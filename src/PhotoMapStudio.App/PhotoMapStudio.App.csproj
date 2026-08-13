@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>PhotoMapStudio.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <!-- MSIX packaged アプリは AnyCPU 不可。Platform 未指定（ソリューション経由）でも RID が解決されるよう既定を x64 にする -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <!-- 配布は .appinstaller によるアーキテクチャ別 MSIX 単体のため、バンドルは不要 -->
+    <AppxBundle>Never</AppxBundle>
+    <!-- NFR-DIST-02: .NET / Windows App SDK ランタイムを MSIX に同梱し、外部ランタイム非依存にする -->
+    <SelfContained>true</SelfContained>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- CA5392: Windows App SDK が自動でコンパイルに含める UndockedRegFreeWinRT-AutoInitializer.cs が
+         DefaultDllImportSearchPaths 属性を持たないため発生する。生成コードのため修正できない。 -->
+    <NoWarn>$(NoWarn);CA5392</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageReference Include="WinUIEx" Version="2.9.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoMapStudio.Core\PhotoMapStudio.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

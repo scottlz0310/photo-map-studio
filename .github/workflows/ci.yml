@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      # Codecov への OIDC 認証(トークンレス)に必要
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore PhotoMapStudio.slnx
+
+      - name: Format check
+        run: dotnet format PhotoMapStudio.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build PhotoMapStudio.slnx -c Release -p:Platform=x64 --no-restore
+
+      - name: Test (Core)
+        run: dotnet test tests/PhotoMapStudio.Core.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
+
+      - name: Test (App)
+        run: dotnet test tests/PhotoMapStudio.App.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          use_oidc: true
+          directory: coverage
+
+  # NFR-DIST-03: アーキテクチャ別 MSIX の生成可否を初期段階から検証する。
+  # 署名は行わず、パッケージングが両アーキテクチャで完走することのみを確認する。
+  package:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: microsoft/setup-msbuild@v3
+
+      - name: Build MSIX (${{ matrix.platform }})
+        shell: pwsh
+        run: |
+          msbuild src/PhotoMapStudio.App/PhotoMapStudio.App.csproj `
+            -restore -t:Build -p:Configuration=Release -p:Platform=${{ matrix.platform }} `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxPackageSigningEnabled=false `
+            -p:AppxPackageDir="$env:RUNNER_TEMP\appx\"

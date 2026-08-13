@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EXIF GPS の読み取り。HEIC を含む主要フォーマットに対応し、ネイティブ依存を持たない -->
+    <PackageReference Include="MetadataExtractor" Version="2.9.3" />
+    <!-- タイル貼り合わせ・ピン合成・attribution の文字描画・PNG 出力 -->
+    <PackageReference Include="SkiaSharp" Version="4.151.1" />
+  </ItemGroup>
+
+</Project>

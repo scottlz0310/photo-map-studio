@@ -44,6 +44,20 @@ public static class TileSources
     public static IReadOnlyList<TileSource> All { get; } = [GsiPale, GsiStandard, OpenStreetMap];
 
     /// <summary>
+    /// 既定のタイルソース。
+    /// </summary>
+    /// <remarks>
+    /// 実測（#8）で、一括生成の所要時間・山間部の可読性・ピンの視認性のいずれも淡色が優位だった。
+    /// OSM は一括生成が Tile Usage Policy の bulk downloading に該当するため既定にしない。
+    /// </remarks>
+    public static TileSource Default => GsiPale;
+
+    /// <summary>
+    /// 日本国外など、既定のタイルソースが配信していない領域を補う全世界対応のソース。
+    /// </summary>
+    public static TileSource WorldwideFallback => OpenStreetMap;
+
+    /// <summary>
     /// 任意のタイル URL からタイルソースを構築する（FR-03）。
     /// </summary>
     /// <param name="urlTemplate">URL テンプレート。</param>

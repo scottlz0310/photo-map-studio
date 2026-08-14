@@ -29,7 +29,9 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ComposeAsync(MapCompositionRequest request, CancellationToken cancellationToken)
+    public async Task<MapCompositionResult> ComposeAsync(
+        MapCompositionRequest request,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.Width);
@@ -52,7 +54,7 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         using SKImage image = surface.Snapshot();
         using SKData encoded = image.Encode(SKEncodedImageFormat.Png, 100)
             ?? throw new MapCompositionException("PNG へのエンコードに失敗しました。");
-        return encoded.ToArray();
+        return new MapCompositionResult(encoded.ToArray(), request.TileSource, UsedFallback: false);
     }
 
     private async Task DrawTilesAsync(

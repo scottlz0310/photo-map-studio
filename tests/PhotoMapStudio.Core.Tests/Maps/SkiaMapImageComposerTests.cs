@@ -189,7 +189,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         const int Height = 100;
         var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
 
-        byte[] png = await composer.ComposeAsync(
+        byte[] png = (await composer.ComposeAsync(
             new MapCompositionRequest
             {
                 Center = Tokyo,
@@ -198,7 +198,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
                 Height = Height,
                 Zoom = 15,
             },
-            CancellationToken.None);
+            CancellationToken.None)).Png.ToArray();
 
         using SKBitmap bitmap = SKBitmap.Decode(png);
 
@@ -217,7 +217,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         const int Size = 20;
         var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
 
-        byte[] png = await composer.ComposeAsync(
+        byte[] png = (await composer.ComposeAsync(
             new MapCompositionRequest
             {
                 Center = Tokyo,
@@ -226,7 +226,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
                 Height = Size,
                 Zoom = 15,
             },
-            CancellationToken.None);
+            CancellationToken.None)).Png.ToArray();
 
         using SKBitmap bitmap = SKBitmap.Decode(png);
 
@@ -282,14 +282,14 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             CancellationToken.None));
     }
 
-    private static Task<byte[]> ComposeAsync(
+    private static async Task<byte[]> ComposeAsync(
         ITileProvider provider,
         int width,
         int height,
         string? pinImagePath = null)
     {
         var composer = new SkiaMapImageComposer(provider);
-        return composer.ComposeAsync(
+        MapCompositionResult result = await composer.ComposeAsync(
             new MapCompositionRequest
             {
                 Center = Tokyo,
@@ -299,7 +299,9 @@ public sealed class SkiaMapImageComposerTests : IDisposable
                 Zoom = 15,
                 PinImagePath = pinImagePath,
             },
-            CancellationToken.None);
+            CancellationToken.None).ConfigureAwait(false);
+
+        return result.Png.ToArray();
     }
 
     private static byte[] CreateSolidPng(int width, int height, SKColor color)

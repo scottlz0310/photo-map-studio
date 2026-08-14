@@ -21,7 +21,7 @@ public sealed record MapCompositionRequest
     public required GeoCoordinate Center { get; init; }
 
     /// <summary>使用するタイルソース。</summary>
-    public required TileSource TileSource { get; init; }
+    public TileSource TileSource { get; init; } = TileSources.Default;
 
     /// <summary>出力画像の幅（ピクセル）。</summary>
     public int Width { get; init; } = DefaultWidth;

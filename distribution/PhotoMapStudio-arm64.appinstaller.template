@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+    Uri="https://github.com/scottlz0310/photo-map-studio/releases/latest/download/PhotoMapStudio-arm64.appinstaller"
+    Version="{VERSION}">
+
+  <MainPackage
+      Name="PhotoMapStudio"
+      Publisher="CN=scottlz0310"
+      Version="{VERSION}"
+      ProcessorArchitecture="arm64"
+      Uri="https://github.com/scottlz0310/photo-map-studio/releases/download/{TAG}/PhotoMapStudio_ARM64.msix" />
+
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" />
+  </UpdateSettings>
+
+</AppInstaller>

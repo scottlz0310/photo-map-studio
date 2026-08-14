@@ -48,6 +48,19 @@ PhotoMapStudio.exe --input-dir "C:\Photos" --output-dir "C:\Maps"
 
 **一括生成では自動切替を行いません。** OpenStreetMap への一括取得は [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) が禁じる bulk downloading に該当するためです。一括生成で国外の写真に当たった場合はスキップとして結果一覧に残るので、タイルソースを OpenStreetMap に切り替えて実行し直してください。
 
+## 配布版のインストール
+
+GitHub Releases では x64 / ARM64 向けの署名済み MSIX と、アーキテクチャ別の `.appinstaller` を提供します。Windows のアプリ インストーラーから `.appinstaller` を開くと、以後の更新確認を自動化できます。
+
+PowerShell からインストールする場合は、Release から `Install-PhotoMapStudio.ps1` を保存して実行します。
+
+```pwsh
+Set-ExecutionPolicy -Scope Process Bypass
+.\Install-PhotoMapStudio.ps1 -Architecture x64
+```
+
+ARM64 環境では `-Architecture ARM64` を指定してください。自己署名証明書を使った開発用パッケージでは、インストール前に証明書を信頼済みにする必要があります。リリース手順と署名Secretの設定は [アーキテクチャ・配布仕様](docs/architecture.md) を、データ取り扱いと地図タイルの通信先は [プライバシーポリシー](docs/privacy-policy.html) を参照してください。
+
 ## 開発
 
 ### 必要な環境

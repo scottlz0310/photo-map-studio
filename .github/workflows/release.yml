@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: microsoft/setup-msbuild@v3
+
+      - name: Generate formal MSIX assets
+        shell: pwsh
+        run: .\scripts\Generate-MsixAssets.ps1
+
+      - name: Resolve and apply package version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "タグは v<major>.<minor>.<patch> 形式である必要があります: $tag"
+          }
+          $version = "$($tag.TrimStart('v')).0"
+          $path = "src/PhotoMapStudio.App/Package.appxmanifest"
+          $content = [IO.File]::ReadAllText($path)
+          $content = $content -replace 'Version="[^"]+"', ('Version="' + $version + '"')
+          [IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))
+
+      - name: Build unsigned MSIX (${{ matrix.platform }})
+        shell: pwsh
+        run: |
+          msbuild src/PhotoMapStudio.App/PhotoMapStudio.App.csproj `
+            -restore -t:Build -p:Configuration=Release -p:Platform=${{ matrix.platform }} `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxPackageSigningEnabled=false `
+            -p:AppxPackageDir="$env:RUNNER_TEMP\appx\"
+
+          $msix = Get-ChildItem "$env:RUNNER_TEMP\appx" -Recurse -Filter "PhotoMapStudio.App_*_${{ matrix.platform }}.msix" |
+            Where-Object { $_.DirectoryName -notmatch "Dependencies" } | Select-Object -First 1
+          if (-not $msix) {
+            throw "${{ matrix.platform }} のMSIXが生成されていません"
+          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $msix.FullName "dist/PhotoMapStudio_${{ matrix.platform }}.msix"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: msix-${{ matrix.platform }}
+          path: dist/PhotoMapStudio_${{ matrix.platform }}.msix
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: microsoft/setup-msbuild@v3
+
+      - name: Restore build tools
+        run: dotnet restore PhotoMapStudio.slnx
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: msix-*
+          merge-multiple: true
+          path: dist
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "タグは v<major>.<minor>.<patch> 形式である必要があります: $tag"
+          }
+          $version = "$($tag.TrimStart('v')).0"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore signing certificate
+        shell: pwsh
+        env:
+          SIGNING_CERTIFICATE_BASE64: ${{ secrets.SIGNING_CERTIFICATE_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_BASE64)) {
+            throw "Secret SIGNING_CERTIFICATE_BASE64 が未設定です。scripts/New-SigningCertificate.ps1 を参照してください。"
+          }
+          [IO.File]::WriteAllBytes(
+            "$env:RUNNER_TEMP\PhotoMapStudio-signing.pfx",
+            [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+
+      - name: Sign MSIX and prepare release assets
+        shell: pwsh
+        env:
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_PASSWORD)) {
+            throw "Secret SIGNING_CERTIFICATE_PASSWORD が未設定です。"
+          }
+
+          $pfxPath = "$env:RUNNER_TEMP\PhotoMapStudio-signing.pfx"
+          $signtool = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.windows.sdk.buildtools\*\bin\*\x64\signtool.exe" |
+            Sort-Object FullName | Select-Object -Last 1
+          if (-not $signtool) {
+            throw "signtool.exe が NuGet キャッシュに見つかりません"
+          }
+
+          $msixFiles = @(Get-ChildItem -LiteralPath dist -Filter "PhotoMapStudio_*.msix" -File)
+          if ($msixFiles.Count -ne 2) {
+            throw "x64 / ARM64 のMSIXが揃っていません: $($msixFiles.Count) 件"
+          }
+
+          foreach ($msix in $msixFiles) {
+            & $signtool.FullName sign /fd SHA256 /f $pfxPath /p $env:SIGNING_CERTIFICATE_PASSWORD $msix.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "MSIX署名に失敗しました: $($msix.Name)"
+            }
+            $signature = Get-AuthenticodeSignature -FilePath $msix.FullName
+            if (-not $signature.SignerCertificate) {
+              throw "MSIXの署名証明書を確認できません: $($msix.Name)"
+            }
+          }
+
+          $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfxPath,
+            $env:SIGNING_CERTIFICATE_PASSWORD,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+          try {
+            if ($certificate.Subject -ne "CN=scottlz0310") {
+              throw "署名証明書のSubjectがマニフェストと一致しません: $($certificate.Subject)"
+            }
+            [IO.File]::WriteAllBytes(
+              "dist/PhotoMapStudio.cer",
+              $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          }
+          finally {
+            $certificate.Dispose()
+          }
+
+          foreach ($architecture in @("x64", "arm64")) {
+            $templatePath = "distribution/PhotoMapStudio-$architecture.appinstaller.template"
+            $appInstaller = [IO.File]::ReadAllText($templatePath)
+            $appInstaller = $appInstaller.Replace("{VERSION}", "${{ steps.version.outputs.version }}").Replace("{TAG}", "${{ steps.version.outputs.tag }}")
+            [IO.File]::WriteAllText(
+              "dist/PhotoMapStudio-$architecture.appinstaller",
+              $appInstaller,
+              [Text.UTF8Encoding]::new($false))
+          }
+
+          Copy-Item scripts/Install-PhotoMapStudio.ps1 dist/
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem -LiteralPath dist -File | ForEach-Object FullName
+          gh release create "${{ steps.version.outputs.tag }}" @files `
+            --title "PhotoMapStudio ${{ steps.version.outputs.tag }}" --generate-notes

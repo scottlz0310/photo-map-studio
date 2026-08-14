@@ -4,7 +4,7 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に基づき、[Semantic Versioning](https://semver.org/lang/ja/) に従います。
 
-## [Unreleased]
+## [0.1.0] - 2026-08-15
 
 ### Added
 
@@ -30,3 +30,4 @@
 - 日本国外など配信範囲外の写真で、代替タイルソース（OpenStreetMap）へ自動的に切り替える `FallbackMapImageComposer` を追加。切り替えは `MapCompositionRequest.AllowWorldwideFallback` で制御し、OSM の bulk downloading に該当する一括生成では無効にする
 - 合成結果に使用したタイルソースと代替切替の有無を含める（`MapCompositionResult`）
 - ドメイン層の既定の構築経路を `AddPhotoMapStudioCore` として提供。レート制御・キャッシュ・配信範囲外の切り替えを組み合わせた構成を 1 か所に固定する
+- x64 / ARM64 の署名済み MSIX、アーキテクチャ別 App Installer、GitHub Releases を生成するリリースワークフローを追加

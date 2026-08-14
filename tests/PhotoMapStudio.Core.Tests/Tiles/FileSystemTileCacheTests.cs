@@ -82,6 +82,22 @@ public sealed class FileSystemTileCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task 読み取りに失敗したキャッシュは無視する()
+    {
+        var cache = new FileSystemTileCache(this.root);
+        await cache.WriteAsync(Key, [0x01], CancellationToken.None);
+
+        // 他プロセスが掴んでいる状態を再現する
+        using FileStream locked = File.Open(
+            Path.Combine(this.root, Key),
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.None);
+
+        Assert.Null(await cache.TryReadAsync(Key, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task 一時ファイルを残さない()
     {
         var cache = new FileSystemTileCache(this.root);

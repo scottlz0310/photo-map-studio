@@ -40,20 +40,12 @@ public sealed class HttpTileClient : ITileClient
 
         HttpClient client = this.httpClientFactory.CreateClient(HttpClientName);
 
-        HttpResponseMessage response;
         try
         {
-            response = await client
+            using HttpResponseMessage response = await client
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new TileFetchException($"タイルを取得できませんでした: {requestUri}", requestUri, null, ex);
-        }
 
-        using (response)
-        {
             if (!response.IsSuccessStatusCode)
             {
                 string message = string.Create(
@@ -62,8 +54,22 @@ public sealed class HttpTileClient : ITileClient
                 throw new TileFetchException(message, requestUri, response.StatusCode, null);
             }
 
+            // ResponseHeadersRead のため本文の受信はここで行われる。切断も取得失敗として扱う
             // 再エンコードせずレスポンスのバイト列をそのまま返す（仕様書 §5.3-3）
             return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 呼び出し元のキャンセルは伝播させ、HttpClient のタイムアウトだけを取得失敗に変換する
+            throw new TileFetchException($"タイルの取得がタイムアウトしました: {requestUri}", requestUri, null, ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new TileFetchException($"タイルを取得できませんでした: {requestUri}", requestUri, null, ex);
+        }
+        catch (IOException ex)
+        {
+            throw new TileFetchException($"タイルの本文を読み取れませんでした: {requestUri}", requestUri, null, ex);
         }
     }
 }

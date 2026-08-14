@@ -76,6 +76,48 @@ public class HttpTileClientTests
     }
 
     [Fact]
+    public async Task タイムアウトは取得失敗として伝播する()
+    {
+        // HttpClient のタイムアウトは呼び出し元のキャンセルと同じ例外型で表れる
+        using var factory = new StubHttpClientFactory(
+            _ => throw new TaskCanceledException("タイムアウト", new TimeoutException()));
+        var client = new HttpTileClient(factory);
+
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+            () => client.GetTileAsync(Source, 15, 29105, 12903, CancellationToken.None));
+
+        Assert.Equal(new Uri("https://tile.openstreetmap.org/15/29105/12903.png"), exception.RequestUri);
+        Assert.IsType<TaskCanceledException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task 本文の読み取り失敗も取得失敗として伝播する()
+    {
+        using var factory = StubHttpClientFactory.WithFailingBody(new IOException("接続が切断されました"));
+        var client = new HttpTileClient(factory);
+
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+            () => client.GetTileAsync(Source, 15, 29105, 12903, CancellationToken.None));
+
+        Assert.Equal(new Uri("https://tile.openstreetmap.org/15/29105/12903.png"), exception.RequestUri);
+    }
+
+    [Fact]
+    public async Task 取得中のキャンセルは取得失敗に変換しない()
+    {
+        using var cts = new CancellationTokenSource();
+        using var factory = new StubHttpClientFactory(_ =>
+        {
+            cts.Cancel();
+            throw new TaskCanceledException("キャンセル", null, cts.Token);
+        });
+        var client = new HttpTileClient(factory);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.GetTileAsync(Source, 15, 29105, 12903, cts.Token));
+    }
+
+    [Fact]
     public async Task キャンセル済みトークンでは取得しない()
     {
         using var factory = StubHttpClientFactory.WithStatus(HttpStatusCode.OK);

@@ -26,3 +26,4 @@
 - 既定のタイルソースを地理院タイル（淡色）に決定（`TileSources.Default`）。実測比較の結果は [#8](https://github.com/scottlz0310/photo-map-studio/issues/8) を参照
 - 日本国外など配信範囲外の写真で、代替タイルソース（OpenStreetMap）へ自動的に切り替える `FallbackMapImageComposer` を追加
 - 合成結果に使用したタイルソースと代替切替の有無を含める（`MapCompositionResult`）
+- ドメイン層の既定の構築経路を `AddPhotoMapStudioCore` として提供。レート制御・キャッシュ・配信範囲外の切り替えを組み合わせた構成を 1 か所に固定する

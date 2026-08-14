@@ -4,6 +4,14 @@
 
 形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に基づき、[Semantic Versioning](https://semver.org/lang/ja/) に従います。
 
+## [Unreleased]
+
+### Fixed
+
+- PowerShell 5.1 からの MSIX インストールで、署名証明書を `LocalMachine\TrustedPeople` に登録するよう修正
+- AppX の実体（`AppxManifest.xml`）を確認してからインストール完了を表示するよう修正
+- Windows PowerShell 5.1 のスクリプト文字コードと `Invoke-WebRequest` の進捗出力に対応
+
 ## [0.1.0] - 2026-08-15
 
 ### Added

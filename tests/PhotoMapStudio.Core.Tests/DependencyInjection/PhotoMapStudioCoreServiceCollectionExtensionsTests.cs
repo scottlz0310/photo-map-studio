@@ -39,6 +39,16 @@ public sealed class PhotoMapStudioCoreServiceCollectionExtensionsTests : IDispos
     }
 
     [Fact]
+    public void タイル取得のHttpClientに既定のタイムアウトを適用する()
+    {
+        IHttpClientFactory factory = this.provider.GetRequiredService<IHttpClientFactory>();
+
+        using HttpClient client = factory.CreateClient(HttpTileClient.HttpClientName);
+
+        Assert.Equal(PhotoMapStudioCoreServiceCollectionExtensions.DefaultTileRequestTimeout, client.Timeout);
+    }
+
+    [Fact]
     public void 事前に登録した実装を上書きしない()
     {
         var services = new ServiceCollection();

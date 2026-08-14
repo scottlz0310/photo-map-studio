@@ -24,6 +24,7 @@
 - User-Agent の一元管理（`UserAgentProvider`）とレート制御（`ThrottledTileClient`）を追加
 - WinUI 3 の基本レイアウト、設定 UI、設定の永続化、テーマ追従、ウィンドウ状態の復元を追加
 - GPS 付き写真のプレビュー表示、対象切り替え、attribution / ライセンスリンク、CancellationToken による再生成キャンセルを追加
+- 写真フォルダの一括生成、ファイル単位の進捗・ログ・キャンセル、出力名衝突検出、OSM 単一接続レート制御を追加。`--input-dir` / `--output-dir` 起動引数と単一インスタンス転送に対応
 - 地図画像の合成（`IMapImageComposer` / `SkiaMapImageComposer`）を追加。タイルの貼り合わせ・切り出し・ピン合成（アンカーは下端中央）・フォールバックピン・出典表示の焼き込みに対応する
 - 既定のタイルソースを地理院タイル（淡色）に決定（`TileSources.Default`）。実測比較の結果は [#8](https://github.com/scottlz0310/photo-map-studio/issues/8) を参照
 - 日本国外など配信範囲外の写真で、代替タイルソース（OpenStreetMap）へ自動的に切り替える `FallbackMapImageComposer` を追加。切り替えは `MapCompositionRequest.AllowWorldwideFallback` で制御し、OSM の bulk downloading に該当する一括生成では無効にする

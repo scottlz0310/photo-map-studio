@@ -42,7 +42,7 @@ public static class TileSources
         minZoom: 0,
         maxZoom: 19,
         "© OpenStreetMap contributors",
-        TileRateLimit.Conservative,
+        TileRateLimit.OpenStreetMap,
         OpenStreetMapAttributionUri);
 
     /// <summary>プリセット一覧（表示順）。</summary>

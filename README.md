@@ -29,6 +29,14 @@
 
 任意のタイル URL も設定できます。
 
+## コマンドライン連携
+
+スイート連携用に、起動時の入力・出力フォルダを指定できます。既に起動中の場合は同じインスタンスへ引数を転送します。
+
+```text
+PhotoMapStudio.exe --input-dir "C:\Photos" --output-dir "C:\Maps"
+```
+
 既定を地理院タイル（淡色）にしているのは、実測（[#8](https://github.com/scottlz0310/photo-map-studio/issues/8)）で次の結果が出たためです。
 
 - 一括生成は OpenStreetMap の Tile Usage Policy が禁じる bulk downloading に該当するが、地理院タイルにこの制限はない

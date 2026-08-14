@@ -123,6 +123,117 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         Assert.Equal(CheckerTileProvider.ColorOf(range.MinX + 1, range.MinY), bitmap.GetPixel(boundaryX, 0));
     }
 
+    [Theory]
+    // ズーム 0 では世界が 1 枚。800×600 は世界を覆い、範囲は x=-2..2 / y=-1..1 になる
+    [InlineData(0.0, 0.0, 0, 800, 600)]
+    // 経度 180 度・南北限をまたぐ位置
+    [InlineData(0.0, 180.0, 1, 800, 600)]
+    [InlineData(-85.0, 0.0, 2, 800, 600)]
+    [InlineData(85.0, 179.9, 2, 800, 600)]
+    public async Task 世界端でも有効なタイル番号だけを要求する(
+        double latitude,
+        double longitude,
+        int zoom,
+        int width,
+        int height)
+    {
+        var provider = new SolidTileProvider(TileColor);
+        var composer = new SkiaMapImageComposer(provider);
+
+        await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = new GeoCoordinate(latitude, longitude),
+                TileSource = TileSources.OpenStreetMap,
+                Width = width,
+                Height = height,
+                Zoom = zoom,
+            },
+            CancellationToken.None);
+
+        int tileCount = 1 << zoom;
+        Assert.NotEmpty(provider.RequestedTiles);
+        Assert.All(provider.RequestedTiles, tile =>
+        {
+            Assert.InRange(tile.X, 0, tileCount - 1);
+            Assert.InRange(tile.Y, 0, tileCount - 1);
+        });
+    }
+
+    [Fact]
+    public async Task 経度方向は世界を周回して同じタイルを再利用する()
+    {
+        var provider = new SolidTileProvider(TileColor);
+        var composer = new SkiaMapImageComposer(provider);
+
+        await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = new GeoCoordinate(0.0, 0.0),
+                TileSource = TileSources.OpenStreetMap,
+                Width = 800,
+                Height = 600,
+                Zoom = 0,
+            },
+            CancellationToken.None);
+
+        // x=-2..2 が 1 枚のタイルへ正規化され、南北限外の帯は要求されない
+        Assert.All(provider.RequestedTiles, tile => Assert.Equal((0, 0, 0), tile));
+        Assert.Equal(5, provider.RequestedTiles.Count);
+    }
+
+    [Fact]
+    public async Task 日本語の出典は幅が足りなければ折り返す()
+    {
+        const int Width = 100;
+        const int Height = 100;
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
+
+        byte[] png = await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = Tokyo,
+                TileSource = TileSources.GsiPale,
+                Width = Width,
+                Height = Height,
+                Zoom = 15,
+            },
+            CancellationToken.None);
+
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+
+        // 下地が幅のほとんどを占め、複数行ぶんの高さを持つ（1 行では収まらない文字列のため）
+        int bottomRow = Enumerable.Range(0, Width).Count(x => bitmap.GetPixel(x, Height - 1) != TileColor);
+        int rightColumn = Enumerable.Range(0, Height).Count(y => bitmap.GetPixel(Width - 1, y) != TileColor);
+
+        Assert.True(bottomRow >= Width * 0.8, $"下地が幅方向に足りません: {bottomRow}/{Width}");
+        Assert.True(rightColumn >= 12, $"下地が 1 行ぶんしかありません: {rightColumn}");
+        Assert.Equal(TileColor, bitmap.GetPixel(1, 1));
+    }
+
+    [Fact]
+    public async Task 折り返しても収まらない極小サイズでは出典の焼き込みを省略する()
+    {
+        const int Size = 20;
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
+
+        byte[] png = await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = Tokyo,
+                TileSource = TileSources.GsiPale,
+                Width = Size,
+                Height = Size,
+                Zoom = 15,
+            },
+            CancellationToken.None);
+
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+
+        // 代替ピンの外側にあたる隅が地図のまま = 下地が描かれていない
+        Assert.Equal(TileColor, bitmap.GetPixel(Size - 1, Size - 1));
+    }
+
     [Fact]
     public async Task タイル取得の失敗は代替タイルに置き換えず伝播する()
     {

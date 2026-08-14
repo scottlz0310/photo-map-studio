@@ -64,19 +64,30 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         // タイルは重ならないため、アルファ合成せず上書きで配置する（仕様書 §6.2）
         using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
 
+        int tileCount = 1 << request.Zoom;
+
         for (int tileY = range.MinY; tileY <= range.MaxY; tileY++)
         {
+            // メルカトルの南北限より外にタイルは存在しないため、その帯は描かない
+            if (tileY < 0 || tileY >= tileCount)
+            {
+                continue;
+            }
+
             for (int tileX = range.MinX; tileX <= range.MaxX; tileX++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                // 経度方向は世界が周回するため、要求とキャッシュキーには正規化した番号を使う
+                int sourceX = ((tileX % tileCount) + tileCount) % tileCount;
+
                 byte[] content = await this.tileProvider
-                    .GetTileAsync(request.TileSource, request.Zoom, tileX, tileY, cancellationToken)
+                    .GetTileAsync(request.TileSource, request.Zoom, sourceX, tileY, cancellationToken)
                     .ConfigureAwait(false);
 
                 using SKImage tile = SKImage.FromEncodedData(content)
                     ?? throw new MapCompositionException(
-                        $"タイル画像を復号できませんでした: {request.TileSource.BuildTileUri(request.Zoom, tileX, tileY)}");
+                        $"タイル画像を復号できませんでした: {request.TileSource.BuildTileUri(request.Zoom, sourceX, tileY)}");
 
                 // キャンバスを作らず、切り出し位置ぶんずらして直接配置する（結果は §6.2・§6.3 と同じ）
                 float left = ((tileX - range.MinX) * WebMercator.TileSize) - range.CropLeft;
@@ -161,27 +172,39 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         string text = request.TileSource.Attribution;
 
         using SKFont font = CreateAttributionFont(text, request.Width);
-        float textWidth = font.MeasureText(text);
+        float maxTextWidth = request.Width - (AttributionPadding * 2);
+
+        // 下限フォントでも 1 行に収まらない場合は折り返して全文を描画する
+        IReadOnlyList<string> lines = AttributionLayout.Wrap(font, text, maxTextWidth);
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
         SKFontMetrics metrics = font.Metrics;
         float lineHeight = metrics.Descent - metrics.Ascent;
+        float boxHeight = (lineHeight * lines.Count) + AttributionPadding;
 
-        float boxWidth = Math.Min(textWidth + (AttributionPadding * 2), request.Width);
-        float boxHeight = lineHeight + AttributionPadding;
-        float boxLeft = request.Width - boxWidth;
+        // 折り返しても画像内に収まらない極小サイズでは焼き込みを省略する（プレビュー側の表示で担保する）
+        if (boxHeight > request.Height)
+        {
+            return;
+        }
+
+        float boxWidth = Math.Min(lines.Max(line => font.MeasureText(line)) + (AttributionPadding * 2), request.Width);
         float boxTop = request.Height - boxHeight;
 
         // 地図の内容に紛れて読めなくならないよう、半透明の下地を敷く（仕様書 §6.6）
         using var backgroundPaint = new SKPaint { Color = new SKColor(0, 0, 0, 128), Style = SKPaintStyle.Fill };
-        canvas.DrawRect(boxLeft, boxTop, boxWidth, boxHeight, backgroundPaint);
+        canvas.DrawRect(request.Width - boxWidth, boxTop, boxWidth, boxHeight, backgroundPaint);
 
         using var textPaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
-        canvas.DrawText(
-            text,
-            request.Width - AttributionPadding,
-            request.Height - (AttributionPadding / 2f) - metrics.Descent,
-            SKTextAlign.Right,
-            font,
-            textPaint);
+        float baseline = boxTop + (AttributionPadding / 2f) - metrics.Ascent;
+        foreach (string line in lines)
+        {
+            canvas.DrawText(line, request.Width - AttributionPadding, baseline, SKTextAlign.Right, font, textPaint);
+            baseline += lineHeight;
+        }
     }
 
     private static SKFont CreateAttributionFont(string text, int width)
@@ -192,7 +215,7 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
 
         var font = new SKFont(typeface, Math.Clamp(width * 0.018f, 8f, 14f));
 
-        // 幅に収まらない場合は下限まで縮小する。収まらなくても出典は省略しない
+        // 1 行に収まるまでは縮小し、下限に達したら折り返しへ委ねる
         while (font.MeasureText(text) > width - (AttributionPadding * 2) && font.Size > MinimumFontSize)
         {
             font.Size -= 1f;

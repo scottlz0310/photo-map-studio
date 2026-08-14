@@ -37,7 +37,7 @@ jobs:
           $version = "$($tag.TrimStart('v')).0"
           $path = "src/PhotoMapStudio.App/Package.appxmanifest"
           $content = [IO.File]::ReadAllText($path)
-          $content = $content -replace 'Version="[^"]+"', ('Version="' + $version + '"')
+          $content = $content -replace '(<Identity\b[^>]*\bVersion=")[^"]+(")', ('${1}' + $version + '${2}')
           [IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))
 
       - name: Build unsigned MSIX (${{ matrix.platform }})

@@ -9,6 +9,8 @@
   <ItemGroup>
     <!-- EXIF GPS の読み取り。HEIC を含む主要フォーマットに対応し、ネイティブ依存を持たない -->
     <PackageReference Include="MetadataExtractor" Version="2.9.3" />
+    <!-- タイル取得の HttpClient 管理（IHttpClientFactory） -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
     <!-- タイル貼り合わせ・ピン合成・attribution の文字描画・PNG 出力 -->
     <PackageReference Include="SkiaSharp" Version="4.151.1" />
   </ItemGroup>

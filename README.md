@@ -23,10 +23,22 @@
 
 | プリセット | 提供元 | ズーム | 備考 |
 | --- | --- | --- | --- |
-| 地理院タイル（淡色 / 標準） | 国土地理院 | 5–18 | 日本国内のみ。[地理院タイル一覧](https://maps.gsi.go.jp/development/ichiran.html) |
-| OpenStreetMap | OpenStreetMap contributors | 0–19 | [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) に従い、一括生成時は取得を制限します |
+| **地理院タイル（淡色）** | 国土地理院 | 5–18 | **既定**。日本国内のみ。[地理院タイル一覧](https://maps.gsi.go.jp/development/ichiran.html) |
+| 地理院タイル（標準） | 国土地理院 | 5–18 | 日本国内のみ |
+| OpenStreetMap | OpenStreetMap contributors | 0–19 | [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) に従い、取得を制限します |
 
 任意のタイル URL も設定できます。
+
+既定を地理院タイル（淡色）にしているのは、実測（[#8](https://github.com/scottlz0310/photo-map-studio/issues/8)）で次の結果が出たためです。
+
+- 一括生成は OpenStreetMap の Tile Usage Policy が禁じる bulk downloading に該当するが、地理院タイルにこの制限はない
+- 写真 20 枚の一括生成が地理院で約 10 秒、OpenStreetMap で約 16 秒（レート制御を含む実測）
+- 山間部では地理院タイルに等高線・登山路・地名が出るのに対し、OpenStreetMap はほぼ緑一色になる
+- 淡色は背景の彩度が低く、ピンが最も見分けやすい
+
+**日本国外の写真**は地理院タイルの配信範囲外です。プレビューと単発の生成では自動的に OpenStreetMap へ切り替えて生成し、その旨を結果に表示します。
+
+**一括生成では自動切替を行いません。** OpenStreetMap への一括取得は [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) が禁じる bulk downloading に該当するためです。一括生成で国外の写真に当たった場合はスキップとして結果一覧に残るので、タイルソースを OpenStreetMap に切り替えて実行し直してください。
 
 ## 開発
 

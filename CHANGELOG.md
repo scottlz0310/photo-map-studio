@@ -15,3 +15,6 @@
 - lefthook による pre-commit フック（`dotnet format --verify-no-changes`）
 - Renovate 設定（`github>scottlz0310/renovate-config` を extend）
 - 移植仕様書 `docs/photo-map-studio-migration-spec.md`（[auto-map-generator](https://github.com/scottlz0310/auto-map-generator) から抽出）
+- `PhotoMapStudio.Core` に EXIF GPS 読み取り（`IExifGpsReader` / `DmsCoordinate`）を追加。GPS 情報なしと読み取り失敗を区別する
+- `PhotoMapStudio.Core` に Web メルカトル座標変換（`WebMercator` / `TilePoint` / `TileRange`）を追加
+- `PhotoMapStudio.Core` に写真ファイルの列挙（`IPhotoFileEnumerator`）を追加。フォルダ直下のみを名前昇順で走査する

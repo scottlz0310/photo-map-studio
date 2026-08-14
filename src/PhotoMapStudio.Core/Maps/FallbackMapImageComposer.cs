@@ -10,6 +10,9 @@ namespace PhotoMapStudio.Core.Maps;
 /// <remarks>
 /// 地理院タイルは日本国外で HTTP 404 を返すため、既定のままでは国外の写真を生成できない。
 /// 写真 1 枚単位で切り替えるので、国内の写真は既定ソースの速度のまま処理される。
+/// 切り替え先が OpenStreetMap の場合、一括生成で使うと Tile Usage Policy の bulk downloading に
+/// 該当するため、一括生成では <see cref="MapCompositionRequest.AllowWorldwideFallback"/> を
+/// <see langword="false"/> にして切り替えを止める。
 /// </remarks>
 public sealed class FallbackMapImageComposer : IMapImageComposer
 {
@@ -52,7 +55,8 @@ public sealed class FallbackMapImageComposer : IMapImageComposer
 
     // 404 は「そのタイルが配信されていない」ことを表す。認証エラーや障害では切り替えない
     private bool CanFallback(TileFetchException exception, MapCompositionRequest request)
-        => exception.StatusCode == HttpStatusCode.NotFound
+        => request.AllowWorldwideFallback
+            && exception.StatusCode == HttpStatusCode.NotFound
             && request.TileSource != this.fallbackSource
             && this.fallbackSource.SupportsZoom(request.Zoom);
 }

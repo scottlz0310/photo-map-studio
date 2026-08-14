@@ -81,6 +81,25 @@ public class FallbackMapImageComposerTests
     }
 
     [Fact]
+    public async Task 一括生成のように切り替えを禁じた場合は再試行しない()
+    {
+        var inner = new RecordingComposer(NotFound());
+        var composer = new FallbackMapImageComposer(inner, TileSources.WorldwideFallback);
+
+        // 代替ソース（OpenStreetMap）の一括取得は Tile Usage Policy に抵触するため切り替えない
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(() => composer.ComposeAsync(
+            CreateRequest() with { AllowWorldwideFallback = false },
+            CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.Equal([TileSources.GsiPale], inner.UsedSources);
+    }
+
+    [Fact]
+    public void 切り替えは既定で有効である()
+        => Assert.True(CreateRequest().AllowWorldwideFallback);
+
+    [Fact]
     public async Task 代替ソースでも失敗した場合は例外を伝播する()
     {
         var inner = new RecordingComposer(NotFound(), NotFound());

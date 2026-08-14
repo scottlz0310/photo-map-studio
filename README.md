@@ -36,7 +36,9 @@
 - 山間部では地理院タイルに等高線・登山路・地名が出るのに対し、OpenStreetMap はほぼ緑一色になる
 - 淡色は背景の彩度が低く、ピンが最も見分けやすい
 
-**日本国外の写真**は地理院タイルの配信範囲外のため、自動的に OpenStreetMap へ切り替えて生成し、その旨を結果に表示します。
+**日本国外の写真**は地理院タイルの配信範囲外です。プレビューと単発の生成では自動的に OpenStreetMap へ切り替えて生成し、その旨を結果に表示します。
+
+**一括生成では自動切替を行いません。** OpenStreetMap への一括取得は [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) が禁じる bulk downloading に該当するためです。一括生成で国外の写真に当たった場合はスキップとして結果一覧に残るので、タイルソースを OpenStreetMap に切り替えて実行し直してください。
 
 ## 開発
 

@@ -139,9 +139,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
                         Width = settings.Width,
                         Height = settings.Height,
                         Zoom = settings.Zoom,
-                        PinImagePath = string.IsNullOrWhiteSpace(settings.PinImagePath)
-                            ? null
-                            : settings.PinImagePath.Trim(),
+                        PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinImagePath),
                         AllowWorldwideFallback = false,
                     },
                     cancellationToken).ConfigureAwait(false);

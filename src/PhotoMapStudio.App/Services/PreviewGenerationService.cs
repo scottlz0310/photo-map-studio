@@ -134,9 +134,7 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
                     Width = width,
                     Height = height,
                     Zoom = zoom,
-                    PinImagePath = string.IsNullOrWhiteSpace(settings.PinImagePath)
-                        ? null
-                        : settings.PinImagePath.Trim(),
+                    PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinImagePath),
                     AllowWorldwideFallback = true,
                 },
                 cancellationToken).ConfigureAwait(false);

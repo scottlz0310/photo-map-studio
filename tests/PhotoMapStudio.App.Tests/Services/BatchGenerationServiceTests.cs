@@ -50,6 +50,12 @@ public class BatchGenerationServiceTests
         Assert.True(File.Exists(Path.Combine(fixture.OutputPath, "a_map.png")));
         Assert.True(File.Exists(Path.Combine(fixture.OutputPath, "z_map.png")));
         Assert.DoesNotContain(composer.Requests, request => request.AllowWorldwideFallback);
+        string defaultPinPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "MapPins",
+            "green_pin.png");
+        Assert.All(composer.Requests, request => Assert.Equal(defaultPinPath, request.PinImagePath));
     }
 
     [Fact]

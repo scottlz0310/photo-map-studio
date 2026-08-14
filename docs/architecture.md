@@ -8,6 +8,8 @@
 
 アプリプロジェクトは `SelfContained=true` と `WindowsAppSDKSelfContained=true` を使用します。配布対象は x64 と ARM64 の個別 MSIX で、`AppxBundle=Never` によりアーキテクチャ混在のバンドルは作成しません。
 
+地図合成の既定ピンは `Assets/MapPins/green_pin.png` です。空の設定は実行時にMSIX内のこのパスへ解決するため、パッケージ更新でインストール先が変わっても古い絶対パスを保存しません。`blue_pin.png` と `red_pin.png` も同梱し、ユーザー指定のピン画像として利用できます。
+
 ## リリースフロー
 
 `v<major>.<minor>.<patch>` タグを push すると、`.github/workflows/release.yml` が次の処理を行います。

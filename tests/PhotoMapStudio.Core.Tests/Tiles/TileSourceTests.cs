@@ -56,6 +56,9 @@ public class TileSourceTests
         });
 
         Assert.Equal("© OpenStreetMap contributors", TileSources.OpenStreetMap.Attribution);
+        Assert.Equal(
+            new Uri("https://www.openstreetmap.org/copyright"),
+            TileSources.OpenStreetMap.AttributionUri);
         Assert.Equal(0, TileSources.OpenStreetMap.MinZoom);
         Assert.Equal(19, TileSources.OpenStreetMap.MaxZoom);
     }

@@ -45,9 +45,12 @@ public sealed class MainViewModel : ObservableObject
     /// ViewModel を構築する。
     /// </summary>
     /// <param name="settingsRepository">設定リポジトリ。</param>
-    public MainViewModel(IPhotoMapSettingsRepository settingsRepository)
+    public MainViewModel(
+        IPhotoMapSettingsRepository settingsRepository,
+        PreviewViewModel? preview = null)
     {
         this.settingsRepository = settingsRepository ?? throw new ArgumentNullException(nameof(settingsRepository));
+        this.Preview = preview;
 
         var settings = this.settingsRepository.Load();
         this.inputFolderPath = settings.InputFolderPath;
@@ -64,6 +67,7 @@ public sealed class MainViewModel : ObservableObject
 
         this.TileSourceOptions = PhotoMapStudio.App.Models.TileSourceChoices.All;
         this.SaveSettingsCommand = new RelayCommand(this.SaveSettings);
+        this.Preview?.UpdateSettings(this.CreatePreviewSettings());
     }
 
     /// <summary>入力フォルダ。</summary>
@@ -75,6 +79,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.inputFolderPath, value ?? string.Empty))
             {
                 this.ClearFeedback();
+                this.NotifyPreviewChanged(reloadPhotos: true);
             }
         }
     }
@@ -101,6 +106,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.width, value))
             {
                 this.ClearFeedback();
+                this.NotifyPreviewChanged();
             }
         }
     }
@@ -114,6 +120,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.height, value))
             {
                 this.ClearFeedback();
+                this.NotifyPreviewChanged();
             }
         }
     }
@@ -127,6 +134,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.zoom, value))
             {
                 this.ClearFeedback();
+                this.NotifyPreviewChanged();
             }
         }
     }
@@ -140,6 +148,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.pinImagePath, value ?? string.Empty))
             {
                 this.ClearFeedback();
+                this.NotifyPreviewChanged();
             }
         }
     }
@@ -163,6 +172,7 @@ public sealed class MainViewModel : ObservableObject
             this.OnPropertyChanged(nameof(this.IsCustomTileSource));
             this.OnPropertyChanged(nameof(this.SelectedTileSourceAttribution));
             this.ClearFeedback();
+            this.NotifyPreviewChanged();
         }
     }
 
@@ -175,6 +185,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.customTileUrlTemplate, value ?? string.Empty))
             {
                 this.ClearFeedback();
+                this.NotifyPreviewChanged();
             }
         }
     }
@@ -189,6 +200,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 this.ClearFeedback();
                 this.OnPropertyChanged(nameof(this.SelectedTileSourceAttribution));
+                this.NotifyPreviewChanged();
             }
         }
     }
@@ -218,6 +230,9 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>タイルソースの選択肢。</summary>
     public IReadOnlyList<TileSourceChoice> TileSourceOptions { get; }
+
+    /// <summary>プレビューの状態。</summary>
+    public PreviewViewModel? Preview { get; }
 
     /// <summary>入力値の検証エラー。</summary>
     public string ValidationMessage
@@ -312,6 +327,22 @@ public sealed class MainViewModel : ObservableObject
         this.ValidationMessage = string.Empty;
         this.StatusMessage = string.Empty;
     }
+
+    private void NotifyPreviewChanged(bool reloadPhotos = false)
+        => this.Preview?.UpdateSettings(this.CreatePreviewSettings(), reloadPhotos);
+
+    private PreviewGenerationSettings CreatePreviewSettings()
+        => new()
+        {
+            InputFolderPath = this.InputFolderPath,
+            Width = this.Width,
+            Height = this.Height,
+            Zoom = this.Zoom,
+            PinImagePath = this.PinImagePath,
+            SelectedTileSource = this.SelectedTileSource,
+            CustomTileUrlTemplate = this.CustomTileUrlTemplate,
+            CustomTileAttribution = this.CustomTileAttribution,
+        };
 
     private static bool TryGetPositiveInteger(double value, out int result)
     {

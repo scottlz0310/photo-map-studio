@@ -27,13 +27,15 @@ public sealed record TileSource
     /// <param name="maxZoom">利用可能な最大ズーム。</param>
     /// <param name="attribution">出典表示（FR-08 で生成画像に焼き込む）。</param>
     /// <param name="rateLimit">レート制御方針。</param>
+    /// <param name="attributionUri">出典・ライセンスページへのリンク。</param>
     public TileSource(
         string name,
         string urlTemplate,
         int minZoom,
         int maxZoom,
         string attribution,
-        TileRateLimit rateLimit)
+        TileRateLimit rateLimit,
+        Uri? attributionUri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(attribution);
@@ -49,6 +51,7 @@ public sealed record TileSource
         this.MaxZoom = maxZoom;
         this.Attribution = attribution;
         this.RateLimit = rateLimit;
+        this.AttributionUri = attributionUri;
     }
 
     /// <summary>表示名。</summary>
@@ -65,6 +68,9 @@ public sealed record TileSource
 
     /// <summary>出典表示。</summary>
     public string Attribution { get; }
+
+    /// <summary>出典・ライセンスページへのリンク。</summary>
+    public Uri? AttributionUri { get; }
 
     /// <summary>レート制御方針。</summary>
     public TileRateLimit RateLimit { get; }

@@ -72,6 +72,7 @@ internal sealed partial class MainWindow : Window
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         _ = this.ViewModel.TrySaveSettings();
+        this.ViewModel.Preview?.Dispose();
         this.windowManager.Dispose();
     }
 }

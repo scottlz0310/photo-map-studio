@@ -34,6 +34,8 @@ public partial class App : Application
         services.AddPhotoMapStudioCore(cacheRootPath);
         services.AddSingleton<ISettingsValueStore, ApplicationDataSettingsValueStore>();
         services.AddSingleton<IPhotoMapSettingsRepository, PhotoMapSettingsRepository>();
+        services.AddSingleton<IPreviewGenerationService, PreviewGenerationService>();
+        services.AddSingleton<PreviewViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddTransient<MainWindow>();
 

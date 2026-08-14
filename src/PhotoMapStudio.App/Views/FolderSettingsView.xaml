@@ -1,0 +1,28 @@
+<UserControl
+    x:Class="PhotoMapStudio.App.Views.FolderSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Spacing="12">
+        <TextBlock
+            Style="{ThemeResource SubtitleTextBlockStyle}"
+            Text="フォルダ" />
+
+        <TextBox
+            Header="入力フォルダ"
+            PlaceholderText="写真フォルダのパス"
+            Text="{Binding InputFolderPath, Mode=TwoWay}" />
+        <Button
+            HorizontalAlignment="Left"
+            Click="InputFolderBrowseButton_Click"
+            Content="入力フォルダを選択..." />
+
+        <TextBox
+            Header="出力フォルダ"
+            PlaceholderText="生成画像の保存先"
+            Text="{Binding OutputFolderPath, Mode=TwoWay}" />
+        <Button
+            HorizontalAlignment="Left"
+            Click="OutputFolderBrowseButton_Click"
+            Content="出力フォルダを選択..." />
+    </StackPanel>
+</UserControl>

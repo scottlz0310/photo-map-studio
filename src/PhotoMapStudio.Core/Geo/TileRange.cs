@@ -7,15 +7,15 @@ namespace PhotoMapStudio.Core.Geo;
 /// <param name="MinY">上端のタイル番号。</param>
 /// <param name="MaxX">右端のタイル番号。</param>
 /// <param name="MaxY">下端のタイル番号。</param>
-/// <param name="CropLeft">キャンバス左端から切り出し位置までのピクセル数。</param>
-/// <param name="CropTop">キャンバス上端から切り出し位置までのピクセル数。</param>
+/// <param name="CropLeft">キャンバス左端から切り出し位置までのピクセル数（切り捨て）。</param>
+/// <param name="CropTop">キャンバス上端から切り出し位置までのピクセル数（切り捨て）。</param>
 public readonly record struct TileRange(
     int MinX,
     int MinY,
     int MaxX,
     int MaxY,
-    double CropLeft,
-    double CropTop)
+    int CropLeft,
+    int CropTop)
 {
     /// <summary>X 方向のタイル枚数。</summary>
     public int TileCountX => MaxX - MinX + 1;
@@ -52,12 +52,13 @@ public readonly record struct TileRange(
         int maxX = (int)Math.Floor(rightPixel / WebMercator.TileSize);
         int maxY = (int)Math.Floor(bottomPixel / WebMercator.TileSize);
 
+        // 切り出し位置は切り捨てとし、サブピクセル補間は行わない（タイル境界のにじみを避けるため）
         return new TileRange(
             minX,
             minY,
             maxX,
             maxY,
-            leftPixel - ((double)minX * WebMercator.TileSize),
-            topPixel - ((double)minY * WebMercator.TileSize));
+            (int)Math.Floor(leftPixel - ((double)minX * WebMercator.TileSize)),
+            (int)Math.Floor(topPixel - ((double)minY * WebMercator.TileSize)));
     }
 }

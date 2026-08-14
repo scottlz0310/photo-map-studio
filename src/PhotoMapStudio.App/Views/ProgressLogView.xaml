@@ -12,10 +12,65 @@
             <TextBlock
                 Style="{ThemeResource SubtitleTextBlockStyle}"
                 Text="進捗ログ" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ProgressBar
+                    Grid.Column="0"
+                    Maximum="100"
+                    Value="{Binding GenerationProgressValue}" />
+                <TextBlock
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Text="{Binding GenerationProgressPercentText}" />
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Grid.Column="0"
+                    Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                    Text="{Binding GenerationProgressMessage}"
+                    TextWrapping="Wrap" />
+                <Button
+                    Grid.Column="1"
+                    Command="{Binding CancelGenerationCommand}"
+                    Content="キャンセル" />
+            </Grid>
             <TextBlock
-                Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                Text="一括生成の進捗表示は #7 で追加します。"
+                FontWeight="SemiBold"
+                Text="{Binding GenerationSummary}"
                 TextWrapping="Wrap" />
+            <ListView
+                MaxHeight="180"
+                ItemsSource="{Binding GenerationLogs}">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Grid.Column="0"
+                                Text="{Binding StatusText}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{Binding FileName}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="2"
+                                Text="{Binding Message}"
+                                TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </StackPanel>
     </Border>
 </UserControl>

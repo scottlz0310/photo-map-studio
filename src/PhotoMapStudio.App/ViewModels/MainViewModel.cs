@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Windows.Input;
 
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -27,6 +29,8 @@ public sealed class MainViewModel : ObservableObject
     private const string InvalidZoomMessage = "ズームレベルは 1 〜 19 の範囲で指定してください。";
 
     private readonly IPhotoMapSettingsRepository settingsRepository;
+    private readonly IBatchGenerationService? batchGenerationService;
+    private CancellationTokenSource? generationCancellation;
     private string inputFolderPath;
     private string outputFolderPath;
     private double width;
@@ -40,6 +44,11 @@ public sealed class MainViewModel : ObservableObject
     private double maximumZoom;
     private string validationMessage = string.Empty;
     private string statusMessage = string.Empty;
+    private bool isGenerating;
+    private double generationProgressValue;
+    private string generationProgressMessage = string.Empty;
+    private string generationSummary = string.Empty;
+    private bool hasGenerationError;
 
     /// <summary>
     /// ViewModel を構築する。
@@ -47,9 +56,11 @@ public sealed class MainViewModel : ObservableObject
     /// <param name="settingsRepository">設定リポジトリ。</param>
     public MainViewModel(
         IPhotoMapSettingsRepository settingsRepository,
-        PreviewViewModel? preview = null)
+        PreviewViewModel? preview = null,
+        IBatchGenerationService? batchGenerationService = null)
     {
         this.settingsRepository = settingsRepository ?? throw new ArgumentNullException(nameof(settingsRepository));
+        this.batchGenerationService = batchGenerationService;
         this.Preview = preview;
 
         var settings = this.settingsRepository.Load();
@@ -67,6 +78,8 @@ public sealed class MainViewModel : ObservableObject
 
         this.TileSourceOptions = PhotoMapStudio.App.Models.TileSourceChoices.All;
         this.SaveSettingsCommand = new RelayCommand(this.SaveSettings);
+        this.GenerateCommand = new AsyncRelayCommand(this.GenerateAsync, this.CanGenerate);
+        this.CancelGenerationCommand = new RelayCommand(this.CancelGeneration, this.CanCancelGeneration);
         this.Preview?.UpdateSettings(this.CreatePreviewSettings());
     }
 
@@ -260,6 +273,90 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>設定保存コマンド。</summary>
     public ICommand SaveSettingsCommand { get; }
 
+    /// <summary>一括生成コマンド。</summary>
+    public IAsyncRelayCommand GenerateCommand { get; }
+
+    /// <summary>一括生成キャンセルコマンド。</summary>
+    public IRelayCommand CancelGenerationCommand { get; }
+
+    /// <summary>一括生成の進捗ログ。</summary>
+    public ObservableCollection<BatchGenerationProgress> GenerationLogs { get; } = new();
+
+    /// <summary>一括生成中かどうか。</summary>
+    public bool IsGenerating
+    {
+        get => this.isGenerating;
+        private set
+        {
+            if (this.SetProperty(ref this.isGenerating, value))
+            {
+                this.GenerateCommand.NotifyCanExecuteChanged();
+                this.CancelGenerationCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>進捗バーの値（0〜100）。</summary>
+    public double GenerationProgressValue
+    {
+        get => this.generationProgressValue;
+        private set
+        {
+            if (this.SetProperty(ref this.generationProgressValue, value))
+            {
+                this.OnPropertyChanged(nameof(this.GenerationProgressPercentText));
+            }
+        }
+    }
+
+    /// <summary>進捗バーの表示用パーセント。</summary>
+    public string GenerationProgressPercentText => $"{this.GenerationProgressValue:0}%";
+
+    /// <summary>現在の進捗メッセージ。</summary>
+    public string GenerationProgressMessage
+    {
+        get => this.generationProgressMessage;
+        private set => this.SetProperty(ref this.generationProgressMessage, value);
+    }
+
+    /// <summary>一括生成の集計メッセージ。</summary>
+    public string GenerationSummary
+    {
+        get => this.generationSummary;
+        private set => this.SetProperty(ref this.generationSummary, value);
+    }
+
+    /// <summary>一括生成中にエラーが発生したかどうか。</summary>
+    public bool HasGenerationError
+    {
+        get => this.hasGenerationError;
+        private set => this.SetProperty(ref this.hasGenerationError, value);
+    }
+
+    /// <summary>
+    /// 起動引数から入力・出力フォルダを適用する。
+    /// </summary>
+    /// <param name="arguments">解析済み起動引数。</param>
+    internal void ApplyLaunchArguments(LaunchArguments arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        if (arguments.InputDirectoryPath is not null)
+        {
+            this.InputFolderPath = arguments.InputDirectoryPath;
+        }
+
+        if (arguments.OutputDirectoryPath is not null)
+        {
+            this.OutputFolderPath = arguments.OutputDirectoryPath;
+        }
+
+        if (arguments.Errors.Count > 0)
+        {
+            this.ValidationMessage = string.Join(Environment.NewLine, arguments.Errors);
+        }
+    }
+
     /// <summary>
     /// 現在の入力を検証して設定を保存する。
     /// </summary>
@@ -321,6 +418,162 @@ public sealed class MainViewModel : ObservableObject
     {
         _ = this.TrySaveSettings();
     }
+
+    private bool CanGenerate()
+        => this.batchGenerationService is not null && !this.IsGenerating;
+
+    private bool CanCancelGeneration()
+        => this.IsGenerating;
+
+    private async Task GenerateAsync()
+    {
+        if (this.batchGenerationService is null || !this.TryCreateBatchGenerationSettings(out BatchGenerationSettings settings))
+        {
+            return;
+        }
+
+        this.GenerationLogs.Clear();
+        this.GenerationProgressValue = 0;
+        this.GenerationProgressMessage = "一括生成を開始しています...";
+        this.GenerationSummary = string.Empty;
+        this.HasGenerationError = false;
+        this.IsGenerating = true;
+
+        using var cancellation = new CancellationTokenSource();
+        this.generationCancellation = cancellation;
+
+        try
+        {
+            var progress = new Progress<BatchGenerationProgress>(this.ReportProgress);
+            BatchGenerationSummary summary = await this.batchGenerationService
+                .GenerateAsync(settings, progress, cancellation.Token)
+                .ConfigureAwait(true);
+
+            this.GenerationProgressValue = summary.TotalCount == 0 ? 100 : this.GenerationProgressValue;
+            this.GenerationSummary = FormatSummary(summary);
+            this.GenerationProgressMessage = summary.IsCancelled
+                ? "処理がキャンセルされました。"
+                : "一括生成が完了しました。";
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            this.GenerationProgressMessage = "処理がキャンセルされました。";
+        }
+        catch (Exception exception) when (exception is BatchGenerationException
+            or ArgumentException
+            or IOException
+            or UnauthorizedAccessException)
+        {
+            this.HasGenerationError = true;
+            this.ValidationMessage = exception.Message;
+            this.GenerationProgressMessage = "一括生成を開始できませんでした。";
+        }
+        finally
+        {
+            if (ReferenceEquals(this.generationCancellation, cancellation))
+            {
+                this.generationCancellation = null;
+            }
+
+            this.IsGenerating = false;
+        }
+    }
+
+    private void CancelGeneration()
+    {
+        if (this.generationCancellation is null)
+        {
+            return;
+        }
+
+        this.GenerationProgressMessage = "キャンセルしています...";
+        this.generationCancellation.Cancel();
+    }
+
+    private void ReportProgress(BatchGenerationProgress progress)
+    {
+        this.GenerationLogs.Add(progress);
+        this.GenerationProgressValue = progress.Total == 0
+            ? 100
+            : progress.Index * 100d / progress.Total;
+        this.GenerationProgressMessage = progress.Message;
+        this.HasGenerationError |= progress.Status == BatchGenerationStatus.Error;
+    }
+
+    private bool TryCreateBatchGenerationSettings(out BatchGenerationSettings settings)
+    {
+        settings = null!;
+        this.ClearFeedback();
+
+        if (!TryGetPositiveInteger(this.Width, out int width)
+            || !TryGetPositiveInteger(this.Height, out int height))
+        {
+            this.ValidationMessage = InvalidImageSizeMessage;
+            return false;
+        }
+
+        if (!TryGetInteger(this.Zoom, out int zoom) || zoom is < 1 or > 19)
+        {
+            this.ValidationMessage = InvalidZoomMessage;
+            return false;
+        }
+
+        string inputFolderPath = this.InputFolderPath.Trim();
+        if (string.IsNullOrWhiteSpace(inputFolderPath))
+        {
+            this.ValidationMessage = "入力フォルダを指定してください。";
+            return false;
+        }
+
+        if (!Directory.Exists(inputFolderPath))
+        {
+            this.ValidationMessage = "指定された入力フォルダが存在しません。";
+            return false;
+        }
+
+        string outputFolderPath = this.OutputFolderPath.Trim();
+        if (string.IsNullOrWhiteSpace(outputFolderPath))
+        {
+            this.ValidationMessage = "出力フォルダを指定してください。";
+            return false;
+        }
+
+        TileSource tileSource;
+        try
+        {
+            tileSource = this.SelectedTileSource.CreateSource(
+                this.CustomTileUrlTemplate,
+                this.CustomTileAttribution);
+        }
+        catch (ArgumentException exception)
+        {
+            this.ValidationMessage = $"カスタムタイルソースを検証できません: {exception.Message}";
+            return false;
+        }
+
+        if (!tileSource.SupportsZoom(zoom))
+        {
+            this.ValidationMessage = $"選択中のタイルソースではズームレベルは {tileSource.MinZoom} 〜 {tileSource.MaxZoom} の範囲で指定してください。";
+            return false;
+        }
+
+        settings = new BatchGenerationSettings
+        {
+            InputFolderPath = inputFolderPath,
+            OutputFolderPath = outputFolderPath,
+            Width = width,
+            Height = height,
+            Zoom = zoom,
+            PinImagePath = this.PinImagePath.Trim(),
+            TileSource = tileSource,
+        };
+        return true;
+    }
+
+    private static string FormatSummary(BatchGenerationSummary summary)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{(summary.IsCancelled ? "キャンセル" : "完了")}: 成功 {summary.SuccessCount} / スキップ {summary.SkippedCount} / 総数 {summary.TotalCount}");
 
     private void ClearFeedback()
     {

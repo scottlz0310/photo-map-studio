@@ -46,6 +46,10 @@
                         HorizontalAlignment="Stretch"
                         Command="{x:Bind ViewModel.SaveSettingsCommand}"
                         Content="設定を保存" />
+                    <Button
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.GenerateCommand}"
+                        Content="一括生成" />
                     <TextBlock
                         Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
                         Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
@@ -69,7 +73,9 @@
                     x:Name="Preview"
                     Grid.Row="0"
                     DataContext="{x:Bind ViewModel.Preview}" />
-                <views:ProgressLogView Grid.Row="1" />
+                <views:ProgressLogView
+                    Grid.Row="1"
+                    DataContext="{x:Bind ViewModel}" />
             </Grid>
         </Grid>
     </Grid>

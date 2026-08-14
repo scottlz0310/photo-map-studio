@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.UI.Xaml;
 
+using PhotoMapStudio.App.Services;
 using PhotoMapStudio.App.ViewModels;
 
 using Windows.Storage;
@@ -42,6 +43,13 @@ internal sealed partial class MainWindow : Window
     }
 
     public MainViewModel ViewModel { get; }
+
+    /// <summary>
+    /// スイート連携から渡された起動引数を画面へ適用する。
+    /// </summary>
+    /// <param name="arguments">起動引数文字列。</param>
+    internal void ApplyLaunchArguments(string? arguments)
+        => this.ViewModel.ApplyLaunchArguments(LaunchArgumentParser.Parse(arguments));
 
     private async void InputFolderBrowseRequested(object? sender, EventArgs e)
     {

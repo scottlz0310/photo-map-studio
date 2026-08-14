@@ -61,6 +61,7 @@ public class TileSourceTests
             TileSources.OpenStreetMap.AttributionUri);
         Assert.Equal(0, TileSources.OpenStreetMap.MinZoom);
         Assert.Equal(19, TileSources.OpenStreetMap.MaxZoom);
+        Assert.Equal(1, TileSources.OpenStreetMap.RateLimit.MaxConcurrentRequests);
     }
 
     [Fact]

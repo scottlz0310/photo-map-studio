@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-15
+
 ### Fixed
 
 - PowerShell 5.1 からの MSIX インストールで、署名証明書を `LocalMachine\TrustedPeople` に登録するよう修正

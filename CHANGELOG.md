@@ -22,6 +22,7 @@
 - タイル取得（`ITileClient` / `HttpTileClient`）を追加。`IHttpClientFactory` と `CancellationToken` に対応し、取得失敗は `TileFetchException` として伝播する
 - タイルのローカルキャッシュ（`ITileCache` / `FileSystemTileCache` / `TileCacheKey`）を追加。キャッシュキーに URL テンプレートの SHA-256 を含め、保持期間の下限を 7 日とする
 - User-Agent の一元管理（`UserAgentProvider`）とレート制御（`ThrottledTileClient`）を追加
+- WinUI 3 の基本レイアウト、設定 UI、設定の永続化、テーマ追従、ウィンドウ状態の復元を追加
 - 地図画像の合成（`IMapImageComposer` / `SkiaMapImageComposer`）を追加。タイルの貼り合わせ・切り出し・ピン合成（アンカーは下端中央）・フォールバックピン・出典表示の焼き込みに対応する
 - 既定のタイルソースを地理院タイル（淡色）に決定（`TileSources.Default`）。実測比較の結果は [#8](https://github.com/scottlz0310/photo-map-studio/issues/8) を参照
 - 日本国外など配信範囲外の写真で、代替タイルソース（OpenStreetMap）へ自動的に切り替える `FallbackMapImageComposer` を追加。切り替えは `MapCompositionRequest.AllowWorldwideFallback` で制御し、OSM の bulk downloading に該当する一括生成では無効にする

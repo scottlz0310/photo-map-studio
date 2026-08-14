@@ -1,6 +1,14 @@
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+
+using PhotoMapStudio.App.Services;
+using PhotoMapStudio.App.ViewModels;
+using PhotoMapStudio.Core.DependencyInjection;
+
+using Windows.Storage;
 
 namespace PhotoMapStudio.App;
 
@@ -11,6 +19,7 @@ namespace PhotoMapStudio.App;
 [ExcludeFromCodeCoverage]
 public partial class App : Application
 {
+    private IServiceProvider? serviceProvider;
     private Window? window;
 
     public App()
@@ -20,7 +29,16 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        window = new MainWindow();
-        window.Activate();
+        var services = new ServiceCollection();
+        string cacheRootPath = Path.Combine(ApplicationData.Current.LocalFolder.Path, "tile-cache");
+        services.AddPhotoMapStudioCore(cacheRootPath);
+        services.AddSingleton<ISettingsValueStore, ApplicationDataSettingsValueStore>();
+        services.AddSingleton<IPhotoMapSettingsRepository, PhotoMapSettingsRepository>();
+        services.AddSingleton<MainViewModel>();
+        services.AddTransient<MainWindow>();
+
+        this.serviceProvider = services.BuildServiceProvider();
+        this.window = this.serviceProvider.GetRequiredService<MainWindow>();
+        this.window.Activate();
     }
 }

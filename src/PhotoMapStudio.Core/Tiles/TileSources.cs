@@ -12,6 +12,8 @@ namespace PhotoMapStudio.Core.Tiles;
 public static class TileSources
 {
     private const string GsiAttribution = "国土地理院（https://maps.gsi.go.jp/development/ichiran.html）";
+    private static readonly Uri GsiAttributionUri = new("https://maps.gsi.go.jp/development/ichiran.html");
+    private static readonly Uri OpenStreetMapAttributionUri = new("https://www.openstreetmap.org/copyright");
 
     /// <summary>地理院タイル（淡色）。日本国内のみ。</summary>
     public static TileSource GsiPale { get; } = new(
@@ -20,7 +22,8 @@ public static class TileSources
         minZoom: 5,
         maxZoom: 18,
         GsiAttribution,
-        TileRateLimit.Relaxed);
+        TileRateLimit.Relaxed,
+        GsiAttributionUri);
 
     /// <summary>地理院タイル（標準）。日本国内のみ。</summary>
     public static TileSource GsiStandard { get; } = new(
@@ -29,7 +32,8 @@ public static class TileSources
         minZoom: 5,
         maxZoom: 18,
         GsiAttribution,
-        TileRateLimit.Relaxed);
+        TileRateLimit.Relaxed,
+        GsiAttributionUri);
 
     /// <summary>OpenStreetMap。</summary>
     public static TileSource OpenStreetMap { get; } = new(
@@ -38,7 +42,8 @@ public static class TileSources
         minZoom: 0,
         maxZoom: 19,
         "© OpenStreetMap contributors",
-        TileRateLimit.Conservative);
+        TileRateLimit.Conservative,
+        OpenStreetMapAttributionUri);
 
     /// <summary>プリセット一覧（表示順）。</summary>
     public static IReadOnlyList<TileSource> All { get; } = [GsiPale, GsiStandard, OpenStreetMap];

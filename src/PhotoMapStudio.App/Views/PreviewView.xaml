@@ -3,24 +3,91 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Border
-        Padding="24"
+        Padding="16"
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
         BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}"
         BorderThickness="1"
         CornerRadius="8">
-        <StackPanel
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Spacing="8">
-            <TextBlock
-                HorizontalAlignment="Center"
-                Style="{ThemeResource SubtitleTextBlockStyle}"
-                Text="プレビュー" />
-            <TextBlock
-                HorizontalAlignment="Center"
-                Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                Text="プレビュー生成は次の実装（#6）で有効になります。"
-                TextWrapping="Wrap" />
-        </StackPanel>
+        <Grid RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Style="{ThemeResource SubtitleTextBlockStyle}"
+                    Text="プレビュー" />
+                <ProgressRing
+                    Grid.Column="1"
+                    Width="24"
+                    Height="24"
+                    IsActive="{Binding IsGenerating}"
+                    Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Button
+                    Grid.Column="2"
+                    Command="{Binding CancelCommand}"
+                    Content="キャンセル"
+                    IsEnabled="{Binding IsGenerating}" />
+            </Grid>
+
+            <Grid Grid.Row="1" RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <ComboBox
+                    Header="プレビュー対象"
+                    ItemsSource="{Binding Photos}"
+                    DisplayMemberPath="DisplayName"
+                    SelectedItem="{Binding SelectedPhoto, Mode=TwoWay}" />
+                <Grid
+                    Grid.Row="1"
+                    MinHeight="240"
+                    Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+                    <Image
+                        x:Name="PreviewImage"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Stretch="Uniform" />
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MaxWidth="420"
+                        Spacing="8"
+                        Visibility="{Binding IsEmptyStateVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Text="{Binding StatusMessage}"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <StackPanel
+                Grid.Row="2"
+                Spacing="4">
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Text="出典" />
+                <TextBlock
+                    Text="{Binding Attribution}"
+                    TextWrapping="Wrap" />
+                <HyperlinkButton
+                    Padding="0"
+                    HorizontalAlignment="Left"
+                    Content="ライセンス・出典ページを開く"
+                    NavigateUri="{Binding AttributionUri}"
+                    Visibility="{Binding HasAttributionUri, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            </StackPanel>
+        </Grid>
     </Border>
 </UserControl>

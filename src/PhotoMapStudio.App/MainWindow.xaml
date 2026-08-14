@@ -65,7 +65,10 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <views:PreviewView Grid.Row="0" />
+                <views:PreviewView
+                    x:Name="Preview"
+                    Grid.Row="0"
+                    DataContext="{x:Bind ViewModel.Preview}" />
                 <views:ProgressLogView Grid.Row="1" />
             </Grid>
         </Grid>

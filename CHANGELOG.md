@@ -11,6 +11,7 @@
 ### Fixed
 
 - PowerShell 5.1 からの MSIX インストールで、署名証明書を `LocalMachine\TrustedPeople` に登録するよう修正
+- UAC 昇格を証明書登録だけに限定し、AppX の登録と結果確認を起動元ユーザーで行うよう修正
 - AppX の実体（`AppxManifest.xml`）を確認してからインストール完了を表示するよう修正
 - Windows PowerShell 5.1 のスクリプト文字コードと `Invoke-WebRequest` の進捗出力に対応
 

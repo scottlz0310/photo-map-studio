@@ -54,7 +54,7 @@ GitHub Releases では x64 / ARM64 向けの署名済み MSIX と、アーキテ
 
 PowerShell からインストールする場合は、Release から `Install-PhotoMapStudio.ps1` を保存して実行します。
 
-このスクリプトは Windows PowerShell 5.1 でも実行できます。署名証明書を `LocalMachine\TrustedPeople` に登録するため、実行時に UAC の管理者許可を求めます。証明書を信頼済みルート（`Root`）へ登録する必要はありません。
+このスクリプトは Windows PowerShell 5.1 でも実行できます。署名証明書が未登録の場合だけ、`LocalMachine\TrustedPeople` への登録のため UAC の管理者許可を求めます。AppX のインストールは起動元のユーザーとして行います。証明書を信頼済みルート（`Root`）へ登録する必要はありません。
 
 ```pwsh
 Set-ExecutionPolicy -Scope Process Bypass

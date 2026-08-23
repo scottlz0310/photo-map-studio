@@ -78,7 +78,7 @@ jobs:
       - name: Restore build tools
         run: dotnet restore PhotoMapStudio.slnx
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: msix-*
           merge-multiple: true

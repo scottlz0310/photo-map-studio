@@ -6,11 +6,18 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-28
+
 ### Changed
 
 - インストールスクリプト（`Install-PhotoMapStudio.ps1`）で、全体の段階数と現在位置（`[n/5]`）、各段階の結果・所要時間・スキップ理由を表示するよう変更。`-Test` モードでも同じ段階表示を行う（[#29](https://github.com/scottlz0310/photo-map-studio/issues/29)）
 - 証明書・`.appinstaller` のダウンロード中、`Add-AppxPackage` の実行中、登録完了の待機中は、5 秒ごとに経過時間（待機中は現在の登録状態も）を出力するよう変更
 - 証明書登録で UAC ダイアログが表示される前に承認後の流れを案内し、昇格プロセスの終了結果を元のウィンドウに表示するよう変更
+- 依存パッケージを更新: Windows App SDK 2.4.0、Microsoft.Windows.SDK.BuildTools 10.0.28000.2705、SkiaSharp 4.151.3
+
+### Security
+
+- `Microsoft.Extensions.DependencyInjection` / `Microsoft.Extensions.Http` をセキュリティ修正版の 10.0.12 に更新
 
 ## [0.1.2] - 2026-08-16
 

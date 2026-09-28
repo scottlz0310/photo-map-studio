@@ -29,9 +29,6 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-# Windows PowerShell 5.1 の Invoke-WebRequest は進捗表示を有効にすると大幅に遅くなる。
-# 取得するのは数 KB の .cer と .appinstaller だけなので、進捗は取得後のファイルサイズで示す。
-$ProgressPreference = "SilentlyContinue"
 
 $packageName = "PhotoMapStudio"
 $certStorePath = "Cert:\LocalMachine\TrustedPeople"
@@ -106,7 +103,11 @@ function Save-RemoteFile {
         [string]$Path
     )
 
-    Invoke-WebRequest -Uri $Uri -OutFile $Path -UseBasicParsing -ErrorAction Stop
+    Invoke-CommandWithProgress -Name "Invoke-WebRequest" -Parameters @{
+        Uri             = $Uri
+        OutFile         = $Path
+        UseBasicParsing = $true
+    }
     return (Get-Item -LiteralPath $Path).Length
 }
 
@@ -175,17 +176,20 @@ function Import-CertificateToLocalMachine {
     }
 }
 
-function Install-AppInstallerFile {
+function Invoke-CommandWithProgress {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Path
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Parameters
     )
 
-    # Add-AppxPackage は完了まで制御を返さないため、別 Runspace で実行して待機中に経過時間を出力する。
+    # ダウンロードや AppX の展開は完了まで制御を返さないため、別 Runspace で実行して待機中に経過時間を出力する。
+    # 別 Runspace にはホストがないため、コマンド自身の進捗表示（Windows PowerShell 5.1 で
+    # Invoke-WebRequest を大幅に遅くする原因）は描画されない。
     $powerShell = [PowerShell]::Create()
     try {
-        # -AppInstallerFile はスイッチであり、.appinstaller はローカルパスを -Path に渡す。
-        $null = $powerShell.AddCommand("Add-AppxPackage").AddParameter("Path", $Path).AddParameter("AppInstallerFile").AddParameter("ErrorAction", "Stop")
+        $null = $powerShell.AddCommand($Name).AddParameters($Parameters).AddParameter("ErrorAction", "Stop")
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         $asyncResult = $powerShell.BeginInvoke()
         while (-not $asyncResult.AsyncWaitHandle.WaitOne($progressReportIntervalSeconds * 1000)) {
@@ -195,7 +199,7 @@ function Install-AppInstallerFile {
         try {
             $null = $powerShell.EndInvoke($asyncResult)
         } catch [System.Management.Automation.MethodInvocationException] {
-            # EndInvoke の例外ラッパーを外し、Add-AppxPackage を直接実行した場合と同じエラーとして伝播する。
+            # EndInvoke の例外ラッパーを外し、コマンドを直接実行した場合と同じエラーとして伝播する。
             $innerException = $_.Exception.InnerException
             if ($innerException -is [System.Management.Automation.IContainsErrorRecord]) {
                 throw $innerException.ErrorRecord
@@ -352,7 +356,11 @@ try {
         } else {
             Write-StepStart -Number 4 -Message "アプリをインストールしています（.appinstaller 経由）..."
             Write-StepDetail -Message "MSIX のダウンロード・展開・登録を行うため、数分かかる場合があります。"
-            Install-AppInstallerFile -Path $appInstallerPath
+            # -AppInstallerFile はスイッチであり、.appinstaller はローカルパスを -Path に渡す。
+            Invoke-CommandWithProgress -Name "Add-AppxPackage" -Parameters @{
+                Path             = $appInstallerPath
+                AppInstallerFile = $true
+            }
             Write-StepResult -Message "完了"
 
             Write-StepStart -Number 5 -Message "インストール完了を確認しています（タイムアウト: $InstallTimeoutSeconds 秒）..."

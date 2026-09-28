@@ -29,10 +29,59 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+# Windows PowerShell 5.1 の Invoke-WebRequest は進捗表示を有効にすると大幅に遅くなる。
+# 取得するのは数 KB の .cer と .appinstaller だけなので、進捗は取得後のファイルサイズで示す。
 $ProgressPreference = "SilentlyContinue"
 
 $packageName = "PhotoMapStudio"
 $certStorePath = "Cert:\LocalMachine\TrustedPeople"
+$installStepCount = 5
+# 長時間の処理中も 10 秒以上無出力にならないよう、この間隔で経過を出力する。
+$progressReportIntervalSeconds = 5
+$stepStopwatch = New-Object Diagnostics.Stopwatch
+
+function Write-StepStart {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$Number,
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host "[$Number/$installStepCount] $Message"
+    $stepStopwatch.Restart()
+}
+
+function Write-StepDetail {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host "      $Message"
+}
+
+function Write-StepResult {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-StepDetail -Message ("{0}（{1:N1} 秒）" -f $Message, $stepStopwatch.Elapsed.TotalSeconds)
+}
+
+function Write-StepSkipped {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$Number,
+        [Parameter(Mandatory = $true)]
+        [string]$Title,
+        [Parameter(Mandatory = $true)]
+        [string]$Reason
+    )
+
+    Write-Host "[$Number/$installStepCount] ${Title}: スキップ（$Reason）"
+}
 
 function Invoke-Exit {
     param([int]$Code)
@@ -58,6 +107,7 @@ function Save-RemoteFile {
     )
 
     Invoke-WebRequest -Uri $Uri -OutFile $Path -UseBasicParsing -ErrorAction Stop
+    return (Get-Item -LiteralPath $Path).Length
 }
 
 function Get-AppInstallerMainPackage {
@@ -125,6 +175,38 @@ function Import-CertificateToLocalMachine {
     }
 }
 
+function Install-AppInstallerFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    # Add-AppxPackage は完了まで制御を返さないため、別 Runspace で実行して待機中に経過時間を出力する。
+    $powerShell = [PowerShell]::Create()
+    try {
+        # -AppInstallerFile はスイッチであり、.appinstaller はローカルパスを -Path に渡す。
+        $null = $powerShell.AddCommand("Add-AppxPackage").AddParameter("Path", $Path).AddParameter("AppInstallerFile").AddParameter("ErrorAction", "Stop")
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        $asyncResult = $powerShell.BeginInvoke()
+        while (-not $asyncResult.AsyncWaitHandle.WaitOne($progressReportIntervalSeconds * 1000)) {
+            Write-StepDetail -Message ("処理中です（経過 {0:N0} 秒）..." -f $stopwatch.Elapsed.TotalSeconds)
+        }
+
+        try {
+            $null = $powerShell.EndInvoke($asyncResult)
+        } catch [System.Management.Automation.MethodInvocationException] {
+            # EndInvoke の例外ラッパーを外し、Add-AppxPackage を直接実行した場合と同じエラーとして伝播する。
+            $innerException = $_.Exception.InnerException
+            if ($innerException -is [System.Management.Automation.IContainsErrorRecord]) {
+                throw $innerException.ErrorRecord
+            }
+            throw
+        }
+    } finally {
+        $powerShell.Dispose()
+    }
+}
+
 function Wait-ForInstalledPackage {
     param(
         [Parameter(Mandatory = $true)]
@@ -137,10 +219,11 @@ function Wait-ForInstalledPackage {
         [int]$TimeoutSeconds
     )
 
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    $lastState = "パッケージがまだ登録されていません"
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $nextReportSeconds = $progressReportIntervalSeconds
 
     do {
+        $lastState = "パッケージがまだ登録されていません"
         $package = Get-AppxPackage -Name $Name -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($null -ne $package) {
             $installLocation = [string]$package.InstallLocation
@@ -163,10 +246,16 @@ function Wait-ForInstalledPackage {
             $lastState = "Status=$($package.Status), Version=$($package.Version), Architecture=$architecture, InstallLocation=$installLocation"
         }
 
-        if ((Get-Date) -lt $deadline) {
+        $elapsedSeconds = $stopwatch.Elapsed.TotalSeconds
+        if ($elapsedSeconds -ge $nextReportSeconds) {
+            Write-StepDetail -Message ("待機中です（経過 {0:N0}/{1} 秒、状態: {2}）..." -f $elapsedSeconds, $TimeoutSeconds, $lastState)
+            $nextReportSeconds += $progressReportIntervalSeconds
+        }
+
+        if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
             Start-Sleep -Seconds 2
         }
-    } while ((Get-Date) -lt $deadline)
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds)
 
     throw "APPX_INSTALL_PENDING: AppX パッケージの登録完了を $TimeoutSeconds 秒以内に確認できませんでした（期待値: Name=$Name, Version=$ExpectedVersion, Architecture=$ExpectedArchitecture）。最終状態: $lastState"
 }
@@ -192,41 +281,32 @@ try {
 
         Write-Host "署名証明書を LocalMachine\TrustedPeople ストアへ登録しています..."
         Import-CertificateToLocalMachine -Path $CertificatePath
-    } elseif ($Test) {
-        New-Item -ItemType Directory -Force -Path $workDir | Out-Null
-
-        Write-Host "署名証明書を取得しています..."
-        Save-RemoteFile -Uri "$baseUrl/PhotoMapStudio.cer" -Path $cerPath
-        $null = Get-PfxCertificate -FilePath $cerPath -ErrorAction Stop
-
-        Write-Host "App Installer 定義を取得しています（アーキテクチャ: $Architecture）..."
-        Save-RemoteFile -Uri "$baseUrl/PhotoMapStudio-$Architecture.appinstaller" -Path $appInstallerPath
-        $mainPackage = Get-AppInstallerMainPackage -Path $appInstallerPath
-        if ($mainPackage.Name -ne $packageName) {
-            throw ".appinstaller のパッケージ名が想定と異なります: $($mainPackage.Name)"
-        }
-        if ($mainPackage.ProcessorArchitecture.ToLowerInvariant() -ne $Architecture.ToLowerInvariant()) {
-            throw ".appinstaller のアーキテクチャが指定値と異なります: $($mainPackage.ProcessorArchitecture)"
-        }
-        $null = [version]$mainPackage.Version
-        Write-Host "テストモードのため、証明書登録とアプリインストールは実行しません。"
     } else {
         New-Item -ItemType Directory -Force -Path $workDir | Out-Null
 
-        Write-Host "署名証明書を取得しています..."
-        Save-RemoteFile -Uri "$baseUrl/PhotoMapStudio.cer" -Path $cerPath
+        Write-StepStart -Number 1 -Message "署名証明書を取得しています..."
+        $cerSize = Save-RemoteFile -Uri "$baseUrl/PhotoMapStudio.cer" -Path $cerPath
         $certificate = Get-PfxCertificate -FilePath $cerPath -ErrorAction Stop
-        if (-not (Test-Path -LiteralPath $certStorePath)) {
-            throw "証明書ストアを解決できません: $certStorePath"
-        }
+        Write-StepResult -Message ("完了: {0:N0} バイト、Thumbprint: {1}" -f $cerSize, $certificate.Thumbprint)
 
-        $registeredCertificate = Get-RegisteredCertificate -StorePath $certStorePath -Thumbprint $certificate.Thumbprint
-        if ($null -eq $registeredCertificate) {
-            if (Test-IsAdministrator) {
-                Write-Host "署名証明書を LocalMachine\TrustedPeople ストアへ登録しています..."
+        if ($Test) {
+            Write-StepSkipped -Number 2 -Title "署名証明書の登録" -Reason "テストモード"
+        } else {
+            Write-StepStart -Number 2 -Message "署名証明書の登録状態を確認しています（$certStorePath）..."
+            if (-not (Test-Path -LiteralPath $certStorePath)) {
+                throw "証明書ストアを解決できません: $certStorePath"
+            }
+
+            $registeredCertificate = Get-RegisteredCertificate -StorePath $certStorePath -Thumbprint $certificate.Thumbprint
+            if ($null -ne $registeredCertificate) {
+                Write-StepResult -Message "スキップ: 登録済みです"
+            } elseif (Test-IsAdministrator) {
+                Write-StepDetail -Message "管理者として実行中のため、署名証明書を直接登録します..."
                 Import-CertificateToLocalMachine -Path $cerPath
+                Write-StepResult -Message "完了: 登録しました"
             } else {
-                Write-Host "署名証明書の登録に必要な場合だけ、UAC で管理者権限を要求します..."
+                Write-StepDetail -Message "署名証明書の登録には管理者権限が必要です。UAC の確認ダイアログで「はい」を選択してください。"
+                Write-StepDetail -Message "承認すると別ウィンドウで証明書を登録し、その完了後にこのウィンドウで処理を続行します。"
                 $arguments = @(
                     "-NoProfile",
                     "-ExecutionPolicy", "Bypass",
@@ -241,17 +321,18 @@ try {
                 if ([int]$process.ExitCode -ne 0) {
                     throw "証明書登録用の昇格プロセスが終了コード $($process.ExitCode) で終了しました。"
                 }
-            }
+                Write-StepDetail -Message "証明書登録用の昇格プロセスが終了しました（終了コード: 0）。"
 
-            $registeredCertificate = Get-RegisteredCertificate -StorePath $certStorePath -Thumbprint $certificate.Thumbprint
-            if ($null -eq $registeredCertificate) {
-                throw "署名証明書を $certStorePath に登録できませんでした。"
+                $registeredCertificate = Get-RegisteredCertificate -StorePath $certStorePath -Thumbprint $certificate.Thumbprint
+                if ($null -eq $registeredCertificate) {
+                    throw "署名証明書を $certStorePath に登録できませんでした。"
+                }
+                Write-StepResult -Message "完了: 登録を確認しました"
             }
         }
 
-        Write-Host "App Installer 定義を取得しています（アーキテクチャ: $Architecture）..."
-        Save-RemoteFile -Uri "$baseUrl/PhotoMapStudio-$Architecture.appinstaller" -Path $appInstallerPath
-
+        Write-StepStart -Number 3 -Message "App Installer 定義を取得しています（アーキテクチャ: $Architecture）..."
+        $appInstallerSize = Save-RemoteFile -Uri "$baseUrl/PhotoMapStudio-$Architecture.appinstaller" -Path $appInstallerPath
         $mainPackage = Get-AppInstallerMainPackage -Path $appInstallerPath
         if ($mainPackage.Name -ne $packageName) {
             throw ".appinstaller のパッケージ名が想定と異なります: $($mainPackage.Name)"
@@ -262,19 +343,30 @@ try {
         }
         $expectedVersion = [string]$mainPackage.Version
         $null = [version]$expectedVersion
+        Write-StepResult -Message ("完了: {0:N0} バイト、バージョン: {1}、アーキテクチャ: {2}" -f $appInstallerSize, $expectedVersion, $expectedArchitecture)
 
-        Write-Host "アプリをインストールしています（.appinstaller 経由）..."
-        # -AppInstallerFile はスイッチであり、.appinstaller はローカルパスを -Path に渡す。
-        Add-AppxPackage -Path $appInstallerPath -AppInstallerFile -ErrorAction Stop
-        $installedPackage = Wait-ForInstalledPackage `
-            -Name $packageName `
-            -ExpectedVersion $expectedVersion `
-            -ExpectedArchitecture $expectedArchitecture `
-            -TimeoutSeconds $InstallTimeoutSeconds
+        if ($Test) {
+            Write-StepSkipped -Number 4 -Title "アプリのインストール" -Reason "テストモード"
+            Write-StepSkipped -Number 5 -Title "インストール完了の確認" -Reason "テストモード"
+            Write-Host "テストモードのため、証明書登録とアプリインストールは実行しませんでした。"
+        } else {
+            Write-StepStart -Number 4 -Message "アプリをインストールしています（.appinstaller 経由）..."
+            Write-StepDetail -Message "MSIX のダウンロード・展開・登録を行うため、数分かかる場合があります。"
+            Install-AppInstallerFile -Path $appInstallerPath
+            Write-StepResult -Message "完了"
 
-        Write-Host "インストールが完了しました（バージョン: $($installedPackage.Version)、アーキテクチャ: $($installedPackage.Architecture)）。"
-        Write-Host "スタートメニューから PhotoMapStudio を起動できます。"
-        Write-Host "新バージョンはアプリ起動時に自動チェックされます。"
+            Write-StepStart -Number 5 -Message "インストール完了を確認しています（タイムアウト: $InstallTimeoutSeconds 秒）..."
+            $installedPackage = Wait-ForInstalledPackage `
+                -Name $packageName `
+                -ExpectedVersion $expectedVersion `
+                -ExpectedArchitecture $expectedArchitecture `
+                -TimeoutSeconds $InstallTimeoutSeconds
+            Write-StepResult -Message "完了: 登録を確認しました"
+
+            Write-Host "インストールが完了しました（バージョン: $($installedPackage.Version)、アーキテクチャ: $($installedPackage.Architecture)）。"
+            Write-Host "スタートメニューから PhotoMapStudio を起動できます。"
+            Write-Host "新バージョンはアプリ起動時に自動チェックされます。"
+        }
     }
 } catch {
     $message = $_.Exception.Message

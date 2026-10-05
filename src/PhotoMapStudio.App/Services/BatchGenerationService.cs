@@ -274,7 +274,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
         ReadOnlyMemory<byte> content,
         CancellationToken cancellationToken)
     {
-        string temporaryPath = $"{outputPath}.{Guid.NewGuid():N}.tmp";
+        string temporaryPath = Path.Combine(Path.GetDirectoryName(outputPath)!, $"{Guid.NewGuid():N}.tmp");
         try
         {
             await File.WriteAllBytesAsync(temporaryPath, content.ToArray(), cancellationToken)

@@ -28,6 +28,7 @@ internal sealed partial class MainWindow : Window
 {
     private readonly WindowManager windowManager;
     private ContentDialog? helpDialog;
+    private readonly DialogCoordinator dialogs = new();
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -85,6 +86,7 @@ internal sealed partial class MainWindow : Window
     private async Task ToggleHelpAsync()
     {
         if (this.helpDialog is not null) { this.helpDialog.Hide(); return; }
+        if (this.dialogs.IsBusy) { return; }
         this.helpDialog = new ContentDialog
         {
             XamlRoot = this.RootLayout.XamlRoot,
@@ -96,7 +98,7 @@ internal sealed partial class MainWindow : Window
         var closeAccelerator = new KeyboardAccelerator { Key = Windows.System.VirtualKey.F1 };
         closeAccelerator.Invoked += (_, args) => { args.Handled = true; this.helpDialog?.Hide(); };
         this.helpDialog.KeyboardAccelerators.Add(closeAccelerator);
-        try { await this.helpDialog.ShowAsync(); }
+        try { await this.dialogs.ShowAsync(async () => await this.helpDialog.ShowAsync()); }
         finally { this.helpDialog = null; }
     }
 
@@ -124,8 +126,12 @@ internal sealed partial class MainWindow : Window
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                using CancellationTokenRegistration registration = cancellationToken.Register(() => this.DispatcherQueue.TryEnqueue(() => dialog.Hide()));
-                ContentDialogResult result = await dialog.ShowAsync();
+                ContentDialogResult result = await this.dialogs.ShowAsync(async () =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using CancellationTokenRegistration registration = cancellationToken.Register(() => this.DispatcherQueue.TryEnqueue(() => dialog.Hide()));
+                    return await dialog.ShowAsync();
+                }, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 completion.TrySetResult(result == ContentDialogResult.Primary);
             }

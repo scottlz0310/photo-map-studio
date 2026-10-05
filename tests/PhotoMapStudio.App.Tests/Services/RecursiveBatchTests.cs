@@ -11,6 +11,29 @@ namespace PhotoMapStudio.App.Tests.Services;
 public class RecursiveBatchTests
 {
     [Theory]
+    [InlineData(218)]
+    [InlineData(219)]
+    [InlineData(255)]
+    public async Task 長い最終出力名でも一時保存と移動が成功する(int length)
+    {
+        using var tree = new PhotoTree(); tree.Add("a.jpg");
+        var settings = new BatchGenerationSettings
+        {
+            InputFolderPath = tree.Root,
+            OutputFolderPath = "maps",
+            OutputFilePrefix = new string('p', length - 5),
+            OutputFilePostfix = string.Empty,
+        };
+        var service = new BatchGenerationService(new PhotoFileEnumerator(), new Reader(_ => new(35, 139)), new Composer());
+        BatchGenerationSummary result = await service.GenerateAsync(settings, null, CancellationToken.None);
+        Assert.Equal(1, result.SuccessCount); Assert.Equal(0, result.ErrorCount);
+        string output = Assert.Single(Directory.EnumerateFiles(Path.Combine(tree.Root, "maps")));
+        Assert.Equal(length, Path.GetFileName(output).Length);
+        Assert.Equal(new byte[] { 1 }, await File.ReadAllBytesAsync(output));
+        Assert.Empty(Directory.EnumerateFiles(tree.Root, "*.tmp", SearchOption.AllDirectories));
+    }
+
+    [Theory]
     [InlineData(100)]
     [InlineData(1000)]
     [InlineData(5200)]

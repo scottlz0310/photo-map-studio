@@ -23,6 +23,7 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
     private readonly IPhotoFileEnumerator photoFileEnumerator;
     private readonly IExifGpsReader exifGpsReader;
     private readonly IMapImageComposer mapImageComposer;
+    private readonly IErrorDiagnosticSink? errorDiagnostics;
 
     /// <summary>
     /// サービスを構築する。
@@ -33,11 +34,12 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
     public PreviewGenerationService(
         IPhotoFileEnumerator photoFileEnumerator,
         IExifGpsReader exifGpsReader,
-        IMapImageComposer mapImageComposer)
+        IMapImageComposer mapImageComposer, IErrorDiagnosticSink? errorDiagnostics = null)
     {
         this.photoFileEnumerator = photoFileEnumerator ?? throw new ArgumentNullException(nameof(photoFileEnumerator));
         this.exifGpsReader = exifGpsReader ?? throw new ArgumentNullException(nameof(exifGpsReader));
         this.mapImageComposer = mapImageComposer ?? throw new ArgumentNullException(nameof(mapImageComposer));
+        this.errorDiagnostics = errorDiagnostics;
     }
 
     /// <inheritdoc />
@@ -52,9 +54,13 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
             yield break;
         }
 
-        var scanning = new InlineProgress<PhotoEnumerationProgress>(value => progress?.Report(new(0, 0, 0,
+        var scanning = new InlineProgress<PhotoEnumerationProgress>(value =>
+        {
+            if (value.Failure is not null) { this.errorDiagnostics?.Record(ErrorDiagnosticStage.Enumeration, value.FolderCount, value.Failure); }
+            progress?.Report(new(0, 0, 0,
             value.Error is null ? $"列挙: 走査済み {value.FolderCount} フォルダ / 写真 {value.PhotoCount} 枚"
-                : $"フォルダ読み取りエラー: {value.RelativePath}: {value.Error}", true, value.Error is not null)));
+                : $"フォルダ読み取りエラー: {value.RelativePath}: {value.Error}", true, value.Error is not null));
+        });
         IReadOnlyList<string> filePaths = await Task.Run(
             () => this.photoFileEnumerator.Enumerate(folderPath, includeSubfolders, scanning, cancellationToken),
             cancellationToken).ConfigureAwait(false);
@@ -72,6 +78,7 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
             }
             catch (Exception exception) when (exception is ExifGpsReadException or IOException or UnauthorizedAccessException)
             {
+                this.errorDiagnostics?.Record(ErrorDiagnosticStage.PreviewGps, checkedCount + 1, exception);
                 error = $"GPS読み取りエラー: {Path.GetRelativePath(folderPath, filePath)}: {exception.Message}";
             }
 
@@ -121,8 +128,16 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        GeoCoordinate? coordinate = await this.ReadGpsAsync(photo.FilePath, cancellationToken)
-            .ConfigureAwait(false);
+        GeoCoordinate? coordinate;
+        try
+        {
+            coordinate = await this.ReadGpsAsync(photo.FilePath, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ExifGpsReadException or IOException or UnauthorizedAccessException)
+        {
+            this.errorDiagnostics?.Record(ErrorDiagnosticStage.PreviewGps, 0, exception);
+            throw;
+        }
         if (coordinate is null)
         {
             return Failure("選択された写真にGPS情報が含まれていません。");
@@ -135,6 +150,7 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
         }
         catch (ArgumentException exception)
         {
+            this.errorDiagnostics?.Record(ErrorDiagnosticStage.PreviewMap, 0, exception);
             return Failure($"プレビュー生成エラー: {exception.Message}", coordinate);
         }
 
@@ -175,6 +191,7 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
             or InvalidOperationException
             or IOException)
         {
+            this.errorDiagnostics?.Record(ErrorDiagnosticStage.PreviewMap, 0, exception);
             return Failure($"プレビュー生成エラー: {exception.Message}", coordinate);
         }
     }

@@ -6,6 +6,15 @@ namespace PhotoMapStudio.Core.Tests.Photos;
 public class RecursiveEnumerationTests
 {
     [Theory]
+    [InlineData(FileAttributes.Archive, null, false)]
+    [InlineData(FileAttributes.ReparsePoint | FileAttributes.Archive, null, false)]
+    [InlineData(FileAttributes.ReparsePoint | FileAttributes.Directory, null, false)]
+    [InlineData(FileAttributes.ReparsePoint, "photo.jpg", true)]
+    [InlineData(FileAttributes.ReparsePoint | FileAttributes.Directory, "folder", true)]
+    public void クラウド属性は許可しリンク先のある項目だけを除外する(FileAttributes attributes, string? linkTarget, bool expected)
+        => Assert.Equal(expected, PhotoFileEnumerator.IsFileSystemLink(attributes, linkTarget));
+
+    [Theory]
     [InlineData(100)]
     [InlineData(1000)]
     [InlineData(5200)]
@@ -65,6 +74,7 @@ public class RecursiveEnumerationTests
         var logs = new List<PhotoEnumerationProgress>();
         Assert.Equal([good], enumerator.Enumerate(tree.Root, true, new SynchronousProgress<PhotoEnumerationProgress>(logs.Add)));
         Assert.Equal("bad", Assert.Single(logs, log => log.Error is not null).RelativePath);
+        Assert.IsType(unauthorized ? typeof(UnauthorizedAccessException) : typeof(IOException), Assert.Single(logs, log => log.Error is not null).Failure);
     }
 
     [Theory]

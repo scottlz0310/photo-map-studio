@@ -42,7 +42,7 @@ public sealed partial class HelpView : UserControl
                 this.AddNotice("初回はタイル取得が必要です。まず100枚程度で確認し、1,000枚、5,000枚へ段階的に増やしてください。");
                 break;
             case 1:
-                this.AddText("再帰探索の既定はOFFです。ONでは入力からの相対パス順に処理し、リンク／ジャンクションとシステムフォルダを除外します。読み取れないフォルダはERRORとして記録して続行します。\n絶対パス（UNCを含む）は全写真の共通出力先です。相対パスは各写真のフォルダを基準に解決します。『..』で外へ出る指定、ルート相対、ドライブ相対は指定できません。");
+                this.AddText("再帰探索の既定はOFFです。ONでは入力からの相対パス順に処理し、リンク／ジャンクションとシステムフォルダを除外します。Dropboxなどのクラウド同期ファイルは対象です。読み取れないフォルダはERRORとして記録して続行します。\n絶対パス（UNCを含む）は全写真の共通出力先です。相対パスは各写真のフォルダを基準に解決します。『..』で外へ出る指定、ルート相対、ドライブ相対は指定できません。");
                 this.AddCode("入力\n写真/\n├─ 春/IMG_0001.jpg\n└─ 秋/IMG_0001.jpg\n\n出力先: maps、先頭文字: map_、末尾文字: _z16\n写真/\n├─ 春/\n│  ├─ IMG_0001.jpg\n│  └─ maps/map_IMG_0001_z16.png\n└─ 秋/\n   ├─ IMG_0001.jpg\n   └─ maps/map_IMG_0001_z16.png");
                 this.AddText("『.』は写真と同じ場所、『maps』は写真のフォルダ内のmaps、『out\\map』はその下のmapに保存します。GPSなしでスキップするフォルダには相対出力フォルダを作りません。");
                 break;
@@ -82,9 +82,12 @@ public sealed partial class HelpView : UserControl
                 break;
             case 8:
                 this.AddText("GPSなし: 写真に位置情報があるか確認してください。\nタイル取得失敗: 配信元・HTTPステータス・Retry-Afterを確認し、時間をおいて再実行してください。\n出力衝突: 相対出力に変更するか写真の名前を変更します。\n出力先作成失敗: 保存先の権限とネットワーク接続を確認します。相対出力の失敗は写真単位でERRORにして続行し、絶対出力の作成失敗は開始前に中止します。\n長いパス: パッケージとWindows環境の長いパス対応を確認してください。読み書きに失敗した写真はERRORになります。");
+                this.AddText("読み取り・生成・保存のエラーはローカル診断ログに記録します。時刻・処理段階・番号・アプリ版・例外型・HResult・呼び出しメソッドを保存し、写真・GPS・パス・URL・例外メッセージは含めず、外部送信もしません。現行と直前のログを各1MiBまで保持します。番号0は写真番号を持たない処理です。ログ保存に失敗した場合も画面へエラーを表示します。");
+                this.AddCode($"%LOCALAPPDATA%\\Packages\\{Windows.ApplicationModel.Package.Current.Id.FamilyName}\\LocalState\\diagnostics");
                 break;
             case 9:
-                this.AddText($"PhotoMapStudio {typeof(HelpView).Assembly.GetName().Version}");
+                Windows.ApplicationModel.PackageVersion version = Windows.ApplicationModel.Package.Current.Id.Version;
+                this.AddText($"PhotoMapStudio {version.Major}.{version.Minor}.{version.Build}.{version.Revision}");
                 this.AddLink("README", "https://github.com/scottlz0310/photo-map-studio#readme");
                 this.AddLink("Issues", "https://github.com/scottlz0310/photo-map-studio/issues");
                 this.AddLink("プライバシーポリシー", "https://scottlz0310.github.io/photo-map-studio/privacy-policy.html");
@@ -94,7 +97,7 @@ public sealed partial class HelpView : UserControl
 
     private void AddText(string text) => this.Chapter.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
     private void AddNotice(string text) => this.Chapter.Children.Add(new InfoBar { IsOpen = true, IsClosable = false, Severity = InfoBarSeverity.Warning, Message = text });
-    private void AddCode(string text) => this.Chapter.Children.Add(new TextBox { Text = text, IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), Header = "例（選択してCtrl+Cでコピー）" });
+    private void AddCode(string text) => this.Chapter.Children.Add(new TextBox { AcceptsReturn = true, Text = text, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), Header = "例（選択してCtrl+Cでコピー）" });
     private void AddLink(string label, string uri) => this.Chapter.Children.Add(new HyperlinkButton { Content = label, NavigateUri = new Uri(uri) });
     private void AddStatusTable()
     {

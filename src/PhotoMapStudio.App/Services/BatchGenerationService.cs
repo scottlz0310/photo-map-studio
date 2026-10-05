@@ -26,6 +26,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
     private readonly IMapImageComposer mapImageComposer;
     private readonly TimeProvider timeProvider;
     private readonly TileTrafficController trafficController;
+    private readonly IErrorDiagnosticSink? errorDiagnostics;
 
     /// <summary>
     /// サービスを構築する。
@@ -37,13 +38,14 @@ public sealed class BatchGenerationService : IBatchGenerationService
         IPhotoFileEnumerator photoFileEnumerator,
         IExifGpsReader exifGpsReader,
         IMapImageComposer mapImageComposer,
-        TimeProvider? timeProvider = null, TileTrafficController? trafficController = null)
+        TimeProvider? timeProvider = null, TileTrafficController? trafficController = null, IErrorDiagnosticSink? errorDiagnostics = null)
     {
         this.photoFileEnumerator = photoFileEnumerator ?? throw new ArgumentNullException(nameof(photoFileEnumerator));
         this.exifGpsReader = exifGpsReader ?? throw new ArgumentNullException(nameof(exifGpsReader));
         this.mapImageComposer = mapImageComposer ?? throw new ArgumentNullException(nameof(mapImageComposer));
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.trafficController = trafficController ?? new TileTrafficController();
+        this.errorDiagnostics = errorDiagnostics;
     }
 
     /// <inheritdoc />
@@ -104,14 +106,18 @@ public sealed class BatchGenerationService : IBatchGenerationService
         string[] files;
         try
         {
-            var scanProgress = new InlineProgress<PhotoEnumerationProgress>(scan => progress?.Report(
+            var scanProgress = new InlineProgress<PhotoEnumerationProgress>(scan =>
+            {
+                if (scan.Failure is not null) { this.errorDiagnostics?.Record(ErrorDiagnosticStage.Enumeration, scan.FolderCount, scan.Failure); }
+                progress?.Report(
                 new(0, 0, scan.RelativePath, scan.Error is null ? BatchGenerationStatus.Success : BatchGenerationStatus.Error,
                     scan.Error is null ? $"列挙: 走査済み {scan.FolderCount} フォルダ / 写真 {scan.PhotoCount} 枚" : $"フォルダ読み取りエラー: {scan.Error}")
                 {
                     IsEnumerating = true,
                     IsActivity = scan.Error is null,
                     Elapsed = this.timeProvider.GetElapsedTime(started),
-                }));
+                });
+            });
             files = await Task.Run(() => this.photoFileEnumerator.Enumerate(settings.InputFolderPath,
                 settings.IncludeSubfolders, scanProgress, cancellationToken).ToArray(), cancellationToken).ConfigureAwait(false);
         }
@@ -161,6 +167,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
             try { Directory.CreateDirectory(settings.OutputFolderPath); }
             catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
             {
+                this.errorDiagnostics?.Record(ErrorDiagnosticStage.BatchOutput, 0, exception);
                 throw new BatchGenerationException($"出力フォルダを作成できません: {exception.Message}", exception);
             }
         }
@@ -201,6 +208,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
                 or UnauthorizedAccessException)
             {
                 errorCount++;
+                this.errorDiagnostics?.Record(ErrorDiagnosticStage.BatchGps, displayIndex, exception);
                 Notify(displayIndex, fileName, BatchGenerationStatus.Error, $"生成エラー: {exception.Message}");
                 continue;
             }
@@ -212,9 +220,11 @@ public sealed class BatchGenerationService : IBatchGenerationService
                 continue;
             }
 
+            ErrorDiagnosticStage stage = ErrorDiagnosticStage.BatchOutput;
             try
             {
                 _ = OutputPathResolver.Resolve(filePath, settings);
+                stage = ErrorDiagnosticStage.BatchMap;
                 MapCompositionResult composition = await this.mapImageComposer.ComposeAsync(
                     new MapCompositionRequest
                     {
@@ -231,6 +241,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
 
                 string outputPath = OutputPathResolver.Resolve(filePath, settings);
                 string outputFileName = Path.GetFileName(outputPath);
+                stage = ErrorDiagnosticStage.BatchOutput;
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
                 await WriteOutputAsync(outputPath, composition.Png, cancellationToken).ConfigureAwait(false);
 
@@ -258,6 +269,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
                 or UnauthorizedAccessException)
             {
                 errorCount++;
+                this.errorDiagnostics?.Record(stage, displayIndex, exception);
                 Notify(displayIndex, fileName, BatchGenerationStatus.Error, $"生成エラー: {exception.Message}");
                 if (session.IsStopped)
                 {

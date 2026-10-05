@@ -71,16 +71,16 @@
 
             <Grid Grid.Column="2" RowSpacing="12">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="3*" />
+                    <RowDefinition Height="2*" />
                 </Grid.RowDefinitions>
                 <views:PreviewView
                     x:Name="Preview"
                     Grid.Row="0"
                     DataContext="{x:Bind ViewModel.Preview}" />
-                <views:ProgressLogView
-                    Grid.Row="1"
-                    DataContext="{x:Bind ViewModel}" />
+                <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <views:ProgressLogView DataContext="{x:Bind ViewModel}" />
+                </ScrollViewer>
             </Grid>
         </Grid>
     </Grid>

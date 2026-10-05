@@ -49,7 +49,6 @@
                     SelectedItem="{Binding SelectedPhoto, Mode=TwoWay}" />
                 <Grid
                     Grid.Row="1"
-                    MinHeight="240"
                     Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
                     <Image
                         x:Name="PreviewImage"

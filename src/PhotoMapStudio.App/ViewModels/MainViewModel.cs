@@ -556,7 +556,7 @@ public sealed class MainViewModel : ObservableObject
         {
             this.HasGenerationError = true;
             this.ValidationMessage = exception.Message;
-            this.GenerationProgressMessage = "一括生成を開始できませんでした。";
+            this.GenerationProgressMessage = $"一括生成エラー: {exception.Message}";
         }
         finally
         {

@@ -7,6 +7,20 @@ namespace PhotoMapStudio.Core.Tests.Tiles;
 public class ThrottledTileClientTests
 {
     [Fact]
+    public async Task 一括中は対話要求も同じ単一接続と一秒間隔で送る()
+    {
+        var source = new TileSource("カスタム", "https://example.com/{z}/{x}/{y}.png", 0, 19, "出典", new TileRateLimit(2, TimeSpan.Zero));
+        var traffic = new TileTrafficController();
+        var inner = new ConcurrencyTrackingClient(TimeSpan.FromMilliseconds(20));
+        using var client = new ThrottledTileClient(inner, trafficController: traffic);
+        using IDisposable lease = traffic.BeginBatch(source);
+        long started = Stopwatch.GetTimestamp();
+        await Task.WhenAll(Enumerable.Range(0, 3).Select(index => client.GetTileAsync(source, 15, index, 0, CancellationToken.None)));
+        Assert.Equal(1, inner.MaxObservedConcurrency);
+        Assert.True(Stopwatch.GetElapsedTime(started) >= TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
     public async Task 同時実行数を方針の上限に抑える()
     {
         var source = new TileSource(
@@ -88,7 +102,7 @@ public class ThrottledTileClientTests
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
         {
             lock (this.gate)
             {

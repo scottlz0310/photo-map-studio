@@ -28,7 +28,7 @@ public sealed class HttpTileClient : ITileClient
         int zoom,
         int x,
         int y,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, TileFetchSession? session = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -42,6 +42,7 @@ public sealed class HttpTileClient : ITileClient
 
         try
         {
+            session?.RecordRequest();
             using HttpResponseMessage response = await client
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false);
@@ -51,7 +52,11 @@ public sealed class HttpTileClient : ITileClient
                 string message = string.Create(
                     CultureInfo.InvariantCulture,
                     $"タイルの取得が HTTP {(int)response.StatusCode} で失敗しました: {requestUri}");
-                throw new TileFetchException(message, requestUri, response.StatusCode, null);
+                string? retryAfter = response.Headers.RetryAfter?.ToString();
+                throw new TileFetchException(retryAfter is null ? message : $"{message} (Retry-After: {retryAfter})", requestUri, response.StatusCode, null)
+                {
+                    RetryAfter = retryAfter,
+                };
             }
 
             // ResponseHeadersRead のため本文の受信はここで行われる。切断も取得失敗として扱う

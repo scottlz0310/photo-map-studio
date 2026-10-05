@@ -42,6 +42,9 @@ public sealed class TileFetchException : Exception
     /// <summary>取得しようとしたタイルの URL。</summary>
     public Uri? RequestUri { get; }
 
+    /// <summary>配信元が示した再実行待機の目安。自動リトライはしない。</summary>
+    public string? RetryAfter { get; init; }
+
     /// <summary>応答の HTTP ステータス。</summary>
     public HttpStatusCode? StatusCode { get; }
 }

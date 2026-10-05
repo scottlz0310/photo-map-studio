@@ -35,9 +35,12 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
         services.TryAddSingleton<IExifGpsReader, ExifGpsReader>();
         services.TryAddSingleton<IPhotoFileEnumerator, PhotoFileEnumerator>();
 
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.TryAddSingleton<TileTrafficController>();
         services.TryAddSingleton<ITileCache>(_ => new FileSystemTileCache(tileCacheRootPath));
         services.TryAddSingleton<ITileClient>(provider => new ThrottledTileClient(
-            new HttpTileClient(provider.GetRequiredService<IHttpClientFactory>())));
+            new HttpTileClient(provider.GetRequiredService<IHttpClientFactory>()),
+            provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<TileTrafficController>()));
         services.TryAddSingleton<ITileProvider>(provider => new TileProvider(
             provider.GetRequiredService<ITileClient>(),
             provider.GetRequiredService<ITileCache>()));

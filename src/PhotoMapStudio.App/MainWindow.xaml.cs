@@ -1,9 +1,12 @@
 using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.App.ViewModels;
+using PhotoMapStudio.App.Views;
 
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -24,6 +27,8 @@ namespace PhotoMapStudio.App;
 internal sealed partial class MainWindow : Window
 {
     private readonly WindowManager windowManager;
+    private ContentDialog? helpDialog;
+    private readonly DialogCoordinator dialogs = new();
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -40,6 +45,7 @@ internal sealed partial class MainWindow : Window
         this.FolderSettings.InputFolderBrowseRequested += this.InputFolderBrowseRequested;
         this.FolderSettings.OutputFolderBrowseRequested += this.OutputFolderBrowseRequested;
         this.Closed += this.MainWindow_Closed;
+        this.ViewModel.ConfirmLargeBatchAsync = this.ConfirmLargeBatchAsync;
     }
 
     public MainViewModel ViewModel { get; }
@@ -67,6 +73,75 @@ internal sealed partial class MainWindow : Window
         {
             this.ViewModel.OutputFolderPath = folder.Path;
         }
+    }
+
+    private async void HelpButton_Click(object sender, RoutedEventArgs args) => await this.ToggleHelpAsync();
+
+    private async void HelpAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await this.ToggleHelpAsync();
+    }
+
+    private async Task ToggleHelpAsync()
+    {
+        if (this.helpDialog is not null) { this.helpDialog.Hide(); return; }
+        if (this.dialogs.IsBusy) { return; }
+        this.helpDialog = new ContentDialog
+        {
+            XamlRoot = this.RootLayout.XamlRoot,
+            Title = "PhotoMapStudioの使い方",
+            Content = new HelpView { Width = Math.Min(800, this.RootLayout.ActualWidth - 100), Height = Math.Min(540, this.RootLayout.ActualHeight - 160) },
+            CloseButtonText = "閉じる",
+        };
+        this.helpDialog.Resources["ContentDialogMaxWidth"] = 900d;
+        var closeAccelerator = new KeyboardAccelerator { Key = Windows.System.VirtualKey.F1 };
+        closeAccelerator.Invoked += (_, args) => { args.Handled = true; this.helpDialog?.Hide(); };
+        this.helpDialog.KeyboardAccelerators.Add(closeAccelerator);
+        try { await this.dialogs.ShowAsync(async () => await this.helpDialog.ShowAsync()); }
+        finally { this.helpDialog = null; }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UIディスパッチャの例外を呼び出し側のTaskへ伝播させるため。")]
+    private Task<bool> ConfirmLargeBatchAsync(int count, CancellationToken cancellationToken)
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!this.DispatcherQueue.TryEnqueue(async () =>
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = this.RootLayout.XamlRoot,
+                Title = $"カスタム配信元で{count}枚を一括生成",
+                Content = new InfoBar
+                {
+                    IsOpen = true,
+                    IsClosable = false,
+                    Severity = InfoBarSeverity.Warning,
+                    Message = "配信元が一括取得・画像保存を許可していることを確認してください。未取得のタイルは1秒間隔で取得します。"
+                },
+                PrimaryButtonText = "許可を確認して開始",
+                CloseButtonText = "キャンセル",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ContentDialogResult result = await this.dialogs.ShowAsync(async () =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using CancellationTokenRegistration registration = cancellationToken.Register(() => this.DispatcherQueue.TryEnqueue(() => dialog.Hide()));
+                    return await dialog.ShowAsync();
+                }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                completion.TrySetResult(result == ContentDialogResult.Primary);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { completion.TrySetCanceled(cancellationToken); }
+            catch (Exception exception) { completion.TrySetException(exception); }
+        }))
+        {
+            completion.TrySetException(new InvalidOperationException("確認画面をUIスレッドに表示できません。"));
+        }
+        return completion.Task;
     }
 
     private async Task<StorageFolder?> PickFolderAsync(PickerLocationId suggestedStartLocation)

@@ -16,13 +16,18 @@
             Click="InputFolderBrowseButton_Click"
             Content="入力フォルダを選択..." />
 
+        <CheckBox Content="下位フォルダも探索する" IsChecked="{Binding IncludeSubfolders, Mode=TwoWay}" />
+        <TextBlock Text="絶対パス、または写真のあるフォルダからの相対パス。『.』で写真と同じフォルダ" TextWrapping="Wrap" />
         <TextBox
-            Header="出力フォルダ"
+            Header="出力フォルダ（絶対パス／相対パス）"
             PlaceholderText="生成画像の保存先"
             Text="{Binding OutputFolderPath, Mode=TwoWay}" />
         <Button
             HorizontalAlignment="Left"
             Click="OutputFolderBrowseButton_Click"
             Content="出力フォルダを選択..." />
+        <TextBox Header="出力ファイル名の先頭文字" Text="{Binding OutputFilePrefix, Mode=TwoWay}" />
+        <TextBox Header="出力ファイル名の末尾文字" Text="{Binding OutputFilePostfix, Mode=TwoWay}" />
+        <TextBlock Text="{Binding OutputFileNameExample}" TextWrapping="Wrap" />
     </StackPanel>
 </UserControl>

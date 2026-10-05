@@ -27,7 +27,7 @@ public sealed class TileProvider : ITileProvider
         int zoom,
         int x,
         int y,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, TileFetchSession? session = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -39,15 +39,33 @@ public sealed class TileProvider : ITileProvider
                 $"{source.Name} が対応するズームの範囲外です（{source.MinZoom}〜{source.MaxZoom}）。");
         }
 
+        session?.ThrowIfStopped();
         string key = TileCacheKey.Create(source.UrlTemplate, zoom, x, y);
 
         byte[]? cached = await this.cache.TryReadAsync(key, cancellationToken).ConfigureAwait(false);
         if (cached is not null)
         {
+            session?.RecordSuccess(cached: true);
             return cached;
         }
 
-        byte[] content = await this.client.GetTileAsync(source, zoom, x, y, cancellationToken).ConfigureAwait(false);
+        if (session is not null && source.IsOfficialOpenStreetMap)
+        {
+            throw new InvalidOperationException("OSM公式サーバーの一括新規取得は利用できません。一括取得・画像保存が許可されたOSM系配信元をカスタム設定で指定してください。");
+        }
+
+        byte[] content;
+        try
+        {
+            content = await this.client.GetTileAsync(source, zoom, x, y, cancellationToken, session).ConfigureAwait(false);
+            session?.RecordSuccess(cached: false);
+        }
+        catch (TileFetchException exception)
+        {
+            session?.RecordFailure(exception);
+            session?.ThrowIfStopped();
+            throw;
+        }
         await this.cache.WriteAsync(key, content, cancellationToken).ConfigureAwait(false);
         return content;
     }

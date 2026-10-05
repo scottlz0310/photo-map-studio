@@ -13,7 +13,8 @@ public interface ITileProvider
     /// <param name="x">タイル番号 X。</param>
     /// <param name="y">タイル番号 Y。</param>
     /// <param name="cancellationToken">キャンセルトークン。</param>
+    /// <param name="session">一括取得の集計と連続失敗の検知。</param>
     /// <returns>タイル画像のバイト列。</returns>
     /// <exception cref="TileFetchException">取得に失敗した場合。</exception>
-    Task<byte[]> GetTileAsync(TileSource source, int zoom, int x, int y, CancellationToken cancellationToken);
+    Task<byte[]> GetTileAsync(TileSource source, int zoom, int x, int y, CancellationToken cancellationToken, TileFetchSession? session = null);
 }

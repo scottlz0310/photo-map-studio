@@ -75,6 +75,21 @@ public sealed record TileSource
     /// <summary>レート制御方針。</summary>
     public TileRateLimit RateLimit { get; }
 
+    /// <summary>公式 OSM のタイル配信元かどうか。</summary>
+    public bool IsOfficialOpenStreetMap
+    {
+        get
+        {
+            string host = this.BuildTileUri(0, 0, 0).Host.TrimEnd('.');
+            return string.Equals(host, "tile.openstreetmap.org", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".tile.openstreetmap.org", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>一括生成の固定レート。地理院は従来の間隔を維持する。</summary>
+    public TileRateLimit BatchRateLimit => string.Equals(this.BuildTileUri(0, 0, 0).Host, "cyberjapandata.gsi.go.jp", StringComparison.OrdinalIgnoreCase)
+        ? this.RateLimit : new TileRateLimit(1, TimeSpan.FromSeconds(1));
+
     /// <summary>指定ズームが利用可能かどうかを返す。</summary>
     /// <param name="zoom">ズームレベル。</param>
     /// <returns>利用可能なら <see langword="true"/>。</returns>

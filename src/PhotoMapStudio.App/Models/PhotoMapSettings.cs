@@ -39,6 +39,15 @@ public sealed record PhotoMapSettings
     /// <summary>出力フォルダ。</summary>
     public string OutputFolderPath { get; init; } = string.Empty;
 
+    /// <summary>下位フォルダも探索する。</summary>
+    public bool IncludeSubfolders { get; init; }
+
+    /// <summary>出力名の先頭文字。</summary>
+    public string OutputFilePrefix { get; init; } = string.Empty;
+
+    /// <summary>出力名の末尾文字。</summary>
+    public string OutputFilePostfix { get; init; } = "_map";
+
     /// <summary>出力幅。</summary>
     public int Width { get; init; } = DefaultWidth;
 

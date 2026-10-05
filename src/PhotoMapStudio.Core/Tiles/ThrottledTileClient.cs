@@ -9,6 +9,7 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
 {
     private readonly ITileClient inner;
     private readonly TimeProvider timeProvider;
+    private readonly TileTrafficController trafficController;
     private readonly ConcurrentDictionary<string, Throttle> throttles = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -16,10 +17,11 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
     /// </summary>
     /// <param name="inner">実際にタイルを取得するクライアント。</param>
     /// <param name="timeProvider">間隔制御に使う時刻源。</param>
-    public ThrottledTileClient(ITileClient inner, TimeProvider? timeProvider = null)
+    public ThrottledTileClient(ITileClient inner, TimeProvider? timeProvider = null, TileTrafficController? trafficController = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         this.inner = inner;
+        this.trafficController = trafficController ?? new TileTrafficController();
         this.timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -29,24 +31,23 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
         int zoom,
         int x,
         int y,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, TileFetchSession? session = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
         Throttle throttle = this.throttles.GetOrAdd(
-            source.UrlTemplate,
-            static (_, rateLimit) => new Throttle(rateLimit),
-            source.RateLimit);
+            source.BuildTileUri(0, 0, 0).Host,
+            static _ => new Throttle());
 
-        await throttle.Concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await throttle.EnterAsync(() => this.trafficController.GetConcurrencyLimit(source), cancellationToken).ConfigureAwait(false);
         try
         {
-            await throttle.WaitForIntervalAsync(this.timeProvider, cancellationToken).ConfigureAwait(false);
-            return await this.inner.GetTileAsync(source, zoom, x, y, cancellationToken).ConfigureAwait(false);
+            await throttle.WaitForIntervalAsync(this.timeProvider, this.trafficController.GetMinimumInterval(source), cancellationToken).ConfigureAwait(false);
+            return await this.inner.GetTileAsync(source, zoom, x, y, cancellationToken, session).ConfigureAwait(false);
         }
         finally
         {
-            throttle.Concurrency.Release();
+            throttle.Exit();
         }
     }
 
@@ -63,21 +64,45 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
 
     private sealed class Throttle : IDisposable
     {
-        private readonly TimeSpan minimumInterval;
         private readonly SemaphoreSlim intervalGate = new(1, 1);
         private DateTimeOffset lastRequestedAt = DateTimeOffset.MinValue;
 
-        public Throttle(TileRateLimit rateLimit)
+        private readonly object synchronization = new();
+        private int activeCount;
+        private TaskCompletionSource changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task EnterAsync(Func<int> limit, CancellationToken cancellationToken)
         {
-            this.minimumInterval = rateLimit.MinimumInterval;
-            this.Concurrency = new SemaphoreSlim(rateLimit.MaxConcurrentRequests, rateLimit.MaxConcurrentRequests);
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Task wait;
+                lock (this.synchronization)
+                {
+                    if (this.activeCount < limit())
+                    {
+                        this.activeCount++;
+                        return;
+                    }
+                    wait = this.changed.Task;
+                }
+                await wait.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
 
-        public SemaphoreSlim Concurrency { get; }
-
-        public async Task WaitForIntervalAsync(TimeProvider timeProvider, CancellationToken cancellationToken)
+        public void Exit()
         {
-            if (this.minimumInterval <= TimeSpan.Zero)
+            lock (this.synchronization)
+            {
+                this.activeCount--;
+                this.changed.TrySetResult();
+                this.changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+
+        public async Task WaitForIntervalAsync(TimeProvider timeProvider, TimeSpan minimumInterval, CancellationToken cancellationToken)
+        {
+            if (minimumInterval <= TimeSpan.Zero)
             {
                 return;
             }
@@ -87,9 +112,9 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
             try
             {
                 TimeSpan elapsed = timeProvider.GetUtcNow() - this.lastRequestedAt;
-                if (elapsed < this.minimumInterval)
+                if (elapsed < minimumInterval)
                 {
-                    await Task.Delay(this.minimumInterval - elapsed, timeProvider, cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(minimumInterval - elapsed, timeProvider, cancellationToken).ConfigureAwait(false);
                 }
 
                 this.lastRequestedAt = timeProvider.GetUtcNow();
@@ -102,7 +127,6 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
 
         public void Dispose()
         {
-            this.Concurrency.Dispose();
             this.intervalGate.Dispose();
         }
     }

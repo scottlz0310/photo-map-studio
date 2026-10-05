@@ -4,6 +4,7 @@ using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tests.TestSupport;
 
 namespace PhotoMapStudio.App.Tests.Services;
 
@@ -23,12 +24,14 @@ public class PreviewGenerationServiceTests
             reader,
             new StubMapImageComposer());
 
-        IReadOnlyList<PreviewPhoto> photos = await service.LoadPhotosAsync(
-            "C:\\Photos",
-            CancellationToken.None);
+        var photos = new List<PreviewPhoto>();
+        await foreach (PreviewPhoto loaded in service.LoadPhotosAsync("C:\\Photos", false, null, CancellationToken.None))
+        {
+            photos.Add(loaded);
+        }
 
         var photo = Assert.Single(photos);
-        Assert.Equal("gps.jpg", photo.DisplayName);
+        Assert.EndsWith("gps.jpg", photo.DisplayName, StringComparison.Ordinal);
         Assert.Equal("gps.jpg", photo.FilePath);
     }
 
@@ -65,10 +68,6 @@ public class PreviewGenerationServiceTests
         }
     }
 
-    private sealed class StubPhotoFileEnumerator(IReadOnlyList<string> files) : IPhotoFileEnumerator
-    {
-        public IReadOnlyList<string> Enumerate(string folderPath) => files;
-    }
 
     private sealed class StubExifGpsReader(
         IReadOnlyDictionary<string, GeoCoordinate?> coordinates) : IExifGpsReader

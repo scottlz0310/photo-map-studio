@@ -24,6 +24,15 @@ public sealed record BatchGenerationSettings
     /// <summary>PNG を保存する出力フォルダ。</summary>
     public string OutputFolderPath { get; init; } = string.Empty;
 
+    /// <summary>下位フォルダも探索する。</summary>
+    public bool IncludeSubfolders { get; init; }
+
+    /// <summary>出力名の先頭文字。</summary>
+    public string OutputFilePrefix { get; init; } = string.Empty;
+
+    /// <summary>出力名の末尾文字。</summary>
+    public string OutputFilePostfix { get; init; } = "_map";
+
     /// <summary>出力幅。</summary>
     public int Width { get; init; } = MapCompositionRequest.DefaultWidth;
 
@@ -35,6 +44,9 @@ public sealed record BatchGenerationSettings
 
     /// <summary>ピン画像のパス。</summary>
     public string PinImagePath { get; init; } = string.Empty;
+
+    /// <summary>100枚超のカスタム一括生成を、列挙後に利用者へ確認する。</summary>
+    public Func<int, CancellationToken, Task<bool>>? ConfirmLargeBatchAsync { get; init; }
 
     /// <summary>使用するタイルソース。</summary>
     public TileSource TileSource { get; init; } = TileSources.Default;

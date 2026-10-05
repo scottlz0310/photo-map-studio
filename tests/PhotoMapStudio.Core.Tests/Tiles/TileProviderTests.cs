@@ -103,7 +103,7 @@ public class TileProviderTests
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
         {
             this.CallCount++;
             return this.failure is null

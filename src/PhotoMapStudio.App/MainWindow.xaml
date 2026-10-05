@@ -7,6 +7,7 @@
     Title="PhotoMapStudio">
 
     <Grid
+        x:Name="RootLayout"
         Padding="16"
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
@@ -14,7 +15,11 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="F1" Invoked="HelpAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
         <StackPanel Spacing="4">
+            <Button Content="ヘルプ (F1)" Click="HelpButton_Click" />
             <TextBlock
                 Style="{ThemeResource TitleTextBlockStyle}"
                 Text="PhotoMapStudio" />
@@ -66,16 +71,16 @@
 
             <Grid Grid.Column="2" RowSpacing="12">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="3*" />
+                    <RowDefinition Height="2*" />
                 </Grid.RowDefinitions>
                 <views:PreviewView
                     x:Name="Preview"
                     Grid.Row="0"
                     DataContext="{x:Bind ViewModel.Preview}" />
-                <views:ProgressLogView
-                    Grid.Row="1"
-                    DataContext="{x:Bind ViewModel}" />
+                <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <views:ProgressLogView DataContext="{x:Bind ViewModel}" />
+                </ScrollViewer>
             </Grid>
         </Grid>
     </Grid>

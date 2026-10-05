@@ -19,11 +19,14 @@ namespace PhotoMapStudio.App.Services;
     Justification = "DI コンテナーから生成される一括生成サービス。")]
 public sealed class BatchGenerationService : IBatchGenerationService
 {
-    private const string OutsideCoverageMessage = "選択中のタイルソースは撮影地点を配信していません。タイルソースを OpenStreetMap に変更して再実行してください。";
+    private const string OutsideCoverageMessage = "選択中のタイルソースは撮影地点を配信していません。一括取得・画像保存が許可された配信元をカスタム設定で指定して再実行してください。";
 
     private readonly IPhotoFileEnumerator photoFileEnumerator;
     private readonly IExifGpsReader exifGpsReader;
     private readonly IMapImageComposer mapImageComposer;
+    private readonly TimeProvider timeProvider;
+    private readonly TileTrafficController trafficController;
+    private readonly IErrorDiagnosticSink? errorDiagnostics;
 
     /// <summary>
     /// サービスを構築する。
@@ -34,11 +37,15 @@ public sealed class BatchGenerationService : IBatchGenerationService
     public BatchGenerationService(
         IPhotoFileEnumerator photoFileEnumerator,
         IExifGpsReader exifGpsReader,
-        IMapImageComposer mapImageComposer)
+        IMapImageComposer mapImageComposer,
+        TimeProvider? timeProvider = null, TileTrafficController? trafficController = null, IErrorDiagnosticSink? errorDiagnostics = null)
     {
         this.photoFileEnumerator = photoFileEnumerator ?? throw new ArgumentNullException(nameof(photoFileEnumerator));
         this.exifGpsReader = exifGpsReader ?? throw new ArgumentNullException(nameof(exifGpsReader));
         this.mapImageComposer = mapImageComposer ?? throw new ArgumentNullException(nameof(mapImageComposer));
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+        this.trafficController = trafficController ?? new TileTrafficController();
+        this.errorDiagnostics = errorDiagnostics;
     }
 
     /// <inheritdoc />
@@ -55,50 +62,131 @@ public sealed class BatchGenerationService : IBatchGenerationService
         ArgumentOutOfRangeException.ThrowIfNegative(settings.Zoom);
         ArgumentNullException.ThrowIfNull(settings.TileSource);
 
-        string[] files = await Task.Run(
-            () => this.photoFileEnumerator.Enumerate(settings.InputFolderPath)
-                .OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal)
-                .ToArray(),
-            cancellationToken).ConfigureAwait(false);
-
-        if (files.Length == 0)
+        OutputPathResolver.Validate(settings.OutputFolderPath, settings.OutputFilePrefix, settings.OutputFilePostfix);
+        if (settings.TileSource.IsOfficialOpenStreetMap)
         {
-            return new BatchGenerationSummary(0, 0, 0, IsCancelled: false);
+            throw new BatchGenerationException("OSM公式サーバーはプレビュー用です。一括取得・画像保存が許可されたOSM系配信元をカスタム設定で指定してください。");
         }
 
-        IReadOnlyList<string> collisions = FindOutputCollisions(files);
-        if (collisions.Count > 0)
-        {
-            throw new BatchGenerationException(
-                $"出力ファイル名が衝突しています: {string.Join(", ", collisions)}");
-        }
-
-        try
-        {
-            Directory.CreateDirectory(settings.OutputFolderPath);
-        }
-        catch (Exception exception) when (exception is ArgumentException
-            or IOException
-            or UnauthorizedAccessException)
-        {
-            throw new BatchGenerationException(
-                $"出力フォルダを作成できません: {exception.Message}",
-                exception);
-        }
-
+        long started = this.timeProvider.GetTimestamp();
+        var session = new TileFetchSession(this.timeProvider);
         int successCount = 0;
         int skippedCount = 0;
+        int errorCount = 0;
+        int total = 0;
+        int currentIndex = 0;
+        string currentFile = string.Empty;
+        BatchGenerationSummary Summary(bool cancelled, string? stopReason = null)
+            => new(successCount, skippedCount, total, cancelled)
+            {
+                ErrorCount = errorCount,
+                Elapsed = this.timeProvider.GetElapsedTime(started),
+                Tiles = session.Snapshot(),
+                StopReason = stopReason,
+            };
+        void Notify(int index, string name, BatchGenerationStatus status, string message, bool activity = false)
+            => progress?.Report(new(index, total, name, status, message)
+            {
+                IsActivity = activity,
+                SuccessCount = successCount,
+                SkippedCount = skippedCount,
+                ErrorCount = errorCount,
+                Elapsed = this.timeProvider.GetElapsedTime(started),
+                Tiles = session.Snapshot(),
+            });
+        long lastActivity = started;
+        session.Progress = new InlineProgress<TileFetchStatistics>(_ =>
+        {
+            long now = this.timeProvider.GetTimestamp();
+            if (this.timeProvider.GetElapsedTime(lastActivity, now) < TimeSpan.FromMilliseconds(100)) { return; }
+            lastActivity = now;
+            Notify(currentIndex, currentFile, BatchGenerationStatus.Success, $"生成中: {currentFile}", activity: true);
+        });
+
+        string[] files;
+        try
+        {
+            var scanProgress = new InlineProgress<PhotoEnumerationProgress>(scan =>
+            {
+                if (scan.Failure is not null) { this.errorDiagnostics?.Record(ErrorDiagnosticStage.Enumeration, scan.FolderCount, scan.Failure); }
+                progress?.Report(
+                new(0, 0, scan.RelativePath, scan.Error is null ? BatchGenerationStatus.Success : BatchGenerationStatus.Error,
+                    scan.Error is null ? $"列挙: 走査済み {scan.FolderCount} フォルダ / 写真 {scan.PhotoCount} 枚" : $"フォルダ読み取りエラー: {scan.Error}")
+                {
+                    IsEnumerating = true,
+                    IsActivity = scan.Error is null,
+                    Elapsed = this.timeProvider.GetElapsedTime(started),
+                });
+            });
+            files = await Task.Run(() => this.photoFileEnumerator.Enumerate(settings.InputFolderPath,
+                settings.IncludeSubfolders, scanProgress, cancellationToken).ToArray(), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return Summary(cancelled: true);
+        }
+
+        total = files.Length;
+        if (total == 0)
+        {
+            return Summary(cancelled: false);
+        }
+
+        var outputPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string photo in files)
+        {
+            if (cancellationToken.IsCancellationRequested) { return Summary(cancelled: true); }
+            string output;
+            try { output = OutputPathResolver.Resolve(photo, settings); }
+            catch (ArgumentException) { continue; }
+            if (!outputPaths.TryAdd(output, photo))
+            {
+                throw new BatchGenerationException($"出力パスが衝突しています: {output} / 元写真: {outputPaths[output]}, {photo}");
+            }
+        }
+
+        bool isGsi = string.Equals(settings.TileSource.BuildTileUri(0, 0, 0).Host, "cyberjapandata.gsi.go.jp", StringComparison.OrdinalIgnoreCase);
+        if (!isGsi && total > 100)
+        {
+            if (settings.ConfirmLargeBatchAsync is null)
+            {
+                throw new BatchGenerationException("100枚超のカスタム一括生成には、配信元の一括取得・画像保存の許可を確認してから開始してください。");
+            }
+
+            bool confirmed;
+            try { confirmed = await settings.ConfirmLargeBatchAsync(total, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return Summary(cancelled: true); }
+            if (!confirmed)
+            {
+                return Summary(cancelled: true);
+            }
+        }
+
+        if (Path.IsPathFullyQualified(settings.OutputFolderPath))
+        {
+            try { Directory.CreateDirectory(settings.OutputFolderPath); }
+            catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                this.errorDiagnostics?.Record(ErrorDiagnosticStage.BatchOutput, 0, exception);
+                throw new BatchGenerationException($"出力フォルダを作成できません: {exception.Message}", exception);
+            }
+        }
+
+        using IDisposable batchLease = this.trafficController.BeginBatch(settings.TileSource);
 
         for (int index = 0; index < files.Length; index++)
         {
             string filePath = files[index];
-            string fileName = Path.GetFileName(filePath);
+            string fileName = Path.GetRelativePath(settings.InputFolderPath, filePath);
+            currentIndex = index;
+            currentFile = fileName;
+            Notify(index, fileName, BatchGenerationStatus.Success, $"生成中: {fileName}", activity: true);
             int displayIndex = index + 1;
 
             if (cancellationToken.IsCancellationRequested)
             {
-                Report(progress, displayIndex, files.Length, fileName, BatchGenerationStatus.Cancelled, "処理が手動でキャンセルされました。");
-                return new BatchGenerationSummary(successCount, skippedCount, files.Length, IsCancelled: true);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Cancelled, "処理が手動でキャンセルされました。");
+                return Summary(cancelled: true);
             }
 
             GeoCoordinate? coordinate;
@@ -107,30 +195,36 @@ public sealed class BatchGenerationService : IBatchGenerationService
                 coordinate = await Task.Run(
                     () => this.exifGpsReader.Read(filePath),
                     cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                Report(progress, displayIndex, files.Length, fileName, BatchGenerationStatus.Cancelled, "処理が手動でキャンセルされました。");
-                return new BatchGenerationSummary(successCount, skippedCount, files.Length, IsCancelled: true);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Cancelled, "処理が手動でキャンセルされました。");
+                return Summary(cancelled: true);
             }
             catch (Exception exception) when (exception is ExifGpsReadException
                 or ArgumentException
                 or IOException
                 or UnauthorizedAccessException)
             {
-                ReportError(progress, displayIndex, files.Length, fileName, exception);
+                errorCount++;
+                this.errorDiagnostics?.Record(ErrorDiagnosticStage.BatchGps, displayIndex, exception);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Error, $"生成エラー: {exception.Message}");
                 continue;
             }
 
             if (coordinate is null)
             {
                 skippedCount++;
-                Report(progress, displayIndex, files.Length, fileName, BatchGenerationStatus.Skip, "GPS情報が見つかりません。");
+                Notify(displayIndex, fileName, BatchGenerationStatus.Skip, "GPS情報が見つかりません。");
                 continue;
             }
 
+            ErrorDiagnosticStage stage = ErrorDiagnosticStage.BatchOutput;
             try
             {
+                _ = OutputPathResolver.Resolve(filePath, settings);
+                stage = ErrorDiagnosticStage.BatchMap;
                 MapCompositionResult composition = await this.mapImageComposer.ComposeAsync(
                     new MapCompositionRequest
                     {
@@ -141,29 +235,31 @@ public sealed class BatchGenerationService : IBatchGenerationService
                         Zoom = settings.Zoom,
                         PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinImagePath),
                         AllowWorldwideFallback = false,
+                        TileSession = session,
                     },
                     cancellationToken).ConfigureAwait(false);
 
-                string outputFileName = GetOutputFileName(filePath);
-                string outputPath = Path.Combine(settings.OutputFolderPath, outputFileName);
+                string outputPath = OutputPathResolver.Resolve(filePath, settings);
+                string outputFileName = Path.GetFileName(outputPath);
+                stage = ErrorDiagnosticStage.BatchOutput;
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
                 await WriteOutputAsync(outputPath, composition.Png, cancellationToken).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
 
                 successCount++;
                 string message = string.Create(
                     CultureInfo.InvariantCulture,
                     $"位置情報 ({coordinate.Value.Latitude:F5}, {coordinate.Value.Longitude:F5}) -> {outputFileName} を作成しました。");
-                Report(progress, displayIndex, files.Length, fileName, BatchGenerationStatus.Success, message);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Success, message);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                Report(progress, displayIndex, files.Length, fileName, BatchGenerationStatus.Cancelled, "処理が手動でキャンセルされました。");
-                return new BatchGenerationSummary(successCount, skippedCount, files.Length, IsCancelled: true);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Cancelled, "処理が手動でキャンセルされました。");
+                return Summary(cancelled: true);
             }
             catch (TileFetchException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
             {
                 skippedCount++;
-                Report(progress, displayIndex, files.Length, fileName, BatchGenerationStatus.Skip, OutsideCoverageMessage);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Skip, OutsideCoverageMessage);
             }
             catch (Exception exception) when (exception is MapCompositionException
                 or TileFetchException
@@ -172,29 +268,25 @@ public sealed class BatchGenerationService : IBatchGenerationService
                 or IOException
                 or UnauthorizedAccessException)
             {
-                ReportError(progress, displayIndex, files.Length, fileName, exception);
+                errorCount++;
+                this.errorDiagnostics?.Record(stage, displayIndex, exception);
+                Notify(displayIndex, fileName, BatchGenerationStatus.Error, $"生成エラー: {exception.Message}");
+                if (session.IsStopped)
+                {
+                    return Summary(cancelled: false, exception.Message);
+                }
             }
         }
 
-        return new BatchGenerationSummary(successCount, skippedCount, files.Length, IsCancelled: false);
+        return Summary(cancelled: false);
     }
-
-    private static IReadOnlyList<string> FindOutputCollisions(IReadOnlyList<string> files)
-        => [.. files
-            .GroupBy(GetOutputFileName, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)];
-
-    private static string GetOutputFileName(string filePath)
-        => $"{Path.GetFileNameWithoutExtension(filePath)}_map.png";
 
     private static async Task WriteOutputAsync(
         string outputPath,
         ReadOnlyMemory<byte> content,
         CancellationToken cancellationToken)
     {
-        string temporaryPath = $"{outputPath}.{Guid.NewGuid():N}.tmp";
+        string temporaryPath = Path.Combine(Path.GetDirectoryName(outputPath)!, $"{Guid.NewGuid():N}.tmp");
         try
         {
             await File.WriteAllBytesAsync(temporaryPath, content.ToArray(), cancellationToken)
@@ -211,26 +303,4 @@ public sealed class BatchGenerationService : IBatchGenerationService
         }
     }
 
-    private static void ReportError(
-        IProgress<BatchGenerationProgress>? progress,
-        int index,
-        int total,
-        string fileName,
-        Exception exception)
-        => Report(
-            progress,
-            index,
-            total,
-            fileName,
-            BatchGenerationStatus.Error,
-            $"生成エラー: {exception.Message}");
-
-    private static void Report(
-        IProgress<BatchGenerationProgress>? progress,
-        int index,
-        int total,
-        string fileName,
-        BatchGenerationStatus status,
-        string message)
-        => progress?.Report(new BatchGenerationProgress(index, total, fileName, status, message));
 }

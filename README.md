@@ -8,12 +8,17 @@
 
 ## 機能
 
-- 入力フォルダ配下の写真から、EXIF GPS を持つものを列挙する
+- 入力フォルダ直下、または下位フォルダを再帰探索し、EXIF GPS を持つ写真を列挙する
+- 出力先を絶対パス、または各写真フォルダ基準の相対パスで指定する（`.` で写真と同じ場所）
+- 出力名の先頭・末尾文字を指定する（既定は `{元写真名}_map.png`）
 - 撮影地点を中心とした地図画像を生成し、ピンを合成する
 - 出力サイズ・ズームレベル・ピン画像・タイルソースを設定できる
-- 一括生成、進捗表示、キャンセル
+- 列挙・GPS確認・一括生成の進捗、経過時間、取得／キャッシュ件数、キャンセル
 - 生成前プレビュー（対象写真の切り替え、設定変更時の自動更新）
 - 地図タイルのローカルキャッシュ
+- エラー時のローカル診断ログ（最大2MiB、写真・GPS・パス・URLを含めず、外部送信なし）
+
+詳しい使い方はアプリの「ヘルプ」ボタンまたは `F1` で開けます。
 
 対応する入力形式: JPEG / TIFF / HEIC
 
@@ -25,7 +30,7 @@
 | --- | --- | --- | --- |
 | **地理院タイル（淡色）** | 国土地理院 | 5–18 | **既定**。日本国内のみ。[地理院タイル一覧](https://maps.gsi.go.jp/development/ichiran.html) |
 | 地理院タイル（標準） | 国土地理院 | 5–18 | 日本国内のみ |
-| OpenStreetMap | OpenStreetMap contributors | 0–19 | [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) に従い、取得を制限します |
+| OpenStreetMap | OpenStreetMap contributors | 0–19 | 対話プレビュー用。一括生成は利用条件に合うOSM系配信元をカスタム設定で指定 |
 
 任意のタイル URL も設定できます。
 
@@ -34,8 +39,10 @@
 スイート連携用に、起動時の入力・出力フォルダを指定できます。既に起動中の場合は同じインスタンスへ引数を転送します。
 
 ```text
-PhotoMapStudio.exe --input-dir "C:\Photos" --output-dir "C:\Maps"
+PhotoMapStudio.exe --input-dir "C:\写真 (2026)" --output-dir maps
 ```
+
+`--output-dir` の相対指定も各写真のフォルダが基準です。再帰探索と付加文字は画面で設定します。
 
 既定を地理院タイル（淡色）にしているのは、実測（[#8](https://github.com/scottlz0310/photo-map-studio/issues/8)）で次の結果が出たためです。
 
@@ -46,7 +53,7 @@ PhotoMapStudio.exe --input-dir "C:\Photos" --output-dir "C:\Maps"
 
 **日本国外の写真**は地理院タイルの配信範囲外です。プレビューと単発の生成では自動的に OpenStreetMap へ切り替えて生成し、その旨を結果に表示します。
 
-**一括生成では自動切替を行いません。** OpenStreetMap への一括取得は [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) が禁じる bulk downloading に該当するためです。一括生成で国外の写真に当たった場合はスキップとして結果一覧に残るので、タイルソースを OpenStreetMap に切り替えて実行し直してください。
+**一括生成では自動切替を行いません。** OpenStreetMap への一括取得は [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) が禁じる bulk downloading に該当するためです。一括生成で国外の写真に当たった場合はスキップとして結果一覧に残るので、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。公式OSMをカスタムURLへ入力しても一括生成は開始できません。利用条件、キャッシュ、固定減速、連続失敗による中止の詳細はアプリ内ヘルプを参照してください。
 
 ## 配布版のインストール
 

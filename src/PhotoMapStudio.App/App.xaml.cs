@@ -50,6 +50,10 @@ public partial class App : Application
         var services = new ServiceCollection();
         string cacheRootPath = Path.Combine(ApplicationData.Current.LocalFolder.Path, "tile-cache");
         services.AddPhotoMapStudioCore(cacheRootPath);
+        Windows.ApplicationModel.PackageVersion packageVersion = Windows.ApplicationModel.Package.Current.Id.Version;
+        services.AddSingleton<IErrorDiagnosticSink>(provider => new LocalErrorDiagnosticSink(
+            new DiagnosticFileStore(Path.Combine(ApplicationData.Current.LocalFolder.Path, "diagnostics")),
+            $"{packageVersion.Major}.{packageVersion.Minor}.{packageVersion.Build}.{packageVersion.Revision}", provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<ISettingsValueStore, ApplicationDataSettingsValueStore>();
         services.AddSingleton<IPhotoMapSettingsRepository, PhotoMapSettingsRepository>();
         services.AddSingleton<IPreviewGenerationService, PreviewGenerationService>();

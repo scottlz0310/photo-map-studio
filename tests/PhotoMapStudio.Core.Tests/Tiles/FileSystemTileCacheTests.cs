@@ -1,4 +1,5 @@
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tests.TestSupport;
 
 namespace PhotoMapStudio.Core.Tests.Tiles;
 
@@ -107,12 +108,4 @@ public sealed class FileSystemTileCacheTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(this.root, "*.tmp"));
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset current = now;
-
-        public void Advance(TimeSpan elapsed) => this.current += elapsed;
-
-        public override DateTimeOffset GetUtcNow() => this.current;
-    }
 }

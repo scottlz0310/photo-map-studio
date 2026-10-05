@@ -6,6 +6,7 @@ using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tests.TestSupport;
 
 namespace PhotoMapStudio.App.Tests.Services;
 
@@ -39,14 +40,17 @@ public class BatchGenerationServiceTests
                 InputFolderPath = fixture.InputPath,
                 OutputFolderPath = fixture.OutputPath,
             },
-            new InlineProgress<BatchGenerationProgress>(progress.Add),
+            new SynchronousProgress<BatchGenerationProgress>(progress.Add),
             CancellationToken.None);
 
-        Assert.Equal(new BatchGenerationSummary(2, 1, 3, IsCancelled: false), summary);
-        Assert.Equal(["a.jpg", "no-gps.jpg", "z.jpg"], progress.Select(item => item.FileName));
+        Assert.Equal(2, summary.SuccessCount);
+        Assert.Equal(1, summary.SkippedCount);
+        Assert.Equal(3, summary.TotalCount);
+        Assert.False(summary.IsCancelled);
+        Assert.Equal(["a.jpg", "no-gps.jpg", "z.jpg"], progress.Where(item => !item.IsActivity).Select(item => item.FileName));
         Assert.Equal(
             [BatchGenerationStatus.Success, BatchGenerationStatus.Skip, BatchGenerationStatus.Success],
-            progress.Select(item => item.Status));
+            progress.Where(item => !item.IsActivity).Select(item => item.Status));
         Assert.True(File.Exists(Path.Combine(fixture.OutputPath, "a_map.png")));
         Assert.True(File.Exists(Path.Combine(fixture.OutputPath, "z_map.png")));
         Assert.DoesNotContain(composer.Requests, request => request.AllowWorldwideFallback);
@@ -106,12 +110,13 @@ public class BatchGenerationServiceTests
                 InputFolderPath = fixture.InputPath,
                 OutputFolderPath = fixture.OutputPath,
             },
-            new InlineProgress<BatchGenerationProgress>(progress.Add),
+            new SynchronousProgress<BatchGenerationProgress>(progress.Add),
             CancellationToken.None);
 
-        Assert.Equal(new BatchGenerationSummary(0, 1, 1, IsCancelled: false), summary);
-        Assert.Equal(BatchGenerationStatus.Skip, Assert.Single(progress).Status);
-        Assert.Contains("配信していません", progress[0].Message, StringComparison.Ordinal);
+        Assert.Equal(1, summary.SkippedCount);
+        Assert.False(summary.IsCancelled);
+        Assert.Equal(BatchGenerationStatus.Skip, Assert.Single(progress, item => !item.IsActivity).Status);
+        Assert.Contains("配信していません", progress.Last(item => !item.IsActivity).Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -136,7 +141,7 @@ public class BatchGenerationServiceTests
                 InputFolderPath = fixture.InputPath,
                 OutputFolderPath = fixture.OutputPath,
             },
-            new InlineProgress<BatchGenerationProgress>(progress.Add),
+            new SynchronousProgress<BatchGenerationProgress>(progress.Add),
             cancellation.Token);
 
         await composer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -145,7 +150,7 @@ public class BatchGenerationServiceTests
         BatchGenerationSummary summary = await generation.ConfigureAwait(true);
 
         Assert.True(summary.IsCancelled);
-        Assert.Equal(BatchGenerationStatus.Cancelled, Assert.Single(progress).Status);
+        Assert.Equal(BatchGenerationStatus.Cancelled, Assert.Single(progress, item => !item.IsActivity).Status);
         await composer.CancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -180,10 +185,6 @@ public class BatchGenerationServiceTests
         }
     }
 
-    private sealed class StubPhotoFileEnumerator(IReadOnlyList<string> files) : IPhotoFileEnumerator
-    {
-        public IReadOnlyList<string> Enumerate(string folderPath) => files;
-    }
 
     private sealed class StubExifGpsReader(
         IReadOnlyDictionary<string, GeoCoordinate?> coordinates) : IExifGpsReader
@@ -246,8 +247,4 @@ public class BatchGenerationServiceTests
             => new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
-    {
-        public void Report(T value) => callback(value);
-    }
 }

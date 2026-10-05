@@ -5,6 +5,27 @@ namespace PhotoMapStudio.App.Tests.Services;
 
 public class PhotoMapSettingsRepositoryTests
 {
+    [Theory]
+    [InlineData(false, "", "_map")]
+    [InlineData(true, "map_", "_z16")]
+    [InlineData(true, "", "")]
+    public void 再帰と付加文字を保存し明示的な空の末尾文字を維持する(bool recursive, string prefix, string postfix)
+    {
+        var repository = new PhotoMapSettingsRepository(new InMemorySettingsValueStore());
+        var settings = new PhotoMapSettings { IncludeSubfolders = recursive, OutputFilePrefix = prefix, OutputFilePostfix = postfix };
+        repository.Save(settings);
+        Assert.Equal(settings, repository.Load());
+    }
+
+    [Fact]
+    public void 旧保存値にキーがない場合は既定値を復元する()
+    {
+        var settings = new PhotoMapSettingsRepository(new InMemorySettingsValueStore()).Load();
+        Assert.False(settings.IncludeSubfolders);
+        Assert.Empty(settings.OutputFilePrefix);
+        Assert.Equal("_map", settings.OutputFilePostfix);
+    }
+
     [Fact]
     public void キーバリューストアへ設定を保存して復元する()
     {

@@ -84,7 +84,7 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
                 int sourceX = ((tileX % tileCount) + tileCount) % tileCount;
 
                 byte[] content = await this.tileProvider
-                    .GetTileAsync(request.TileSource, request.Zoom, sourceX, tileY, cancellationToken)
+                    .GetTileAsync(request.TileSource, request.Zoom, sourceX, tileY, cancellationToken, request.TileSession)
                     .ConfigureAwait(false);
 
                 using SKImage tile = SKImage.FromEncodedData(content)

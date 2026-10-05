@@ -25,8 +25,13 @@ public class MainViewModelGenerationTests
         Assert.False(viewModel.IsGenerating);
         Assert.Single(viewModel.GenerationLogs);
         Assert.Equal(100, viewModel.GenerationProgressValue);
-        Assert.Equal("完了: 成功 1 / スキップ 0 / 総数 1", viewModel.GenerationSummary);
+        Assert.Contains("完了: 処理済み 1 / 全 1 枚", viewModel.GenerationSummary, StringComparison.Ordinal);
         Assert.Equal("SUCCESS", viewModel.GenerationLogs[0].StatusText);
+
+        viewModel.IncludeSubfolders = true;
+        Assert.Empty(viewModel.GenerationSummary);
+        Assert.Empty(viewModel.ProgressMessage);
+        Assert.Equal(0, viewModel.ProgressValue);
     }
 
     [Fact]

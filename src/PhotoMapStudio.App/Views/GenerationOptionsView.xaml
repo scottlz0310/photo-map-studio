@@ -47,6 +47,9 @@
             ItemsSource="{Binding TileSourceOptions}"
             SelectedItem="{Binding SelectedTileSource, Mode=TwoWay}" />
 
+        <InfoBar IsOpen="{Binding HasTileUsageMessage}" IsClosable="False"
+            Severity="Warning" Message="{Binding TileUsageMessage}" />
+
         <StackPanel Spacing="8" Visibility="{Binding IsCustomTileSource, Converter={StaticResource BooleanToVisibilityConverter}}">
             <TextBox
                 Header="カスタム URL テンプレート"

@@ -40,6 +40,9 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
         {
             InputFolderPath = ReadString(InputFolderPathKey, string.Empty),
             OutputFolderPath = ReadString(OutputFolderPathKey, string.Empty),
+            IncludeSubfolders = this.store.Read("include-subfolders") is true,
+            OutputFilePrefix = ReadString("output-file-prefix", string.Empty),
+            OutputFilePostfix = ReadString("output-file-postfix", "_map"),
             Width = ReadInt(WidthKey, PhotoMapSettings.DefaultWidth),
             Height = ReadInt(HeightKey, PhotoMapSettings.DefaultHeight),
             Zoom = ReadInt(ZoomKey, PhotoMapSettings.DefaultZoom),
@@ -56,6 +59,9 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
 
         this.store.Write(InputFolderPathKey, settings.InputFolderPath);
         this.store.Write(OutputFolderPathKey, settings.OutputFolderPath);
+        this.store.Write("include-subfolders", settings.IncludeSubfolders);
+        this.store.Write("output-file-prefix", settings.OutputFilePrefix);
+        this.store.Write("output-file-postfix", settings.OutputFilePostfix);
         this.store.Write(WidthKey, settings.Width);
         this.store.Write(HeightKey, settings.Height);
         this.store.Write(ZoomKey, settings.Zoom);

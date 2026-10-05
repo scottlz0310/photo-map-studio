@@ -335,7 +335,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
         {
             this.RequestedTiles.Add((zoom, x, y));
             return Task.FromResult(this.tile);
@@ -352,7 +352,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
             => Task.FromResult(CreateSolidPng(WebMercator.TileSize, WebMercator.TileSize, ColorOf(x, y)));
     }
 
@@ -363,7 +363,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
             => Task.FromException<byte[]>(failure);
     }
 
@@ -374,7 +374,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
             => Task.FromResult<byte[]>([0x00, 0x01, 0x02]);
     }
 }

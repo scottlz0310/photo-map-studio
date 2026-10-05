@@ -24,4 +24,7 @@
     <ProjectReference Include="../../src/PhotoMapStudio.Core/PhotoMapStudio.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

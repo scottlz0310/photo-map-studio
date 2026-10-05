@@ -75,7 +75,7 @@ public class FallbackCompositionIntegrationTests
             int zoom,
             int x,
             int y,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, TileFetchSession? session = null)
         {
             this.RequestedTemplates.Add(source.UrlTemplate);
 

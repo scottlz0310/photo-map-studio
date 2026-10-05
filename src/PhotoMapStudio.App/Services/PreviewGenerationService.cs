@@ -41,33 +41,54 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<PreviewPhoto>> LoadPhotosAsync(
+    public async IAsyncEnumerable<PreviewPhoto> LoadPhotosAsync(
         string folderPath,
-        CancellationToken cancellationToken)
+        bool includeSubfolders,
+        IProgress<PreviewLoadProgress>? progress,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(folderPath))
         {
-            return [];
+            yield break;
         }
 
+        var scanning = new InlineProgress<PhotoEnumerationProgress>(value => progress?.Report(new(0, 0, 0,
+            value.Error is null ? $"列挙: 走査済み {value.FolderCount} フォルダ / 写真 {value.PhotoCount} 枚"
+                : $"フォルダ読み取りエラー: {value.RelativePath}: {value.Error}", true, value.Error is not null)));
         IReadOnlyList<string> filePaths = await Task.Run(
-            () => this.photoFileEnumerator.Enumerate(folderPath),
+            () => this.photoFileEnumerator.Enumerate(folderPath, includeSubfolders, scanning, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
-        var photos = new List<PreviewPhoto>();
+        int checkedCount = 0;
+        int gpsCount = 0;
         foreach (string filePath in filePaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            GeoCoordinate? coordinate = null;
+            string? error = null;
+            try
+            {
+                coordinate = await this.ReadGpsAsync(filePath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is ExifGpsReadException or IOException or UnauthorizedAccessException)
+            {
+                error = $"GPS読み取りエラー: {Path.GetRelativePath(folderPath, filePath)}: {exception.Message}";
+            }
 
-            GeoCoordinate? coordinate = await this.ReadGpsAsync(filePath, cancellationToken)
-                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            checkedCount++;
             if (coordinate is not null)
             {
-                photos.Add(new PreviewPhoto(filePath));
+                gpsCount++;
+            }
+
+            progress?.Report(new(checkedCount, filePaths.Count, gpsCount,
+                error ?? $"GPS確認: 確認済み {checkedCount} / 全 {filePaths.Count} 枚、GPSあり {gpsCount} 枚", IsError: error is not null));
+            if (coordinate is not null)
+            {
+                yield return new PreviewPhoto(filePath, folderPath);
             }
         }
-
-        return photos;
     }
 
     /// <inheritdoc />

@@ -20,7 +20,7 @@
                 <ProgressBar
                     Grid.Column="0"
                     Maximum="100"
-                    Value="{Binding GenerationProgressValue}" />
+                    Value="{Binding ProgressValue}" IsIndeterminate="{Binding ProgressIsIndeterminate}" />
                 <TextBlock
                     Grid.Column="1"
                     VerticalAlignment="Center"
@@ -34,7 +34,7 @@
                 <TextBlock
                     Grid.Column="0"
                     Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                    Text="{Binding GenerationProgressMessage}"
+                    Text="{Binding ProgressMessage}"
                     TextWrapping="Wrap" />
                 <Button
                     Grid.Column="1"
@@ -45,6 +45,10 @@
                 FontWeight="SemiBold"
                 Text="{Binding GenerationSummary}"
                 TextWrapping="Wrap" />
+            <TextBlock Text="{Binding GenerationDetails}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding GenerationElapsedText}" />
+            <TextBlock Text="{Binding Preview.StatusMessage}" TextWrapping="Wrap" />
+            <Button Content="プレビューの読み込みをキャンセル" Command="{Binding Preview.CancelCommand}" />
             <ListView
                 MaxHeight="180"
                 ItemsSource="{Binding GenerationLogs}">

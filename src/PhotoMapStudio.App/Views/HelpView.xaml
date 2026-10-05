@@ -1,0 +1,12 @@
+<UserControl
+    x:Class="PhotoMapStudio.App.Views.HelpView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <NavigationView x:Name="Navigation" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+        PaneDisplayMode="Auto" OpenPaneLength="220" ExpandedModeThresholdWidth="640" CompactModeThresholdWidth="480"
+        SelectionChanged="Navigation_SelectionChanged">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="Chapter" Padding="16" Spacing="12" />
+        </ScrollViewer>
+    </NavigationView>
+</UserControl>

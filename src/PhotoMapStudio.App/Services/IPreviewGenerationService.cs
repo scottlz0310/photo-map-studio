@@ -14,13 +14,17 @@ namespace PhotoMapStudio.App.Services;
 public interface IPreviewGenerationService
 {
     /// <summary>
-    /// GPS 情報を持つ写真を列挙する。
+    /// GPS 情報を持つ写真を見つかった順に返す。
     /// </summary>
     /// <param name="folderPath">入力フォルダ。</param>
+    /// <param name="includeSubfolders">下位フォルダも探索するかどうか。</param>
+    /// <param name="progress">列挙とGPS確認の進捗。</param>
     /// <param name="cancellationToken">キャンセルトークン。</param>
-    /// <returns>プレビュー対象の写真一覧。</returns>
-    Task<IReadOnlyList<PreviewPhoto>> LoadPhotosAsync(
+    /// <returns>段階的に読み込めるプレビュー対象。</returns>
+    IAsyncEnumerable<PreviewPhoto> LoadPhotosAsync(
         string folderPath,
+        bool includeSubfolders,
+        IProgress<PreviewLoadProgress>? progress,
         CancellationToken cancellationToken);
 
     /// <summary>

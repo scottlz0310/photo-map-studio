@@ -63,10 +63,13 @@ public class PreviewViewModelTests
 
         public TaskCompletionSource FirstGenerationCanceled { get; } = NewCompletionSource();
 
-        public Task<IReadOnlyList<PreviewPhoto>> LoadPhotosAsync(
-            string folderPath,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<PreviewPhoto>>(photos);
+        public async IAsyncEnumerable<PreviewPhoto> LoadPhotosAsync(
+            string folderPath, bool includeSubfolders, IProgress<PreviewLoadProgress>? progress,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask.ConfigureAwait(false);
+            foreach (PreviewPhoto photo in photos) { yield return photo; }
+        }
 
         public async Task<PreviewGenerationResult> GenerateAsync(
             PreviewPhoto? photo,

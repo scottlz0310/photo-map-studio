@@ -15,15 +15,16 @@ public sealed record PreviewPhoto
     /// 写真を構築する。
     /// </summary>
     /// <param name="filePath">写真の絶対パス。</param>
-    public PreviewPhoto(string filePath)
+    public PreviewPhoto(string filePath, string? inputFolder = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         this.FilePath = filePath;
+        this.DisplayName = inputFolder is null ? Path.GetFileName(filePath) : Path.GetRelativePath(inputFolder, filePath);
     }
 
     /// <summary>写真の絶対パス。</summary>
     public string FilePath { get; }
 
     /// <summary>選択 UI に表示するファイル名。</summary>
-    public string DisplayName => Path.GetFileName(this.FilePath);
+    public string DisplayName { get; }
 }

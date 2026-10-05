@@ -33,6 +33,13 @@ public sealed class MainViewModel : ObservableObject
     private CancellationTokenSource? generationCancellation;
     private string inputFolderPath;
     private string outputFolderPath;
+    private bool includeSubfolders;
+    private string outputFilePrefix;
+    private string outputFilePostfix;
+    private bool isEnumerating;
+    private string generationDetails = string.Empty;
+    private string generationElapsedText = string.Empty;
+    private readonly TimeProvider timeProvider;
     private double width;
     private double height;
     private double zoom;
@@ -57,15 +64,35 @@ public sealed class MainViewModel : ObservableObject
     public MainViewModel(
         IPhotoMapSettingsRepository settingsRepository,
         PreviewViewModel? preview = null,
-        IBatchGenerationService? batchGenerationService = null)
+        IBatchGenerationService? batchGenerationService = null, TimeProvider? timeProvider = null)
     {
         this.settingsRepository = settingsRepository ?? throw new ArgumentNullException(nameof(settingsRepository));
         this.batchGenerationService = batchGenerationService;
         this.Preview = preview;
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+        if (preview is not null)
+        {
+            preview.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(PreviewViewModel.LoadProgress))
+                {
+                    this.OnPropertyChanged(nameof(this.ProgressIsIndeterminate));
+                    this.OnPropertyChanged(nameof(this.ProgressMessage));
+                    this.OnPropertyChanged(nameof(this.ProgressValue));
+                    if (preview.LoadProgress is { IsError: true } failure)
+                    {
+                        this.GenerationLogs.Add(new(0, failure.TotalCount, string.Empty, BatchGenerationStatus.Error, failure.Message));
+                    }
+                }
+            };
+        }
 
         var settings = this.settingsRepository.Load();
         this.inputFolderPath = settings.InputFolderPath;
         this.outputFolderPath = settings.OutputFolderPath;
+        this.includeSubfolders = settings.IncludeSubfolders;
+        this.outputFilePrefix = settings.OutputFilePrefix;
+        this.outputFilePostfix = settings.OutputFilePostfix;
         this.width = settings.Width;
         this.height = settings.Height;
         this.pinImagePath = settings.PinImagePath;
@@ -109,6 +136,58 @@ public sealed class MainViewModel : ObservableObject
             }
         }
     }
+
+    /// <summary>下位フォルダを探索する。</summary>
+    public bool IncludeSubfolders
+    {
+        get => this.includeSubfolders;
+        set { if (this.SetProperty(ref this.includeSubfolders, value)) { this.ClearFeedback(); this.NotifyPreviewChanged(reloadPhotos: true); } }
+    }
+
+    /// <summary>出力名の先頭文字。</summary>
+    public string OutputFilePrefix
+    {
+        get => this.outputFilePrefix;
+        set { if (this.SetProperty(ref this.outputFilePrefix, value ?? string.Empty)) { this.ClearFeedback(); this.OnPropertyChanged(nameof(this.OutputFileNameExample)); } }
+    }
+
+    /// <summary>出力名の末尾文字。</summary>
+    public string OutputFilePostfix
+    {
+        get => this.outputFilePostfix;
+        set { if (this.SetProperty(ref this.outputFilePostfix, value ?? string.Empty)) { this.ClearFeedback(); this.OnPropertyChanged(nameof(this.OutputFileNameExample)); } }
+    }
+
+    /// <summary>出力名の入力例。</summary>
+    public string OutputFileNameExample => $"IMG_0001.jpg → {this.OutputFilePrefix}IMG_0001{this.OutputFilePostfix}.png";
+
+    /// <summary>配信元に応じた一括生成の案内。</summary>
+    public string TileUsageMessage => this.SelectedTileSource == TileSourceChoices.OpenStreetMap
+        ? "OSM公式サーバーはプレビュー用です。一括生成は、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。"
+        : this.IsCustomTileSource ? "配信元の一括取得・画像保存の許可を確認してください。一括取得は1秒間隔、100枚超は開始前に確認します。" : string.Empty;
+
+    /// <summary>配信元の案内を表示するかどうか。</summary>
+    public bool HasTileUsageMessage => !string.IsNullOrEmpty(this.TileUsageMessage);
+
+    /// <summary>画面側で大量実行の許可を確認する。</summary>
+    public Func<int, CancellationToken, Task<bool>>? ConfirmLargeBatchAsync { get; set; }
+
+    /// <summary>列挙中は件数が確定しない。</summary>
+    public bool ProgressIsIndeterminate => this.IsGenerating ? this.isEnumerating : this.Preview?.LoadProgress?.IsEnumerating == true;
+
+    /// <summary>3フェーズを共通領域で表示する。</summary>
+    public string ProgressMessage => this.IsGenerating || !string.IsNullOrEmpty(this.GenerationSummary)
+        ? this.GenerationProgressMessage : this.Preview?.LoadProgress?.Message ?? string.Empty;
+
+    /// <summary>確定した対象数に対する進捗。</summary>
+    public double ProgressValue => this.IsGenerating || !string.IsNullOrEmpty(this.GenerationSummary)
+        ? this.GenerationProgressValue : this.Preview?.LoadProgress is { TotalCount: > 0 } loading ? loading.CheckedCount * 100d / loading.TotalCount : 0;
+
+    /// <summary>一括生成の件数とタイル集計。</summary>
+    public string GenerationDetails { get => this.generationDetails; private set => this.SetProperty(ref this.generationDetails, value); }
+
+    /// <summary>一括生成開始からの経過時間。</summary>
+    public string GenerationElapsedText { get => this.generationElapsedText; private set => this.SetProperty(ref this.generationElapsedText, value); }
 
     /// <summary>出力幅（ピクセル）。</summary>
     public double Width
@@ -183,6 +262,8 @@ public sealed class MainViewModel : ObservableObject
             this.MaximumZoom = value.MaxZoom;
             this.Zoom = Math.Clamp(this.Zoom, this.MinimumZoom, this.MaximumZoom);
             this.OnPropertyChanged(nameof(this.IsCustomTileSource));
+            this.OnPropertyChanged(nameof(this.TileUsageMessage));
+            this.OnPropertyChanged(nameof(this.HasTileUsageMessage));
             this.OnPropertyChanged(nameof(this.SelectedTileSourceAttribution));
             this.ClearFeedback();
             this.NotifyPreviewChanged();
@@ -292,6 +373,8 @@ public sealed class MainViewModel : ObservableObject
             {
                 this.GenerateCommand.NotifyCanExecuteChanged();
                 this.CancelGenerationCommand.NotifyCanExecuteChanged();
+                this.OnPropertyChanged(nameof(this.ProgressIsIndeterminate));
+                this.OnPropertyChanged(nameof(this.ProgressMessage));
             }
         }
     }
@@ -305,6 +388,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.generationProgressValue, value))
             {
                 this.OnPropertyChanged(nameof(this.GenerationProgressPercentText));
+                this.OnPropertyChanged(nameof(this.ProgressValue));
             }
         }
     }
@@ -316,7 +400,7 @@ public sealed class MainViewModel : ObservableObject
     public string GenerationProgressMessage
     {
         get => this.generationProgressMessage;
-        private set => this.SetProperty(ref this.generationProgressMessage, value);
+        private set { if (this.SetProperty(ref this.generationProgressMessage, value)) { this.OnPropertyChanged(nameof(this.ProgressMessage)); } }
     }
 
     /// <summary>一括生成の集計メッセージ。</summary>
@@ -401,6 +485,9 @@ public sealed class MainViewModel : ObservableObject
         {
             InputFolderPath = this.InputFolderPath.Trim(),
             OutputFolderPath = this.OutputFolderPath.Trim(),
+            IncludeSubfolders = this.IncludeSubfolders,
+            OutputFilePrefix = this.OutputFilePrefix,
+            OutputFilePostfix = this.OutputFilePostfix,
             Width = width,
             Height = height,
             Zoom = zoom,
@@ -440,6 +527,8 @@ public sealed class MainViewModel : ObservableObject
         this.IsGenerating = true;
 
         using var cancellation = new CancellationTokenSource();
+        using var elapsedCancellation = new CancellationTokenSource();
+        Task elapsedTask = this.UpdateElapsedAsync(elapsedCancellation.Token);
         this.generationCancellation = cancellation;
 
         try
@@ -451,9 +540,10 @@ public sealed class MainViewModel : ObservableObject
 
             this.GenerationProgressValue = summary.TotalCount == 0 ? 100 : this.GenerationProgressValue;
             this.GenerationSummary = FormatSummary(summary);
-            this.GenerationProgressMessage = summary.IsCancelled
+            this.HasGenerationError |= summary.ErrorCount > 0 || summary.StopReason is not null;
+            this.GenerationProgressMessage = summary.StopReason ?? (summary.IsCancelled
                 ? "処理がキャンセルされました。"
-                : "一括生成が完了しました。";
+                : "一括生成が完了しました。");
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -475,6 +565,8 @@ public sealed class MainViewModel : ObservableObject
                 this.generationCancellation = null;
             }
 
+            await elapsedCancellation.CancelAsync().ConfigureAwait(true);
+            await elapsedTask.ConfigureAwait(true);
             this.IsGenerating = false;
         }
     }
@@ -492,11 +584,15 @@ public sealed class MainViewModel : ObservableObject
 
     private void ReportProgress(BatchGenerationProgress progress)
     {
-        this.GenerationLogs.Add(progress);
+        this.isEnumerating = progress.IsEnumerating;
+        this.OnPropertyChanged(nameof(this.ProgressIsIndeterminate));
+        if (!progress.IsActivity) { this.GenerationLogs.Add(progress); }
+        this.GenerationDetails = $"処理済み {progress.SuccessCount + progress.SkippedCount + progress.ErrorCount} / 全 {progress.Total} 枚、成功 {progress.SuccessCount} / スキップ {progress.SkippedCount} / エラー {progress.ErrorCount}、現在: {progress.FileName}"
+            + FormatTiles(progress.Tiles);
         this.GenerationProgressValue = progress.Total == 0
-            ? 100
+            ? 0
             : progress.Index * 100d / progress.Total;
-        this.GenerationProgressMessage = progress.Message;
+        if (this.generationCancellation?.IsCancellationRequested != true) { this.GenerationProgressMessage = progress.Message; }
         this.HasGenerationError |= progress.Status == BatchGenerationStatus.Error;
     }
 
@@ -557,10 +653,34 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
+        try
+        {
+            OutputPathResolver.Validate(outputFolderPath, this.OutputFilePrefix, this.OutputFilePostfix);
+            if (this.OutputFilePrefix.Length == 0 && this.OutputFilePostfix.Length == 0)
+            {
+                _ = OutputPathResolver.Resolve(Path.Combine(inputFolderPath, "IMG_0001.jpg"), new()
+                { OutputFolderPath = outputFolderPath, OutputFilePrefix = this.OutputFilePrefix, OutputFilePostfix = this.OutputFilePostfix });
+            }
+            if (tileSource.IsOfficialOpenStreetMap)
+            {
+                this.ValidationMessage = "OSM公式サーバーはプレビュー用です。一括取得・画像保存が許可されたOSM系配信元をカスタム設定で指定してください。";
+                return false;
+            }
+        }
+        catch (ArgumentException exception)
+        {
+            this.ValidationMessage = exception.Message;
+            return false;
+        }
+
         settings = new BatchGenerationSettings
         {
             InputFolderPath = inputFolderPath,
             OutputFolderPath = outputFolderPath,
+            IncludeSubfolders = this.IncludeSubfolders,
+            OutputFilePrefix = this.OutputFilePrefix,
+            OutputFilePostfix = this.OutputFilePostfix,
+            ConfirmLargeBatchAsync = this.ConfirmLargeBatchAsync,
             Width = width,
             Height = height,
             Zoom = zoom,
@@ -573,7 +693,24 @@ public sealed class MainViewModel : ObservableObject
     private static string FormatSummary(BatchGenerationSummary summary)
         => string.Create(
             CultureInfo.InvariantCulture,
-            $"{(summary.IsCancelled ? "キャンセル" : "完了")}: 成功 {summary.SuccessCount} / スキップ {summary.SkippedCount} / 総数 {summary.TotalCount}");
+            $"{(summary.IsCancelled ? "キャンセル" : summary.StopReason is null ? "完了" : "中止")}: 処理済み {summary.ProcessedCount} / 全 {summary.TotalCount} 枚（成功 {summary.SuccessCount} / スキップ {summary.SkippedCount} / エラー {summary.ErrorCount}）、経過 {summary.Elapsed:c}{FormatTiles(summary.Tiles)}");
+
+    private static string FormatTiles(TileFetchStatistics? tiles) => tiles is null ? string.Empty
+        : $" / タイル: ネットワーク取得 {tiles.NetworkCount} 件 / キャッシュ {tiles.CacheCount} 件、平均 {tiles.AverageRate:F2} / 最大 {tiles.MaximumRate} リクエスト/秒";
+
+    private async Task UpdateElapsedAsync(CancellationToken cancellationToken)
+    {
+        long started = this.timeProvider.GetTimestamp();
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                this.GenerationElapsedText = $"経過時間: {this.timeProvider.GetElapsedTime(started):c}";
+                await Task.Delay(TimeSpan.FromSeconds(1), this.timeProvider, cancellationToken).ConfigureAwait(true);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
 
     private void ClearFeedback()
     {
@@ -582,12 +719,22 @@ public sealed class MainViewModel : ObservableObject
     }
 
     private void NotifyPreviewChanged(bool reloadPhotos = false)
-        => this.Preview?.UpdateSettings(this.CreatePreviewSettings(), reloadPhotos);
+    {
+        if (reloadPhotos && !this.IsGenerating)
+        {
+            this.GenerationSummary = string.Empty;
+            this.OnPropertyChanged(nameof(this.ProgressMessage));
+            this.OnPropertyChanged(nameof(this.ProgressValue));
+        }
+
+        this.Preview?.UpdateSettings(this.CreatePreviewSettings(), reloadPhotos);
+    }
 
     private PreviewGenerationSettings CreatePreviewSettings()
         => new()
         {
             InputFolderPath = this.InputFolderPath,
+            IncludeSubfolders = this.IncludeSubfolders,
             Width = this.Width,
             Height = this.Height,
             Zoom = this.Zoom,

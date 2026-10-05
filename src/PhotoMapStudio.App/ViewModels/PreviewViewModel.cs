@@ -21,7 +21,6 @@ namespace PhotoMapStudio.App.ViewModels;
 public sealed class PreviewViewModel : ObservableObject, IDisposable
 {
     private readonly IPreviewGenerationService previewGenerationService;
-    private readonly object synchronization = new();
 
     private PreviewGenerationSettings settings = new();
     private IReadOnlyList<PreviewPhoto> photos = [];
@@ -32,12 +31,18 @@ public sealed class PreviewViewModel : ObservableObject, IDisposable
     private string attribution = "出典未設定";
     private Uri? attributionUri;
     private bool isGenerating;
+    private PreviewLoadProgress? loadProgress;
     private bool hasError;
-    private PendingPreviewRequest? pendingRequest;
-    private CancellationTokenSource? activeCancellation;
-    private TaskCompletionSource? idleCompletion;
-    private long requestVersion;
-    private bool isProcessing;
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "LoadAsyncのusingで破棄する。終了前のDisposeはToken参照と競合する。")]
+    private CancellationTokenSource? loadCancellation;
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "RenderAsyncのusingで破棄する。終了前のDisposeはToken参照と競合する。")]
+    private CancellationTokenSource? renderCancellation;
+    private Task loadingTask = Task.CompletedTask;
+    private Task renderingTask = Task.CompletedTask;
+    private long loadVersion;
+    private long renderVersion;
+    private bool isLoading;
+    private bool isRendering;
     private bool disposed;
 
     /// <summary>
@@ -58,6 +63,13 @@ public sealed class PreviewViewModel : ObservableObject, IDisposable
         private set => this.SetProperty(ref this.photos, value);
     }
 
+    /// <summary>写真一覧の読み込み進捗。</summary>
+    public PreviewLoadProgress? LoadProgress
+    {
+        get => this.loadProgress;
+        private set => this.SetProperty(ref this.loadProgress, value);
+    }
+
     /// <summary>現在選択中の写真。</summary>
     public PreviewPhoto? SelectedPhoto
     {
@@ -66,7 +78,7 @@ public sealed class PreviewViewModel : ObservableObject, IDisposable
         {
             if (this.SetProperty(ref this.selectedPhoto, value))
             {
-                this.QueueRefresh(this.settings, reloadPhotos: false);
+                this.BeginRender();
             }
         }
     }
@@ -154,257 +166,182 @@ public sealed class PreviewViewModel : ObservableObject, IDisposable
     {
         ObjectDisposedException.ThrowIf(this.disposed, this);
         ArgumentNullException.ThrowIfNull(settings);
-
-        bool inputFolderChanged = !string.Equals(
-            this.settings.InputFolderPath,
-            settings.InputFolderPath,
-            StringComparison.OrdinalIgnoreCase);
-
+        bool inputChanged = !string.Equals(this.settings.InputFolderPath, settings.InputFolderPath, StringComparison.OrdinalIgnoreCase)
+            || this.settings.IncludeSubfolders != settings.IncludeSubfolders;
         this.settings = settings;
         this.UpdateAttribution(settings);
-
-        bool shouldReloadPhotos = reloadPhotos
-            || inputFolderChanged
-            || (this.Photos.Count == 0 && !string.IsNullOrWhiteSpace(settings.InputFolderPath));
-        this.QueueRefresh(settings, shouldReloadPhotos);
+        if (reloadPhotos || inputChanged || (this.Photos.Count == 0 && !this.isLoading && !string.IsNullOrWhiteSpace(settings.InputFolderPath)))
+        {
+            this.BeginLoad();
+        }
+        else if (!this.isLoading || this.SelectedPhoto is not null)
+        {
+            this.BeginRender();
+        }
     }
 
-    /// <summary>
-    /// 現在の生成処理が落ち着くまで待つ。テストと終了処理で使用する。
-    /// </summary>
-    public Task WaitForIdleAsync()
+    /// <summary>一覧読み込みと最新の生成が終了するまで待つ。</summary>
+    public async Task WaitForIdleAsync()
     {
-        lock (this.synchronization)
+        while (true)
         {
-            return this.isProcessing
-                ? this.idleCompletion!.Task
-                : Task.CompletedTask;
+            Task loading = this.loadingTask;
+            Task rendering = this.renderingTask;
+            await Task.WhenAll(loading, rendering).ConfigureAwait(true);
+            if (ReferenceEquals(loading, this.loadingTask) && ReferenceEquals(rendering, this.renderingTask)) { return; }
         }
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        lock (this.synchronization)
-        {
-            if (this.disposed)
-            {
-                return;
-            }
+        if (this.disposed) { return; }
+        this.disposed = true;
+        this.loadVersion++; this.renderVersion++;
+        this.loadCancellation?.Cancel();
+        this.renderCancellation?.Cancel();
+    }
 
-            this.disposed = true;
-            this.pendingRequest = null;
-            this.requestVersion++;
-            CancellationTokenSource? cancellation = this.activeCancellation;
-            this.activeCancellation = null;
-            cancellation?.Cancel();
-            cancellation?.Dispose();
-            this.idleCompletion?.TrySetResult();
+    private void UpdateAttribution(PreviewGenerationSettings current)
+    {
+        PhotoMapStudio.Core.Tiles.TileSource? source = current.SelectedTileSource.IsCustom ? null : current.SelectedTileSource.Source;
+        string value = current.SelectedTileSource.IsCustom ? current.CustomTileAttribution.Trim() : source?.Attribution ?? string.Empty;
+        this.Attribution = string.IsNullOrWhiteSpace(value) ? "出典未設定" : value;
+        this.AttributionUri = source?.AttributionUri;
+    }
+
+    private void BeginLoad()
+    {
+        this.loadCancellation?.Cancel();
+        this.renderCancellation?.Cancel();
+        this.renderVersion++;
+        this.Photos = new System.Collections.ObjectModel.ObservableCollection<PreviewPhoto>();
+        this.SetProperty(ref this.selectedPhoto, null, nameof(this.SelectedPhoto));
+        this.PreviewImageBytes = ReadOnlyMemory<byte>.Empty;
+        this.PreviewCoordinate = null;
+        this.LoadProgress = null;
+        this.HasError = false;
+        this.StatusMessage = "GPS情報を持つ写真を検索しています...";
+        this.isLoading = true;
+        this.IsGenerating = true;
+        var cancellation = new CancellationTokenSource();
+        this.loadCancellation = cancellation;
+        this.loadingTask = this.LoadAsync(this.settings, ++this.loadVersion, cancellation, this.loadingTask);
+    }
+
+    private async Task LoadAsync(PreviewGenerationSettings current, long version, CancellationTokenSource cancellation, Task previous)
+    {
+        using (cancellation)
+        {
+            try
+            {
+                await previous.ConfigureAwait(true);
+                cancellation.Token.ThrowIfCancellationRequested();
+                var progress = new Progress<PreviewLoadProgress>(value =>
+                {
+                    if (!this.disposed && version == this.loadVersion && !cancellation.IsCancellationRequested)
+                    {
+                        this.LoadProgress = value;
+                        this.HasError |= value.IsError;
+                    }
+                });
+                await foreach (PreviewPhoto photo in this.previewGenerationService.LoadPhotosAsync(current.InputFolderPath,
+                    current.IncludeSubfolders, progress, cancellation.Token).ConfigureAwait(true))
+                {
+                    if (this.disposed || version != this.loadVersion || cancellation.IsCancellationRequested) { return; }
+                    ((System.Collections.ObjectModel.ObservableCollection<PreviewPhoto>)this.Photos).Add(photo);
+                    if (this.SelectedPhoto is null)
+                    {
+                        this.SetProperty(ref this.selectedPhoto, photo, nameof(this.SelectedPhoto));
+                        this.BeginRender();
+                    }
+                }
+
+                if (this.Photos.Count == 0 && version == this.loadVersion) { this.StatusMessage = "GPS情報を持つ写真が見つかりませんでした。"; }
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            catch (Exception exception) when (exception is ExifGpsReadException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+            {
+                if (version == this.loadVersion && !this.disposed)
+                {
+                    this.HasError = true;
+                    this.StatusMessage = $"写真一覧読み込みエラー: {exception.Message}";
+                }
+            }
+            finally
+            {
+                if (ReferenceEquals(this.loadCancellation, cancellation))
+                {
+                    this.loadCancellation = null;
+                    this.isLoading = false;
+                    this.UpdateBusy();
+                }
+            }
         }
     }
 
-    private void UpdateAttribution(PreviewGenerationSettings settings)
+    private void BeginRender()
     {
-        PhotoMapStudio.Core.Tiles.TileSource? tileSource = settings.SelectedTileSource.IsCustom
-            ? null
-            : settings.SelectedTileSource.Source;
-        string attribution = settings.SelectedTileSource.IsCustom
-            ? settings.CustomTileAttribution.Trim()
-            : tileSource?.Attribution ?? string.Empty;
-
-        this.Attribution = string.IsNullOrWhiteSpace(attribution)
-            ? "出典未設定"
-            : attribution;
-        this.AttributionUri = tileSource?.AttributionUri;
-    }
-
-    private void QueueRefresh(PreviewGenerationSettings settings, bool reloadPhotos)
-    {
-        ObjectDisposedException.ThrowIf(this.disposed, this);
-
+        if (this.disposed) { return; }
+        this.renderCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        this.renderCancellation = cancellation;
+        this.isRendering = true;
         this.IsGenerating = true;
         this.HasError = false;
         this.PreviewImageBytes = ReadOnlyMemory<byte>.Empty;
         this.PreviewCoordinate = null;
         this.StatusMessage = "プレビューを更新しています...";
-
-        bool shouldStartProcessing;
-        lock (this.synchronization)
-        {
-            long version = ++this.requestVersion;
-            this.pendingRequest = new PendingPreviewRequest(settings, reloadPhotos, version);
-            this.activeCancellation?.Cancel();
-
-            shouldStartProcessing = !this.isProcessing;
-            if (shouldStartProcessing)
-            {
-                this.isProcessing = true;
-                this.idleCompletion = new TaskCompletionSource(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
-            }
-        }
-
-        if (shouldStartProcessing)
-        {
-            _ = this.ProcessPendingAsync();
-        }
+        this.renderingTask = this.RenderAsync(this.SelectedPhoto, this.settings, ++this.renderVersion, cancellation, this.renderingTask);
     }
 
-    private async Task ProcessPendingAsync()
+    private async Task RenderAsync(PreviewPhoto? photo, PreviewGenerationSettings current, long version, CancellationTokenSource cancellation, Task previous)
     {
-        while (true)
+        using (cancellation)
         {
-            PendingPreviewRequest? request = null;
-            CancellationTokenSource? cancellation = null;
-            TaskCompletionSource? completion = null;
-
-            lock (this.synchronization)
-            {
-                if (this.pendingRequest is null)
-                {
-                    this.isProcessing = false;
-                    completion = this.idleCompletion;
-                    this.idleCompletion = null;
-                }
-                else
-                {
-                    request = this.pendingRequest;
-                    this.pendingRequest = null;
-                    cancellation = new CancellationTokenSource();
-                    this.activeCancellation = cancellation;
-                }
-            }
-
-            if (completion is not null)
-            {
-                completion.TrySetResult();
-                return;
-            }
-
             try
             {
-                await this.ProcessRequestAsync(request!, cancellation!.Token)
-                    .ConfigureAwait(true);
+                await previous.ConfigureAwait(true);
+                cancellation.Token.ThrowIfCancellationRequested();
+                PreviewGenerationResult result = await this.previewGenerationService.GenerateAsync(photo, current, cancellation.Token).ConfigureAwait(true);
+                if (this.disposed || version != this.renderVersion || cancellation.IsCancellationRequested) { return; }
+                this.PreviewImageBytes = result.Succeeded ? result.Image : ReadOnlyMemory<byte>.Empty;
+                this.PreviewCoordinate = result.Coordinate;
+                this.HasError = !result.Succeeded;
+                this.StatusMessage = result.Message;
             }
-            catch (OperationCanceledException) when (cancellation!.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            catch (Exception exception) when (exception is ExifGpsReadException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
             {
-            }
-            catch (Exception exception) when (exception is ExifGpsReadException
-                or IOException
-                or UnauthorizedAccessException
-                or ArgumentException
-                or InvalidOperationException)
-            {
-                if (this.IsCurrent(request!.Version))
-                {
-                    this.PreviewImageBytes = ReadOnlyMemory<byte>.Empty;
-                    this.PreviewCoordinate = null;
-                    this.HasError = true;
-                    this.StatusMessage = $"プレビュー生成エラー: {exception.Message}";
-                }
+                if (version == this.renderVersion && !this.disposed) { this.HasError = true; this.StatusMessage = $"プレビュー生成エラー: {exception.Message}"; }
             }
             finally
             {
-                lock (this.synchronization)
+                if (ReferenceEquals(this.renderCancellation, cancellation))
                 {
-                    if (ReferenceEquals(this.activeCancellation, cancellation))
-                    {
-                        this.activeCancellation = null;
-                    }
-                }
-
-                cancellation!.Dispose();
-                if (this.IsCurrent(request!.Version))
-                {
-                    this.IsGenerating = false;
+                    this.renderCancellation = null;
+                    this.isRendering = false;
+                    this.UpdateBusy();
                 }
             }
         }
     }
 
-    private async Task ProcessRequestAsync(
-        PendingPreviewRequest request,
-        CancellationToken cancellationToken)
+    private void UpdateBusy()
     {
-        if (request.ReloadPhotos)
+        this.IsGenerating = this.isLoading || this.isRendering;
+        if (!this.IsGenerating && this.StatusMessage == "キャンセルしています...")
         {
-            this.StatusMessage = "GPS 情報を持つ写真を検索しています...";
-            IReadOnlyList<PreviewPhoto> loadedPhotos = await this.previewGenerationService
-                .LoadPhotosAsync(request.Settings.InputFolderPath, cancellationToken)
-                .ConfigureAwait(true);
-
-            if (!this.IsCurrent(request.Version))
-            {
-                return;
-            }
-
-            string? selectedPath = this.SelectedPhoto?.FilePath;
-            this.Photos = loadedPhotos;
-            this.SetSelectedPhotoWithoutRefresh(
-                loadedPhotos.FirstOrDefault(photo => string.Equals(
-                    photo.FilePath,
-                    selectedPath,
-                    StringComparison.OrdinalIgnoreCase))
-                ?? (loadedPhotos.Count > 0 ? loadedPhotos[0] : null));
-        }
-
-        if (!this.IsCurrent(request.Version))
-        {
-            return;
-        }
-
-        PreviewGenerationResult result = await this.previewGenerationService.GenerateAsync(
-            this.SelectedPhoto,
-            request.Settings,
-            cancellationToken).ConfigureAwait(true);
-
-        if (!this.IsCurrent(request.Version))
-        {
-            return;
-        }
-
-        this.PreviewImageBytes = result.Succeeded && !result.Image.IsEmpty
-            ? result.Image
-            : ReadOnlyMemory<byte>.Empty;
-        this.PreviewCoordinate = result.Coordinate;
-        this.HasError = !result.Succeeded;
-        this.StatusMessage = result.Message;
-    }
-
-    private void SetSelectedPhotoWithoutRefresh(PreviewPhoto? photo)
-        => this.SetProperty(ref this.selectedPhoto, photo, nameof(this.SelectedPhoto));
-
-    private bool IsCurrent(long version)
-    {
-        lock (this.synchronization)
-        {
-            return !this.disposed && version == this.requestVersion;
+            this.StatusMessage = "プレビュー生成をキャンセルしました。";
         }
     }
 
     private void Cancel()
     {
-        bool hadWork;
-        lock (this.synchronization)
-        {
-            hadWork = this.isProcessing || this.pendingRequest is not null;
-            if (!hadWork)
-            {
-                return;
-            }
-
-            this.pendingRequest = null;
-            this.requestVersion++;
-            this.activeCancellation?.Cancel();
-        }
-
-        this.IsGenerating = false;
-        this.HasError = false;
-        this.StatusMessage = "プレビュー生成をキャンセルしました。";
+        if (!this.IsGenerating) { return; }
+        this.loadVersion++; this.renderVersion++;
+        this.StatusMessage = "キャンセルしています...";
+        this.loadCancellation?.Cancel();
+        this.renderCancellation?.Cancel();
     }
-
-    private sealed record PendingPreviewRequest(
-        PreviewGenerationSettings Settings,
-        bool ReloadPhotos,
-        long Version);
 }

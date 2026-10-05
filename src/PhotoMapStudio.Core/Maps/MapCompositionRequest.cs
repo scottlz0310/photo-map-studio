@@ -23,6 +23,9 @@ public sealed record MapCompositionRequest
     /// <summary>使用するタイルソース。</summary>
     public TileSource TileSource { get; init; } = TileSources.Default;
 
+    /// <summary>一括生成単位の取得統計。対話プレビューでは未指定。</summary>
+    public TileFetchSession? TileSession { get; init; }
+
     /// <summary>出力画像の幅（ピクセル）。</summary>
     public int Width { get; init; } = DefaultWidth;
 

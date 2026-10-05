@@ -21,6 +21,9 @@ public sealed record PreviewGenerationSettings
     /// <summary>写真を列挙する入力フォルダ。</summary>
     public string InputFolderPath { get; init; } = string.Empty;
 
+    /// <summary>下位フォルダも探索する。</summary>
+    public bool IncludeSubfolders { get; init; }
+
     /// <summary>出力幅。</summary>
     public double Width { get; init; } = MapCompositionRequest.DefaultWidth;
 

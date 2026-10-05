@@ -87,8 +87,14 @@
 
 合意した変更として、公式OSMは対話プレビュー用、一括生成は一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定する。公式URLをカスタムへ入力しても一括開始を拒否する。
 
+## 最終CI・独立レビュー（2026-10-06）
+
+- 対象HEADは `86a3363d5fcbf36b733cdf1aedacd5b54a06d5e1`。GitHub Actions復旧後の[CI再実行](https://github.com/scottlz0310/photo-map-studio/actions/runs/37373204915)でbuild、package (x64)、package (ARM64)、codecov/patchの全4件が成功し、全ページ取得と各runのSHA一致を確認した。
+- [独立再レビューのVerdict](https://github.com/scottlz0310/photo-map-studio/pull/35#issuecomment-6004294601)は同じHEADのAPPROVED / READY_TO_MERGE。reviewerもCore 205件／App 115件、format、Release/x64ビルド成功を確認し、新規指摘なし、全2スレッドresolvedだった。
+- subscriberの要求URI受理と対象PR・通知HEAD一致、最終スナップショットのCI成功・未解決0件を確認し、revision 28の完了記録を `mcp-docker reviewgate validate` で検証した。[PR #35](https://github.com/scottlz0310/photo-map-studio/pull/35)は2026-10-06にマージし、Issue #34をクローズした。
+- Codecovは情報提供モードで閾値は未定義。コメントに対象SHAの記載がないため数値のHEAD照合は未完了だが、固定SHAのcodecov/patchは成功している。
+
 ## 未実施・残る確認
 
 - 実際のネットワーク共有上の独立した約5,000枚・約5GBの測定。今回のローカル保存先・109撮影地点の再利用結果からは、ネットワーク遅延や異なる地点での取得量を判断できない。
-- 今回の画面・探索・診断ログ修正後のCI・独立再レビュー。
-- 独立レビューとCIの最終結果。
+- 署名済み配布MSIXの通常インストール。別Identityの実画面検証や公開資産の定義検証とは区別する。

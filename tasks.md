@@ -7,7 +7,12 @@
 - [x] ループバックでは100枚超の確認を省略
 - [x] 画面の案内（`TileUsageMessage`）とヘルプ（F1）をループバックの実態に合わせる
 - [x] パラメータ化テスト（Core・App）。ループバック判定を常に偽にする変異でループバックのテストが失敗することを確認
-- [x] ローカルの自動テスト（Core 232件・App 127件）・format
+- [x] ローカルの自動テスト（Core 234件・App 127件）・format
+- [x] PRのCI最終結果と独立レビューの完了（PR #38、同じHEAD `afe6fab` のAPPROVED、build・x64／ARM64 package・codecov/patchが成功、未解決0件、マージ済み）
+
+## リリース v0.2.1
+
+- [x] Package.appxmanifest のバージョンを 0.2.1.0 に更新、CHANGELOG を確定
 
 ## Issue #34
 

@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- カスタムタイルの配信元がこの PC 自身（`localhost`、`127.0.0.0/8`、`::1`）の場合、プレビューも一括生成も 8 並列・5 ms 間隔（`TileRateLimit.Loopback`。従来は一括が 1 接続・1 秒間隔）にし、100枚超の確認を省略する。LAN やプライベート IP は他者の資源の可能性があるため対象外で、従来どおり 1 接続・1 秒間隔。画面の案内とヘルプを実態に合わせた（[#37](https://github.com/scottlz0310/photo-map-studio/issues/37)）
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

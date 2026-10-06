@@ -27,6 +27,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private const string InvalidImageSizeMessage = "画像サイズ(幅・高さ)は正の整数を指定してください。";
     private const string InvalidZoomMessage = "ズームレベルは 1 〜 19 の範囲で指定してください。";
+    private const string LoopbackTileUsageMessage = "この PC 上の配信元です。一括取得も高速な間隔（8並列・5ミリ秒）で行い、100枚超の確認は省略します。";
 
     private readonly IPhotoMapSettingsRepository settingsRepository;
     private readonly IBatchGenerationService? batchGenerationService;
@@ -164,7 +165,11 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>配信元に応じた一括生成の案内。</summary>
     public string TileUsageMessage => this.SelectedTileSource == TileSourceChoices.OpenStreetMap
         ? "OSM公式サーバーはプレビュー用です。一括生成は、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。"
-        : this.IsCustomTileSource ? "配信元の一括取得・画像保存の許可を確認してください。一括取得は1秒間隔、100枚超は開始前に確認します。" : string.Empty;
+        : this.IsCustomTileSource ? this.CustomTileUsageMessage : string.Empty;
+
+    private string CustomTileUsageMessage => TileSource.IsLoopbackUrlTemplate(this.CustomTileUrlTemplate)
+        ? LoopbackTileUsageMessage
+        : "配信元の一括取得・画像保存の許可を確認してください。一括取得は1秒間隔、100枚超は開始前に確認します。";
 
     /// <summary>配信元の案内を表示するかどうか。</summary>
     public bool HasTileUsageMessage => !string.IsNullOrEmpty(this.TileUsageMessage);
@@ -279,6 +284,7 @@ public sealed class MainViewModel : ObservableObject
             if (this.SetProperty(ref this.customTileUrlTemplate, value ?? string.Empty))
             {
                 this.ClearFeedback();
+                this.OnPropertyChanged(nameof(this.TileUsageMessage));
                 this.NotifyPreviewChanged();
             }
         }

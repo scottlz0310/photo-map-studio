@@ -54,6 +54,37 @@ public class GenerationValidationTests
         Assert.NotEmpty(model.TileUsageMessage);
     }
 
+    [Theory]
+    [InlineData("http://127.0.0.1:8765/{z}/{x}/{y}.png", true)]
+    [InlineData("http://localhost/{z}/{x}/{y}.png", true)]
+    [InlineData("https://example.com/{z}/{x}/{y}.png", false)]
+    [InlineData("http://192.168.1.10/{z}/{x}/{y}.png", false)]
+    [InlineData("", false)]
+    public void カスタム配信元の案内はループバックだけ一括の間隔の記述を変える(string template, bool loopback)
+    {
+        var model = new MainViewModel(new Repository(new() { TileSourceKey = TileSourceChoices.Custom.Key, CustomTileUrlTemplate = template }));
+        Assert.True(model.HasTileUsageMessage);
+        Assert.Equal(loopback, model.TileUsageMessage.Contains("この PC 上の配信元", StringComparison.Ordinal));
+        Assert.Equal(!loopback, model.TileUsageMessage.Contains("1秒間隔", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void カスタムURLの入力に応じて案内が切り替わり変更が通知される()
+    {
+        var changed = new List<string?>();
+        var model = new MainViewModel(new Repository(new() { TileSourceKey = TileSourceChoices.Custom.Key }));
+        model.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        model.CustomTileUrlTemplate = "http://127.0.0.1:8765/{z}/{x}/{y}.png";
+        Assert.Contains(nameof(MainViewModel.TileUsageMessage), changed);
+        Assert.Contains("この PC 上の配信元", model.TileUsageMessage, StringComparison.Ordinal);
+
+        changed.Clear();
+        model.CustomTileUrlTemplate = "https://example.com/{z}/{x}/{y}.png";
+        Assert.Contains(nameof(MainViewModel.TileUsageMessage), changed);
+        Assert.Contains("1秒間隔", model.TileUsageMessage, StringComparison.Ordinal);
+    }
+
     private sealed class Repository(PhotoMapSettings? settings = null) : IPhotoMapSettingsRepository
     {
         public PhotoMapSettings Load() => settings ?? new();

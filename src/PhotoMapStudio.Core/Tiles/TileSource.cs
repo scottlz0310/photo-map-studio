@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Net;
 
 namespace PhotoMapStudio.Core.Tiles;
 
@@ -86,9 +87,25 @@ public sealed record TileSource
         }
     }
 
-    /// <summary>一括生成の固定レート。地理院は従来の間隔を維持する。</summary>
-    public TileRateLimit BatchRateLimit => string.Equals(this.BuildTileUri(0, 0, 0).Host, "cyberjapandata.gsi.go.jp", StringComparison.OrdinalIgnoreCase)
+    /// <summary>配信元がこの PC 自身（ループバック）かどうか。</summary>
+    public bool IsLoopback => IsLoopbackHost(this.BuildTileUri(0, 0, 0));
+
+    /// <summary>
+    /// 一括生成の固定レート。地理院は従来の間隔を維持する。ループバックは他者のサーバーに負荷を掛けないため、通常のレートを使う。
+    /// </summary>
+    public TileRateLimit BatchRateLimit => this.IsLoopback || string.Equals(this.BuildTileUri(0, 0, 0).Host, "cyberjapandata.gsi.go.jp", StringComparison.OrdinalIgnoreCase)
         ? this.RateLimit : new TileRateLimit(1, TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// URL テンプレートの配信元がループバックかどうかを返す。テンプレートが不正な場合は <see langword="false"/>。
+    /// </summary>
+    /// <param name="urlTemplate">URL テンプレート。</param>
+    /// <returns>http または https で、ホストがループバックなら <see langword="true"/>。</returns>
+    public static bool IsLoopbackUrlTemplate(string? urlTemplate)
+        => !string.IsNullOrWhiteSpace(urlTemplate)
+            && Uri.TryCreate(Substitute(urlTemplate, 0, 0, 0), UriKind.Absolute, out Uri? uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && IsLoopbackHost(uri);
 
     /// <summary>指定ズームが利用可能かどうかを返す。</summary>
     /// <param name="zoom">ズームレベル。</param>
@@ -103,6 +120,15 @@ public sealed record TileSource
     /// <param name="y">タイル番号 Y。</param>
     /// <returns>タイルの URL。</returns>
     public Uri BuildTileUri(int zoom, int x, int y) => new(Substitute(this.UrlTemplate, zoom, x, y), UriKind.Absolute);
+
+    // DNS 解決はしない。ホスト名は localhost だけ、IP は 127.0.0.0/8 と ::1 だけを対象にする。
+    // LAN やプライベート IP は他者の資源の可能性があるため含めない。
+    private static bool IsLoopbackHost(Uri uri)
+    {
+        string host = uri.Host.TrimEnd('.');
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (IPAddress.TryParse(host.Trim('[', ']'), out IPAddress? address) && IPAddress.IsLoopback(address));
+    }
 
     private static string Substitute(string template, int zoom, int x, int y) => template
         .Replace("{z}", zoom.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)

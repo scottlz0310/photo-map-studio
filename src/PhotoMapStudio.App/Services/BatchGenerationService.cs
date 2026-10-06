@@ -146,7 +146,8 @@ public sealed class BatchGenerationService : IBatchGenerationService
         }
 
         bool isGsi = string.Equals(settings.TileSource.BuildTileUri(0, 0, 0).Host, "cyberjapandata.gsi.go.jp", StringComparison.OrdinalIgnoreCase);
-        if (!isGsi && total > 100)
+        // ループバックは他者の配信元ではないため、一括取得の許可を確認する相手がいない。
+        if (!isGsi && !settings.TileSource.IsLoopback && total > 100)
         {
             if (settings.ConfirmLargeBatchAsync is null)
             {

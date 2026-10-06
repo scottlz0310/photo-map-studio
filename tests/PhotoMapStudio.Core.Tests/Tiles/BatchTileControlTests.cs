@@ -138,7 +138,12 @@ public class BatchTileControlTests
         {
             Assert.Equal(loopback, traffic.GetMinimumInterval(source) == interval);
             Assert.Equal(loopback, traffic.GetConcurrencyLimit(source) == concurrency);
-            if (!loopback)
+            if (loopback)
+            {
+                Assert.Equal(TimeSpan.FromMilliseconds(5), traffic.GetMinimumInterval(source));
+                Assert.Equal(8, traffic.GetConcurrencyLimit(source));
+            }
+            else
             {
                 Assert.Equal(TimeSpan.FromSeconds(1), traffic.GetMinimumInterval(source));
                 Assert.Equal(1, traffic.GetConcurrencyLimit(source));

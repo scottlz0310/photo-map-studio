@@ -81,13 +81,29 @@ public class TileSourceTests
     [InlineData("http://127.1.2.3/{z}/{x}/{y}.png")]
     [InlineData("http://[::1]:8765/{z}/{x}/{y}.png")]
     [InlineData("https://127.0.0.1/{z}/{x}/{y}.png")]
-    public void ループバックの配信元は一括生成でも通常のレートを使う(string template)
+    public void ループバックの配信元はプレビューも一括生成も同じ高速なレートを使う(string template)
     {
         TileSource source = TileSources.Custom(template, "出典");
 
         Assert.True(source.IsLoopback);
         Assert.True(TileSource.IsLoopbackUrlTemplate(template));
+        Assert.Equal(TileRateLimit.Loopback, source.RateLimit);
         Assert.Equal(source.RateLimit, source.BatchRateLimit);
+    }
+
+    [Fact]
+    public void ループバック用のレートは8並列5ミリ秒間隔にする()
+    {
+        Assert.Equal(8, TileRateLimit.Loopback.MaxConcurrentRequests);
+        Assert.Equal(TimeSpan.FromMilliseconds(5), TileRateLimit.Loopback.MinimumInterval);
+    }
+
+    [Fact]
+    public void ループバックの一括生成レートは配信元自身のレートに従う()
+    {
+        var source = new TileSource("テスト", "http://127.0.0.1/{z}/{x}/{y}.png", 0, 19, "出典", TileRateLimit.OpenStreetMap);
+
+        Assert.Equal(TileRateLimit.OpenStreetMap, source.BatchRateLimit);
     }
 
     [Theory]
@@ -107,6 +123,7 @@ public class TileSourceTests
 
         Assert.False(source.IsLoopback);
         Assert.False(TileSource.IsLoopbackUrlTemplate(template));
+        Assert.Equal(TileRateLimit.Conservative, source.RateLimit);
         Assert.Equal(new TileRateLimit(1, TimeSpan.FromSeconds(1)), source.BatchRateLimit);
     }
 

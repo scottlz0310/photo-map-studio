@@ -69,7 +69,13 @@ public static class TileSources
     /// <param name="attribution">出典表示。</param>
     /// <param name="minZoom">利用可能な最小ズーム。</param>
     /// <param name="maxZoom">利用可能な最大ズーム。</param>
-    /// <returns>構築したタイルソース。</returns>
+    /// <returns>構築したタイルソース。ループバックの配信元は <see cref="TileRateLimit.Loopback"/>、それ以外は <see cref="TileRateLimit.Conservative"/>。</returns>
     public static TileSource Custom(string urlTemplate, string attribution, int minZoom = 1, int maxZoom = 19)
-        => new("カスタム", urlTemplate, minZoom, maxZoom, attribution, TileRateLimit.Conservative);
+        => new(
+            "カスタム",
+            urlTemplate,
+            minZoom,
+            maxZoom,
+            attribution,
+            TileSource.IsLoopbackUrlTemplate(urlTemplate) ? TileRateLimit.Loopback : TileRateLimit.Conservative);
 }

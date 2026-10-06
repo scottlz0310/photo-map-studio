@@ -27,7 +27,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private const string InvalidImageSizeMessage = "画像サイズ(幅・高さ)は正の整数を指定してください。";
     private const string InvalidZoomMessage = "ズームレベルは 1 〜 19 の範囲で指定してください。";
-    private const string LoopbackTileUsageMessage = "この PC 上の配信元です。一括取得も通常の取得間隔で行い、100枚超の確認は省略します。";
+    private const string LoopbackTileUsageMessage = "この PC 上の配信元です。一括取得も高速な間隔（8並列・5ミリ秒）で行い、100枚超の確認は省略します。";
 
     private readonly IPhotoMapSettingsRepository settingsRepository;
     private readonly IBatchGenerationService? batchGenerationService;

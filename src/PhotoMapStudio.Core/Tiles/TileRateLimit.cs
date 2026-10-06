@@ -15,4 +15,10 @@ public readonly record struct TileRateLimit(int MaxConcurrentRequests, TimeSpan 
 
     /// <summary>公的機関のタイル配信など、比較的余裕のある設定。</summary>
     public static TileRateLimit Relaxed { get; } = new(4, TimeSpan.FromMilliseconds(50));
+
+    /// <summary>
+    /// この PC 上の配信元（ループバック）用の設定。他者のサーバーに負荷を掛けない。
+    /// 静的配信の実測（約 150〜260 件/秒で頭打ち）に対して、上限が 200 件/秒になる値。
+    /// </summary>
+    public static TileRateLimit Loopback { get; } = new(8, TimeSpan.FromMilliseconds(5));
 }

@@ -3,9 +3,10 @@
 ## Issue #37
 
 - [x] ループバック判定（`TileSource.IsLoopback`、`IsLoopbackUrlTemplate`）と、一括生成レート（`BatchRateLimit`）の緩和
+- [x] ループバック用のレート（`TileRateLimit.Loopback`: 8並列・5ミリ秒間隔）。静的配信の負荷試験（約150〜260件/秒で頭打ち）に基づく
 - [x] ループバックでは100枚超の確認を省略
 - [x] 画面の案内（`TileUsageMessage`）とヘルプ（F1）をループバックの実態に合わせる
-- [x] パラメータ化テスト（Core・App）。ループバック判定を常に偽にする変異で9件が失敗することを確認
+- [x] パラメータ化テスト（Core・App）。ループバック判定を常に偽にする変異でループバックのテストが失敗することを確認
 - [x] ローカルの自動テスト（Core 232件・App 127件）・format
 
 ## Issue #34

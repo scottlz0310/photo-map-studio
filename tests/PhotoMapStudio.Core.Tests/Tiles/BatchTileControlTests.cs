@@ -124,6 +124,28 @@ public class BatchTileControlTests
         Assert.Equal(interactive, traffic.GetMinimumInterval(source));
     }
 
+    [Theory]
+    [InlineData("http://127.0.0.1:8765/{z}/{x}/{y}.png", true)]
+    [InlineData("http://localhost/{z}/{x}/{y}.png", true)]
+    [InlineData("http://192.168.1.10/{z}/{x}/{y}.png", false)]
+    public void 一括中もループバックだけは通常の間隔と並列数を維持する(string template, bool loopback)
+    {
+        var source = TileSources.Custom(template, "出典");
+        var traffic = new TileTrafficController();
+        TimeSpan interval = traffic.GetMinimumInterval(source);
+        int concurrency = traffic.GetConcurrencyLimit(source);
+        using (traffic.BeginBatch(source))
+        {
+            Assert.Equal(loopback, traffic.GetMinimumInterval(source) == interval);
+            Assert.Equal(loopback, traffic.GetConcurrencyLimit(source) == concurrency);
+            if (!loopback)
+            {
+                Assert.Equal(TimeSpan.FromSeconds(1), traffic.GetMinimumInterval(source));
+                Assert.Equal(1, traffic.GetConcurrencyLimit(source));
+            }
+        }
+    }
+
     private sealed class MemoryCache : ITileCache
     {
         private readonly Dictionary<string, byte[]> entries = [];

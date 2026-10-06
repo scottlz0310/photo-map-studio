@@ -135,6 +135,47 @@ public class RecursiveBatchTests
     }
 
     [Theory]
+    [InlineData("http://127.0.0.1:8765/{z}/{x}/{y}.png", 0)]
+    [InlineData("http://localhost/{z}/{x}/{y}.png", 0)]
+    [InlineData("http://[::1]:8765/{z}/{x}/{y}.png", 0)]
+    [InlineData("http://192.168.1.10/{z}/{x}/{y}.png", 1)]
+    [InlineData("https://example.com/{z}/{x}/{y}.png", 1)]
+    public async Task 大量実行の確認はループバックでは省略しそれ以外では求める(string template, int expectedConfirmations)
+    {
+        using var tree = new PhotoTree(); tree.Populate(101);
+        var composer = new Composer(); int confirmations = 0;
+        var service = new BatchGenerationService(new PhotoFileEnumerator(), new Reader(_ => new(35, 139)), composer);
+        BatchGenerationSummary result = await service.GenerateAsync(new()
+        {
+            InputFolderPath = tree.Root,
+            OutputFolderPath = "maps",
+            IncludeSubfolders = true,
+            TileSource = TileSources.Custom(template, "出典"),
+            ConfirmLargeBatchAsync = (_, _) => { confirmations++; return Task.FromResult(true); },
+        }, null, CancellationToken.None);
+        Assert.Equal(expectedConfirmations, confirmations);
+        Assert.Equal(101, composer.Count);
+        Assert.False(result.IsCancelled);
+    }
+
+    [Fact]
+    public async Task ループバックは確認の処理が無くても100枚超を生成できる()
+    {
+        using var tree = new PhotoTree(); tree.Populate(101);
+        var composer = new Composer();
+        var service = new BatchGenerationService(new PhotoFileEnumerator(), new Reader(_ => new(35, 139)), composer);
+        BatchGenerationSummary result = await service.GenerateAsync(new()
+        {
+            InputFolderPath = tree.Root,
+            OutputFolderPath = "maps",
+            IncludeSubfolders = true,
+            TileSource = TileSources.Custom("http://127.0.0.1:8765/{z}/{x}/{y}.png", "出典"),
+        }, null, CancellationToken.None);
+        Assert.Equal(101, composer.Count);
+        Assert.False(result.IsCancelled);
+    }
+
+    [Theory]
     [InlineData("enumeration")]
     [InlineData("exif")]
     [InlineData("composition")]

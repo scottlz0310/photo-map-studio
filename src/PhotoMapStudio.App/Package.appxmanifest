@@ -10,7 +10,7 @@
   <Identity
     Name="PhotoMapStudio"
     Publisher="CN=scottlz0310"
-    Version="0.2.0.0" />
+    Version="0.2.1.0" />
 
   <Properties>
     <DisplayName>PhotoMapStudio</DisplayName>

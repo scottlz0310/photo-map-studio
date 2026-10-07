@@ -173,8 +173,11 @@ public class ErrorDiagnosticTests
         }
         else
         {
-            failure = await Assert.ThrowsAsync<IOException>(() => new BatchGenerationService(enumerator, reader, new Composer(), errorDiagnostics: sink)
+            BatchGenerationException batchFailure = await Assert.ThrowsAsync<BatchGenerationException>(() => new BatchGenerationService(enumerator, reader, new Composer(), errorDiagnostics: sink)
                 .GenerateAsync(new() { InputFolderPath = tree.Root, OutputFolderPath = "maps" }, null, CancellationToken.None));
+            failure = Assert.IsType<IOException>(batchFailure.InnerException);
+            Assert.NotNull(batchFailure.Summary);
+            Assert.NotEmpty(batchFailure.Summary.Issues);
         }
         Assert.Equal([original, writeFailure], Assert.IsType<AggregateException>(failure.InnerException).InnerExceptions);
     }

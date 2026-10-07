@@ -25,4 +25,6 @@ public sealed record BatchGenerationSummary(
     public PhotoMapStudio.Core.Tiles.TileFetchStatistics? Tiles { get; init; }
     /// <summary>配信元の連続失敗による中止理由。</summary>
     public string? StopReason { get; init; }
+    /// <summary>進捗通知とは独立した、処理済みの問題の確定一覧。</summary>
+    public IReadOnlyList<BatchGenerationIssue> Issues { get; init; } = [];
 }

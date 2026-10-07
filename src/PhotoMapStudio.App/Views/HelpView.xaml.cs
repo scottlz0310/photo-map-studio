@@ -39,6 +39,7 @@ public sealed partial class HelpView : UserControl
         {
             case 0:
                 this.AddText("1. 入力フォルダを指定します。必要なら『下位フォルダも探索する』を有効にします。\n2. 出力先に『.』を指定すると写真と同じフォルダに保存します。\n3. プレビューで位置・サイズ・ズームを確認します。\n4. 一括生成を押し、進捗と結果を確認します。");
+                this.AddText("進捗ログの『スキップ・エラーの実行履歴』で実行を選ぶと、入力フォルダと問題の相対パス・理由を確認できます。ファイル名や理由は選択してコピーできます。完了・キャンセル・途中中止までの確定結果を端末内に自動保存し、直近30回を保持します。アプリの再起動後も履歴を確認できます。");
                 this.AddNotice("初回はタイル取得が必要です。まず100枚程度で確認し、1,000枚、5,000枚へ段階的に増やしてください。");
                 break;
             case 1:
@@ -84,6 +85,8 @@ public sealed partial class HelpView : UserControl
                 this.AddText("GPSなし: 写真に位置情報があるか確認してください。\nタイル取得失敗: 配信元・HTTPステータス・Retry-Afterを確認し、時間をおいて再実行してください。\n出力衝突: 相対出力に変更するか写真の名前を変更します。\n出力先作成失敗: 保存先の権限とネットワーク接続を確認します。相対出力の失敗は写真単位でERRORにして続行し、絶対出力の作成失敗は開始前に中止します。\n長いパス: パッケージとWindows環境の長いパス対応を確認してください。読み書きに失敗した写真はERRORになります。");
                 this.AddText("読み取り・生成・保存のエラーはローカル診断ログに記録します。時刻・処理段階・番号・アプリ版・例外型・HResult・呼び出しメソッドを保存し、写真・GPS・パス・URL・例外メッセージは含めず、外部送信もしません。現行と直前のログを各1MiBまで保持します。番号0は写真番号を持たない処理です。ログ保存に失敗した場合も画面へエラーを表示します。");
                 this.AddCode($"%LOCALAPPDATA%\\Packages\\{Windows.ApplicationModel.Package.Current.Id.FamilyName}\\LocalState\\diagnostics");
+                this.AddText("実行履歴は診断ログとは別に、日時・入力フォルダ・問題の相対パス・結果・理由・集計を記録します。写真本体・GPS・タイルURL・生の例外メッセージは記録しません。正常保存後に古い履歴を整理して直近30回を残します。保存・読み込み・整理に失敗したら履歴欄に通知します。今回の結果は画面に残りますが、アプリ終了後の保存を保証するものではありません。保存先の権限・空き容量や読み取りエラーの内容を確認してください。");
+                this.AddCode($"%LOCALAPPDATA%\\Packages\\{Windows.ApplicationModel.Package.Current.Id.FamilyName}\\LocalState\\batch-history");
                 break;
             case 9:
                 Windows.ApplicationModel.PackageVersion version = Windows.ApplicationModel.Package.Current.Id.Version;

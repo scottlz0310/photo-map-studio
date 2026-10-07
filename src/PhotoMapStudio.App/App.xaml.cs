@@ -58,6 +58,8 @@ public partial class App : Application
         services.AddSingleton<IPhotoMapSettingsRepository, PhotoMapSettingsRepository>();
         services.AddSingleton<IPreviewGenerationService, PreviewGenerationService>();
         services.AddSingleton<IBatchGenerationService, BatchGenerationService>();
+        services.AddSingleton<IBatchGenerationHistoryStore>(_ => new BatchGenerationHistoryStore(
+            Path.Combine(ApplicationData.Current.LocalFolder.Path, "batch-history")));
         services.AddSingleton<PreviewViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddTransient<MainWindow>();

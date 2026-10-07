@@ -49,6 +49,30 @@
             <TextBlock Text="{Binding GenerationElapsedText}" />
             <TextBlock Text="{Binding Preview.StatusMessage}" TextWrapping="Wrap" />
             <Button Content="プレビューの読み込みをキャンセル" Command="{Binding Preview.CancelCommand}" />
+            <TextBlock FontWeight="SemiBold" Text="スキップ・エラーの実行履歴" />
+            <TextBlock Text="{Binding BatchHistoryMessage}" TextWrapping="Wrap" />
+            <ComboBox
+                HorizontalAlignment="Stretch"
+                PlaceholderText="保存済みの実行を選択"
+                ItemsSource="{Binding BatchHistories}"
+                SelectedItem="{Binding SelectedBatchHistory, Mode=TwoWay}"
+                DisplayMemberPath="DisplayName" />
+            <Button Content="履歴を再読み込み" Command="{Binding LoadBatchHistoryCommand}" />
+            <TextBlock Text="{Binding SelectedBatchHistory.InputFolderPath}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+            <TextBlock Text="{Binding SelectedBatchHistory.SummaryText}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding SelectedBatchHistory.EmptyMessage}" TextWrapping="Wrap" />
+            <ListView MaxHeight="240" ItemsSource="{Binding SelectedBatchHistory.Issues}">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding RelativePath}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                            <TextBlock Text="{Binding ReasonText}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <TextBlock Text="今回の進捗詳細" FontWeight="SemiBold" />
             <ListView
                 MaxHeight="180"
                 ItemsSource="{Binding GenerationLogs}">

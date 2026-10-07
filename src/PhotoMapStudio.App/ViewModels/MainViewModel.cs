@@ -31,6 +31,10 @@ public sealed class MainViewModel : ObservableObject
 
     private readonly IPhotoMapSettingsRepository settingsRepository;
     private readonly IBatchGenerationService? batchGenerationService;
+    private readonly IBatchGenerationHistoryStore? historyStore;
+    private BatchHistoryViewModel? selectedBatchHistory;
+    private string batchHistoryMessage = string.Empty;
+    private bool isHistoryBusy;
     private CancellationTokenSource? generationCancellation;
     private string inputFolderPath;
     private string outputFolderPath;
@@ -65,10 +69,12 @@ public sealed class MainViewModel : ObservableObject
     public MainViewModel(
         IPhotoMapSettingsRepository settingsRepository,
         PreviewViewModel? preview = null,
-        IBatchGenerationService? batchGenerationService = null, TimeProvider? timeProvider = null)
+        IBatchGenerationService? batchGenerationService = null, TimeProvider? timeProvider = null,
+        IBatchGenerationHistoryStore? historyStore = null)
     {
         this.settingsRepository = settingsRepository ?? throw new ArgumentNullException(nameof(settingsRepository));
         this.batchGenerationService = batchGenerationService;
+        this.historyStore = historyStore;
         this.Preview = preview;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         if (preview is not null)
@@ -108,6 +114,7 @@ public sealed class MainViewModel : ObservableObject
         this.SaveSettingsCommand = new RelayCommand(this.SaveSettings);
         this.GenerateCommand = new AsyncRelayCommand(this.GenerateAsync, this.CanGenerate);
         this.CancelGenerationCommand = new RelayCommand(this.CancelGeneration, this.CanCancelGeneration);
+        this.LoadBatchHistoryCommand = new AsyncRelayCommand(this.LoadBatchHistoryAsync, this.CanLoadBatchHistory);
         this.Preview?.UpdateSettings(this.CreatePreviewSettings());
     }
 
@@ -369,6 +376,41 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>一括生成の進捗ログ。</summary>
     public ObservableCollection<BatchGenerationProgress> GenerationLogs { get; } = new();
 
+    /// <summary>最新から順に選択できる実行履歴。</summary>
+    public ObservableCollection<BatchHistoryViewModel> BatchHistories { get; } = new();
+
+    /// <summary>表示する履歴。</summary>
+    public BatchHistoryViewModel? SelectedBatchHistory
+    {
+        get => this.selectedBatchHistory;
+        set => this.SetProperty(ref this.selectedBatchHistory, value);
+    }
+
+    /// <summary>履歴保存・読み取りの結果。</summary>
+    public string BatchHistoryMessage
+    {
+        get => this.batchHistoryMessage;
+        private set => this.SetProperty(ref this.batchHistoryMessage, value);
+    }
+
+    /// <summary>履歴の再読み込み。</summary>
+    public IAsyncRelayCommand LoadBatchHistoryCommand { get; }
+
+    /// <summary>履歴の保存・読み込み中かどうか。</summary>
+    public bool IsHistoryBusy
+    {
+        get => this.isHistoryBusy;
+        private set
+        {
+            if (this.SetProperty(ref this.isHistoryBusy, value))
+            {
+                this.GenerateCommand.NotifyCanExecuteChanged();
+                this.LoadBatchHistoryCommand.NotifyCanExecuteChanged();
+                this.CancelGenerationCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
     /// <summary>一括生成中かどうか。</summary>
     public bool IsGenerating
     {
@@ -379,6 +421,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 this.GenerateCommand.NotifyCanExecuteChanged();
                 this.CancelGenerationCommand.NotifyCanExecuteChanged();
+                this.LoadBatchHistoryCommand.NotifyCanExecuteChanged();
                 this.OnPropertyChanged(nameof(this.ProgressIsIndeterminate));
                 this.OnPropertyChanged(nameof(this.ProgressMessage));
             }
@@ -513,10 +556,10 @@ public sealed class MainViewModel : ObservableObject
     }
 
     private bool CanGenerate()
-        => this.batchGenerationService is not null && !this.IsGenerating;
+        => this.batchGenerationService is not null && !this.IsGenerating && !this.IsHistoryBusy;
 
     private bool CanCancelGeneration()
-        => this.IsGenerating;
+        => this.IsGenerating && !this.IsHistoryBusy;
 
     private async Task GenerateAsync()
     {
@@ -533,6 +576,7 @@ public sealed class MainViewModel : ObservableObject
         this.IsGenerating = true;
 
         using var cancellation = new CancellationTokenSource();
+        DateTimeOffset startedAtUtc = this.timeProvider.GetUtcNow();
         using var elapsedCancellation = new CancellationTokenSource();
         Task elapsedTask = this.UpdateElapsedAsync(elapsedCancellation.Token);
         this.generationCancellation = cancellation;
@@ -543,6 +587,8 @@ public sealed class MainViewModel : ObservableObject
             BatchGenerationSummary summary = await this.batchGenerationService
                 .GenerateAsync(settings, progress, cancellation.Token)
                 .ConfigureAwait(true);
+
+            await this.SaveBatchHistoryAsync(settings.InputFolderPath, startedAtUtc, summary).ConfigureAwait(true);
 
             this.GenerationProgressValue = summary.TotalCount == 0 ? 100 : this.GenerationProgressValue;
             this.GenerationSummary = FormatSummary(summary);
@@ -560,6 +606,11 @@ public sealed class MainViewModel : ObservableObject
             or IOException
             or UnauthorizedAccessException)
         {
+            if (exception is BatchGenerationException { Summary: { } partial })
+            {
+                this.GenerationSummary = FormatSummary(partial);
+                await this.SaveBatchHistoryAsync(settings.InputFolderPath, startedAtUtc, partial).ConfigureAwait(true);
+            }
             this.HasGenerationError = true;
             this.ValidationMessage = exception.Message;
             this.GenerationProgressMessage = $"一括生成エラー: {exception.Message}";
@@ -574,7 +625,56 @@ public sealed class MainViewModel : ObservableObject
             await elapsedCancellation.CancelAsync().ConfigureAwait(true);
             await elapsedTask.ConfigureAwait(true);
             this.IsGenerating = false;
+            this.LoadBatchHistoryCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    private bool CanLoadBatchHistory() => this.historyStore is not null && !this.IsGenerating && !this.IsHistoryBusy;
+
+    private async Task LoadBatchHistoryAsync()
+    {
+        if (this.historyStore is null) { return; }
+        this.IsHistoryBusy = true;
+        try
+        {
+            IReadOnlyList<BatchGenerationHistory> histories = await this.historyStore.LoadAsync().ConfigureAwait(true);
+            this.BatchHistories.Clear();
+            foreach (BatchGenerationHistory history in histories) { this.BatchHistories.Add(new(history)); }
+            this.SelectedBatchHistory = this.BatchHistories.FirstOrDefault();
+            this.BatchHistoryMessage = "履歴を読み込みました。正常保存後に直近30回を保持します。";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            this.BatchHistoryMessage = $"履歴を読み込めません: {exception.Message}";
+        }
+        finally { this.IsHistoryBusy = false; }
+    }
+
+    private async Task SaveBatchHistoryAsync(string inputFolderPath, DateTimeOffset startedAtUtc, BatchGenerationSummary summary)
+    {
+        var history = new BatchGenerationHistory(1, Guid.NewGuid(), startedAtUtc, this.timeProvider.GetUtcNow(),
+            Path.GetFullPath(inputFolderPath), summary.SuccessCount, summary.SkippedCount, summary.ErrorCount, summary.TotalCount,
+            summary.IsCancelled, summary.StopReason is not null, summary.Elapsed, summary.Issues);
+        var display = new BatchHistoryViewModel(history);
+        this.BatchHistories.Insert(0, display);
+        this.SelectedBatchHistory = display;
+        if (this.historyStore is null) { return; }
+        this.IsHistoryBusy = true;
+        try
+        {
+            await this.historyStore.SaveAsync(history).ConfigureAwait(true);
+            while (this.BatchHistories.Count > BatchGenerationHistoryStore.RetainedRunCount)
+            {
+                this.BatchHistories.RemoveAt(this.BatchHistories.Count - 1);
+            }
+            this.BatchHistoryMessage = "今回の結果を端末内へ自動保存しました（直近30回を保持）。";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // 保存失敗で写真の集計を変更せず、今回の結果は画面に残す。
+            this.BatchHistoryMessage = $"今回の履歴を保存・整理できません: {exception.Message}";
+        }
+        finally { this.IsHistoryBusy = false; }
     }
 
     private void CancelGeneration()

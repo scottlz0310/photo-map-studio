@@ -46,9 +46,13 @@ internal sealed partial class MainWindow : Window
         this.FolderSettings.OutputFolderBrowseRequested += this.OutputFolderBrowseRequested;
         this.Closed += this.MainWindow_Closed;
         this.ViewModel.ConfirmLargeBatchAsync = this.ConfirmLargeBatchAsync;
+        this.RootLayout.Loaded += this.RootLayout_Loaded;
     }
 
     public MainViewModel ViewModel { get; }
+
+    private async void RootLayout_Loaded(object sender, RoutedEventArgs args)
+        => await this.ViewModel.LoadBatchHistoryCommand.ExecuteAsync(null);
 
     /// <summary>
     /// スイート連携から渡された起動引数を画面へ適用する。

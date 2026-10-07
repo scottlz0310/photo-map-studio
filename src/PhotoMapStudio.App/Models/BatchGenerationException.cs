@@ -11,6 +11,8 @@ namespace PhotoMapStudio.App.Models;
     Justification = "ViewModel と App.Tests から扱う生成エラー契約として公開する。")]
 public sealed class BatchGenerationException : Exception
 {
+    /// <summary>開始・継続失敗までの処理結果。</summary>
+    public BatchGenerationSummary? Summary { get; init; }
     /// <summary>既定のコンストラクター。</summary>
     public BatchGenerationException()
     {

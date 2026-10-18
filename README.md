@@ -68,6 +68,10 @@ PhotoMapStudio.exe --input-dir "C:\写真 (2026)" --output-dir maps
 
 GitHub Releases では x64 / ARM64 向けの署名済み MSIX と、アーキテクチャ別の `.appinstaller` を提供します。Windows のアプリ インストーラーから `.appinstaller` を開くと、以後の更新確認を自動化できます。
 
+更新はアプリの起動とは独立して、Windows が8時間間隔でバックグラウンド確認します。起動時の更新確認は行わず、バックグラウンド確認の画面も表示しません。更新は即時には反映されず、PC の稼働・通信状況などによって遅れる場合があります。すぐに更新したい場合は、最新 Release の自分のアーキテクチャ用 `.appinstaller` を開いてください。
+
+従来の起動時確認設定でインストール済みの場合は、新しい設定を含む `.appinstaller` の適用後に切り替わります。次のリリース公開前には切り替わりません。
+
 PowerShell からインストールする場合は、Release から `Install-PhotoMapStudio.ps1` を保存して実行します。
 
 このスクリプトは Windows PowerShell 5.1 でも実行できます。署名証明書が未登録の場合だけ、`LocalMachine\TrustedPeople` への登録のため UAC の管理者許可を求めます。AppX のインストールは起動元のユーザーとして行います。証明書を信頼済みルート（`Root`）へ登録する必要はありません。

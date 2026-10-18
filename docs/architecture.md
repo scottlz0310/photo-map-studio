@@ -21,7 +21,11 @@
 3. 各アーキテクチャ用の App Installer XML とインストールスクリプトを生成する
 4. 署名済み MSIX、証明書チェーン用 `.cer`、App Installer、スクリプトを GitHub Release に添付する
 
-App Installer の `MainPackage` と `UpdateSettings` はタグ付き Release の資産を参照し、起動時の更新確認を有効にします。x64 と ARM64 の App Installer は異なるパッケージ URI を持つため、利用環境に合う方を選択してください。
+App Installer の `MainPackage` はタグ付き Release の MSIX を、ルートの `Uri` は最新 Release のアーキテクチャ別 `.appinstaller` を参照します。x64 と ARM64 の App Installer は異なるパッケージ URI を持つため、利用環境に合う方を選択してください。
+
+`UpdateSettings` は `AutomaticBackgroundTask` のみを指定し、`OnLaunch` は指定しません。起動時の更新確認画面を避けるため、Windows による8時間間隔のバックグラウンド確認を使用します。この更新経路は UI を表示しません。独自ランチャーやアプリ内の更新処理は追加しません。[Microsoft の仕様](https://learn.microsoft.com/en-us/uwp/schemas/appinstallerschema/element-s3-automaticbackgroundtask)を参照してください。
+
+更新の即時適用は保証しません。PC の稼働・通信状況などにより反映が遅れる場合があり、すぐに更新する場合は最新 Release の該当アーキテクチャの `.appinstaller` を開きます。既存インストールは新しい `.appinstaller` の設定が適用されるまで従来の起動時確認を継続するため、次のリリース公開だけで全端末が直ちに切り替わるとは扱いません。初回インストールや手動更新の App Installer 画面は引き続き表示されます。
 
 ## 署名
 

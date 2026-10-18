@@ -373,7 +373,8 @@ try {
 
             Write-Host "インストールが完了しました（バージョン: $($installedPackage.Version)、アーキテクチャ: $($installedPackage.Architecture)）。"
             Write-Host "スタートメニューから PhotoMapStudio を起動できます。"
-            Write-Host "新バージョンはアプリ起動時に自動チェックされます。"
+            Write-Host "新バージョンは、アプリの起動とは独立して8時間間隔でバックグラウンド確認されます。"
+            Write-Host "すぐに更新する場合は、最新 Release の該当アーキテクチャ用 .appinstaller を開いてください。"
         }
     }
 } catch {

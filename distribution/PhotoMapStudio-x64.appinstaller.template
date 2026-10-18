@@ -12,7 +12,7 @@
       Uri="https://github.com/scottlz0310/photo-map-studio/releases/download/{TAG}/PhotoMapStudio_x64.msix" />
 
   <UpdateSettings>
-    <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" />
+    <AutomaticBackgroundTask />
   </UpdateSettings>
 
 </AppInstaller>

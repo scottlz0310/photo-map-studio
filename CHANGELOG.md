@@ -6,9 +6,12 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-18
+
 ### Changed
 
 - App Installer の毎回の起動時更新確認を廃止し、Windows による8時間間隔のバックグラウンド確認へ変更。更新確認による起動時の待機画面を避ける。既存インストールは新しい `.appinstaller` の設定適用後に切り替わる（[#21](https://github.com/scottlz0310/photo-map-studio/issues/21) の検討で合意した代替対応）
+- 依存パッケージを更新: Windows App SDK 2.5.1、SkiaSharp 4.153.1、Microsoft.Extensions.DependencyInjection / Http 10.0.13
 
 ## [0.2.2] - 2026-10-07
 

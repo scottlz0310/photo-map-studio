@@ -46,14 +46,45 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
             provider.GetRequiredService<ITileClient>(),
             provider.GetRequiredService<ITileCache>()));
 
-        services.TryAddSingleton<IVectorMapStyle, OpenMapTilesStyle>();
+        services.TryAddSingleton<OpenMapTilesStyle>();
+        services.TryAddSingleton<GsiVectorStyle>();
+        services.TryAddSingleton<IVectorMapStyle>(provider => provider.GetRequiredService<OpenMapTilesStyle>());
+
         services.TryAddSingleton<OpenFreeMapTileSource>(provider =>
             new OpenFreeMapTileSource(provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName)));
+
         services.TryAddSingleton<IVectorTileSource>(provider =>
             new CachedVectorTileSource(
                 provider.GetRequiredService<OpenFreeMapTileSource>(),
                 provider.GetRequiredService<ITileCache>()));
-        services.TryAddSingleton<IVectorMapRenderer, VectorMapRenderer>();
+
+        services.TryAddSingleton<IVectorMapRenderer>(provider =>
+        {
+            var cache = provider.GetRequiredService<ITileCache>();
+            var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName);
+
+            var ofmStyle = provider.GetRequiredService<OpenMapTilesStyle>();
+            var gsiStyle = provider.GetRequiredService<GsiVectorStyle>();
+
+            var ofmTileSource = provider.GetRequiredService<IVectorTileSource>();
+            var gsiTileSource = new CachedVectorTileSource(
+                GsiVectorTileSource.Create(httpClient),
+                cache);
+
+            return new VectorMapRenderer(
+                defaultTileSource: ofmTileSource,
+                defaultStyle: ofmStyle,
+                resolver: source =>
+                {
+                    if (source != null && (string.Equals(source.Name, TileSources.GsiVector.Name, StringComparison.Ordinal)
+                        || source.UrlTemplate.Contains("optimal_bvmap", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return (gsiTileSource, gsiStyle);
+                    }
+
+                    return (ofmTileSource, ofmStyle);
+                });
+        });
 
         // 既定のタイルソース（地理院タイル）は日本国外を配信しないため、切り替えを既定の経路に組み込む
         services.TryAddSingleton<IMapImageComposer>(provider => new FallbackMapImageComposer(

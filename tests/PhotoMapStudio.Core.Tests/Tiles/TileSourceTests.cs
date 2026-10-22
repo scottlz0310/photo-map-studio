@@ -77,6 +77,18 @@ public class TileSourceTests
     }
 
     [Fact]
+    public void GsiVectorプリセットはベクター設定を持つ()
+    {
+        Assert.True(TileSources.GsiVector.IsVector);
+        Assert.Equal("地理院タイル（最適化ベクトルタイル）", TileSources.GsiVector.Attribution);
+        Assert.Equal(new Uri("https://github.com/gsi-cyberjapan/optimal_bvmap"), TileSources.GsiVector.AttributionUri);
+        Assert.Equal(4, TileSources.GsiVector.MinZoom);
+        Assert.Equal(18, TileSources.GsiVector.MaxZoom);
+        Assert.Equal(TileRateLimit.Relaxed, TileSources.GsiVector.RateLimit);
+        Assert.Contains(TileSources.GsiVector, TileSources.All);
+    }
+
+    [Fact]
     public void 任意URLからカスタムソースを構築できる()
     {
         TileSource source = TileSources.Custom("https://tile.example.com/{z}/{x}/{y}.png", "自前の出典");

@@ -58,6 +58,13 @@ public sealed class PhotoMapStudioCoreServiceCollectionExtensionsTests : IDispos
     }
 
     [Fact]
+    public void GsiVectorStyleとOpenMapTilesStyleを登録する()
+    {
+        Assert.NotNull(this.provider.GetRequiredService<GsiVectorStyle>());
+        Assert.NotNull(this.provider.GetRequiredService<OpenMapTilesStyle>());
+    }
+
+    [Fact]
     public void 事前に登録した実装を上書きしない()
     {
         var services = new ServiceCollection();

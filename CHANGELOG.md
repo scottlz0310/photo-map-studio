@@ -8,6 +8,8 @@
 
 ### Added
 
+- 国土地理院 最適化ベクトルタイル対応（TileSources.GsiVector、TileSourceChoices.GsiVector）と PMTiles v3 HTTP Range 取得基盤を追加。PmtilesHilbert、PmtilesDirectory、HttpPmtilesByteSource、FilePmtilesByteSource、PmtilesVectorTileSource、GsiVectorTileSource、GsiVectorStyle を実装。国土地理院の最適化ベクトルタイル（optimal_bvmap-v1.pmtiles）から等高線・道路縁・建物・公的漢字注記（Anno / knj）を直接ラスタライズし、役所対応・公的測量基準図としての参考位置図案内、出典焼き込み（地理院タイル（最適化ベクトルタイル））、設定 UI 連携、ヘルプ・README・非保証事項を整備（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
+
 - OpenFreeMap ベクター地図プリセット（TileSources.OpenFreeMap、TileSourceChoices.OpenFreeMap）と SkiaMapImageComposer への直接ベクター描画パイプライン統合を追加。Core 内蔵エンジンによる直接ラスタライズ、ピン合成および ODbL 出典焼き込み（© OpenStreetMap contributors, OpenFreeMap）、設定 UI 連携、ヘルプ・README を整備（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 - ベクタータイル直接描画アーキテクチャ設計仕様書（docs/vector-map-architecture.md）。中間ラスターを介さない直接ベクター合成描画（Direct Vector Composition）を採用し、共通描画エンジン上に OpenStreetMap（OpenFreeMap）と国土地理院（最適化ベクトルタイル）の 2 本立てスタイル（役所対応・公的測量基準図／現場確認・民間・世界対応）を選択可能とするアーキテクチャおよび段階的実装ロードマップ（M0〜M4）を策定（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）

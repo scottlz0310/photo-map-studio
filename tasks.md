@@ -8,6 +8,7 @@
 - [x] M2: Core 内蔵ベクタータイル描画エンジン（VectorTileDecoder、OpenMapTilesStyle、LabelCollisionGrid、VectorMapRenderer、Core 単体テスト）
 - [x] M3: UI 連携・設定・出典表示（WinUI 3 設定UI、ODbL 出典焼き込み、ヘルプ・ドキュメント更新）
 - [x] M4: 国土地理院ベクター対応・最適化PMTiles Range取得 & BYOフォールバック（GsiVectorStyle、optimal_bvmap-v1 PMTiles Range取得、PmtilesVectorTileSource、レート制御、設定UI連携・非保証事項案内）
+- [x] ベクター地図の日本語フォント自動解決と文字化け（豆腐）修正（VectorMapFontHelper、GsiVectorStyle、OpenMapTilesStyle、単体テスト）
 - [ ] （将来・任意）M5: 拡張機能（カスタム PMTiles / スタイル指定、直接ベクター合成描画）
 ## リリース v0.2.3
 

@@ -60,7 +60,16 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     };
 
     // テキスト用ペイント・フォント
-    private readonly SKFont placeFont = new(SKTypeface.Default, 12f);
+    private readonly SKTypeface placeTypeface = VectorMapFontHelper.CreateJapaneseTypeface();
+    private readonly SKFont placeFont;
+
+    /// <summary>
+    /// OpenMapTiles ベクタースタイルを初期化する。
+    /// </summary>
+    public OpenMapTilesStyle()
+    {
+        this.placeFont = new SKFont(this.placeTypeface, 12f);
+    }
     private readonly SKPaint placeFillPaint = new()
     {
         Color = new SKColor(0x22, 0x22, 0x22),
@@ -446,6 +455,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         this.buildingStrokePaint.Dispose();
         this.railwayPaint.Dispose();
         this.placeFont.Dispose();
+        this.placeTypeface.Dispose();
         this.placeFillPaint.Dispose();
         this.textHaloPaint.Dispose();
     }

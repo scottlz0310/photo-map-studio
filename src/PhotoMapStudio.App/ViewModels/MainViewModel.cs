@@ -264,6 +264,11 @@ public sealed class MainViewModel : ObservableObject
         {
             if (this.SetProperty(ref this.selectedPinKindChoice, value ?? PinKindChoice.Default))
             {
+                if (this.selectedPinKindChoice.Kind != PinKind.CustomImage)
+                {
+                    this.SelectedPinAnchorChoice = PinAnchorChoice.Default;
+                }
+
                 this.ClearFeedback();
                 this.OnPropertyChanged(nameof(this.IsCustomPinImageVisible));
                 this.NotifyPreviewChanged();
@@ -586,7 +591,7 @@ public sealed class MainViewModel : ObservableObject
             Height = height,
             Zoom = zoom,
             PinKind = this.SelectedPinKindChoice.Kind,
-            PinAnchor = this.SelectedPinAnchorChoice.Anchor,
+            PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath.Trim(),
             TileSourceKey = this.SelectedTileSource.Key,
             CustomTileUrlTemplate = this.CustomTileUrlTemplate.Trim(),
@@ -838,7 +843,7 @@ public sealed class MainViewModel : ObservableObject
             Height = height,
             Zoom = zoom,
             PinKind = this.SelectedPinKindChoice.Kind,
-            PinAnchor = this.SelectedPinAnchorChoice.Anchor,
+            PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath.Trim(),
             TileSource = tileSource,
         };
@@ -894,7 +899,7 @@ public sealed class MainViewModel : ObservableObject
             Height = this.Height,
             Zoom = this.Zoom,
             PinKind = this.SelectedPinKindChoice.Kind,
-            PinAnchor = this.SelectedPinAnchorChoice.Anchor,
+            PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath,
             SelectedTileSource = this.SelectedTileSource,
             CustomTileUrlTemplate = this.CustomTileUrlTemplate,

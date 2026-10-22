@@ -30,6 +30,19 @@ public class PhotoMapSettingsRepositoryTests
     }
 
     [Fact]
+    public void 旧保存値にpinKindキーがなくpinImagePathがある場合はCustomImageとして移行する()
+    {
+        var store = new InMemorySettingsValueStore();
+        store.Write("pin-image-path", "C:\\custom\\old-pin.png");
+
+        var settings = new PhotoMapSettingsRepository(store).Load();
+
+        Assert.Equal(PinKind.CustomImage, settings.PinKind);
+        Assert.Equal(PinAnchor.BottomCenter, settings.PinAnchor);
+        Assert.Equal("C:\\custom\\old-pin.png", settings.PinImagePath);
+    }
+
+    [Fact]
     public void キーバリューストアへ設定を保存して復元する()
     {
         var store = new InMemorySettingsValueStore();

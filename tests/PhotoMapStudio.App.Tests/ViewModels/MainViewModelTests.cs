@@ -38,6 +38,32 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void カスタム画像で中央アンカー選択後に同梱ピンへ戻すと下端中央にリセットされる()
+    {
+        var repository = new InMemorySettingsRepository();
+        var viewModel = new MainViewModel(repository);
+
+        // 1. カスタム画像を選択し、中央アンカーを指定
+        viewModel.SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.CustomImage);
+        viewModel.SelectedPinAnchorChoice = PinAnchorChoice.FromAnchor(PinAnchor.Center);
+        viewModel.PinImagePath = "C:\\pin.png";
+
+        Assert.Equal(PinAnchor.Center, viewModel.SelectedPinAnchorChoice.Anchor);
+
+        // 2. 同梱ピン（赤ピン）へ切り替える
+        viewModel.SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.RedPin);
+
+        // アンカー選択が既定値（下端中央）に戻り、カスタム欄が非表示になること
+        Assert.Equal(PinAnchor.BottomCenter, viewModel.SelectedPinAnchorChoice.Anchor);
+        Assert.False(viewModel.IsCustomPinImageVisible);
+
+        // 設定保存時も BottomCenter が永続化されること
+        Assert.True(viewModel.TrySaveSettings());
+        Assert.Equal(PinKind.RedPin, repository.Settings.PinKind);
+        Assert.Equal(PinAnchor.BottomCenter, repository.Settings.PinAnchor);
+    }
+
+    [Fact]
     public void タイルソースの変更でズーム範囲と値を追従させる()
     {
         var viewModel = new MainViewModel(new InMemorySettingsRepository())
@@ -86,7 +112,7 @@ public class MainViewModelTests
             Width = 1024,
             Height = 768,
             Zoom = 10,
-            SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.Crosshair),
+            SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.CustomImage),
             SelectedPinAnchorChoice = PinAnchorChoice.FromAnchor(PinAnchor.Center),
             PinImagePath = " C:\\pin.png ",
             SelectedTileSource = TileSourceChoices.OpenStreetMap,
@@ -101,7 +127,7 @@ public class MainViewModelTests
         Assert.Equal(1024, reloaded.Width);
         Assert.Equal(768, reloaded.Height);
         Assert.Equal(10, reloaded.Zoom);
-        Assert.Equal(PinKind.Crosshair, reloaded.SelectedPinKindChoice.Kind);
+        Assert.Equal(PinKind.CustomImage, reloaded.SelectedPinKindChoice.Kind);
         Assert.Equal(PinAnchor.Center, reloaded.SelectedPinAnchorChoice.Anchor);
         Assert.Equal("C:\\pin.png", reloaded.PinImagePath);
         Assert.Equal(TileSourceChoices.OpenStreetMap, reloaded.SelectedTileSource);

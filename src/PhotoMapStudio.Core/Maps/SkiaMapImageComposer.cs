@@ -148,8 +148,11 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
             return;
         }
 
+        // 同梱ピン（GreenPin, RedPin, BluePin）は先端が撮影地点を指すため常に下端中央。
+        // カスタム画像で明示的に Center が指定された場合のみ図心中央アンカーを適用する。
+        bool useCenter = request.PinKind == PinKind.CustomImage && request.PinAnchor == PinAnchor.Center;
         float x = MathF.Round(centerX - (pin.Width / 2f));
-        float y = request.PinAnchor == PinAnchor.Center
+        float y = useCenter
             ? MathF.Round(centerY - (pin.Height / 2f))
             : MathF.Round(centerY - pin.Height);
 

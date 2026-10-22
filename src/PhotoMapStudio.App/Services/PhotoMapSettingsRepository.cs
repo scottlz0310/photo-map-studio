@@ -39,7 +39,15 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
 
     /// <inheritdoc/>
     public PhotoMapSettings Load()
-        => new()
+    {
+        string pinImagePath = ReadString(PinImagePathKey, string.Empty);
+        // 旧バージョンでカスタム画像を設定していた場合、新キー (pin-kind) が未保存なら CustomImage として自動移行する
+        PinKind defaultKind = string.IsNullOrWhiteSpace(pinImagePath) ? PinKind.GreenPin : PinKind.CustomImage;
+        PinKind pinKind = this.store.Read(PinKindKey) is null
+            ? defaultKind
+            : ReadEnum(PinKindKey, PinKind.GreenPin);
+
+        return new()
         {
             InputFolderPath = ReadString(InputFolderPathKey, string.Empty),
             OutputFolderPath = ReadString(OutputFolderPathKey, string.Empty),
@@ -49,13 +57,14 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
             Width = ReadInt(WidthKey, PhotoMapSettings.DefaultWidth),
             Height = ReadInt(HeightKey, PhotoMapSettings.DefaultHeight),
             Zoom = ReadInt(ZoomKey, PhotoMapSettings.DefaultZoom),
-            PinKind = ReadEnum(PinKindKey, PinKind.GreenPin),
+            PinKind = pinKind,
             PinAnchor = ReadEnum(PinAnchorKey, PinAnchor.BottomCenter),
-            PinImagePath = ReadString(PinImagePathKey, string.Empty),
+            PinImagePath = pinImagePath,
             TileSourceKey = ReadString(TileSourceKey, TileSourceChoices.GsiPaleKey),
             CustomTileUrlTemplate = ReadString(CustomTileUrlTemplateKey, PhotoMapSettings.DefaultCustomTileUrlTemplate),
             CustomTileAttribution = ReadString(CustomTileAttributionKey, PhotoMapSettings.DefaultCustomTileAttribution),
         };
+    }
 
     /// <inheritdoc/>
     public void Save(PhotoMapSettings settings)

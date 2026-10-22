@@ -75,6 +75,33 @@ public class CachedVectorTileSourceTests
         Assert.Equal(fetchedBytes, result);
     }
 
+    [Fact]
+    public async Task 異なるSourceIdのソースはキャッシュが分離される()
+    {
+        byte[] bytesA = [1, 1, 1];
+        byte[] bytesB = [2, 2, 2];
+        var stubCache = new MemoryTileCache();
+
+        var sourceA = new StubVectorTileSource("source-a", 14, (_, _, _) => bytesA);
+        var sourceB = new StubVectorTileSource("source-b", 14, (_, _, _) => bytesB);
+
+        var cachedA = new CachedVectorTileSource(sourceA, stubCache);
+        var cachedB = new CachedVectorTileSource(sourceB, stubCache);
+
+        byte[]? resultA = await cachedA.GetTileAsync(14, 100, 200, CancellationToken.None);
+        byte[]? resultB = await cachedB.GetTileAsync(14, 100, 200, CancellationToken.None);
+
+        Assert.Equal(bytesA, resultA);
+        Assert.Equal(bytesB, resultB);
+
+        // キャッシュキーも分離されている
+        string keyA = VectorTileCacheKey.Create("source-a", 14, 100, 200);
+        string keyB = VectorTileCacheKey.Create("source-b", 14, 100, 200);
+        Assert.NotEqual(keyA, keyB);
+        Assert.Equal(bytesA, await stubCache.TryReadAsync(keyA, CancellationToken.None));
+        Assert.Equal(bytesB, await stubCache.TryReadAsync(keyB, CancellationToken.None));
+    }
+
     private sealed class StubVectorTileSource(string sourceId, int maxZoom, Func<int, int, int, byte[]?> handler) : IVectorTileSource
     {
         public string SourceId => sourceId;

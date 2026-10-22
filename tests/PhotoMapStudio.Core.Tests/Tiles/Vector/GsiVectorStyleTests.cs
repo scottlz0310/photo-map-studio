@@ -61,7 +61,6 @@ public sealed class GsiVectorStyleTests
             ],
         };
 
-        // ズーム14で描画（建物も描画対象）
         float tileScale = 256f / 4096f;
         canvas.Scale(tileScale, tileScale);
         style.RenderPolygons(canvas, tile, tileScale, 14);
@@ -133,13 +132,54 @@ public sealed class GsiVectorStyleTests
         canvas.Scale(tileScale, tileScale);
         style.RenderLines(canvas, tile, tileScale, 14);
 
-        // y = 128 (2048 * 256 / 4096) 付近に国道が描画されていること
+        // y = 128 付近に国道が描画されていること
         SKColor roadPixel = bitmap.GetPixel(128, 128);
         Assert.True(roadPixel.Alpha > 0);
     }
 
     [Fact]
-    public void Annoレイヤーの漢字注記が衝突判定を経て描画される()
+    public void 実スキーマ道路属性による道路分類が反映される()
+    {
+        using var style = new GsiVectorStyle();
+        using var bitmap = new SKBitmap(256, 256);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+
+        var tile = new VectorTile
+        {
+            Layers =
+            [
+                new VectorTileLayer
+                {
+                    Name = "RdCL",
+                    Extent = 4096,
+                    Features =
+                    [
+                        new VectorTileFeature
+                        {
+                            GeometryType = VectorGeometryType.LineString,
+                            GeometryParts = [[new(0, 2048), new(4096, 2048)]],
+                            Properties = new Dictionary<string, object>
+                            {
+                                ["vt_rdctg"] = "0", // 現行 optimal_bvmap-v1 実データは文字列
+                                ["vt_rnkwidth"] = "2",
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+
+        float tileScale = 256f / 4096f;
+        canvas.Scale(tileScale, tileScale);
+        style.RenderLines(canvas, tile, tileScale, 14);
+
+        SKColor roadPixel = bitmap.GetPixel(128, 128);
+        Assert.True(roadPixel.Alpha > 0);
+    }
+
+    [Fact]
+    public void Annoレイヤーの実スキーマ注記が描画される()
     {
         using var style = new GsiVectorStyle();
         using var bitmap = new SKBitmap(256, 256);
@@ -165,7 +205,7 @@ public sealed class GsiVectorStyleTests
                             GeometryParts = [[new(2048, 2048)]],
                             Properties = new Dictionary<string, object>
                             {
-                                ["knj"] = "東京",
+                                ["vt_text"] = "東京駅", // 現行 optimal_bvmap-v1 実データの属性名
                             },
                         },
                     ],
@@ -175,7 +215,6 @@ public sealed class GsiVectorStyleTests
 
         style.RenderLabels(canvas, tile, matrix, 14, collisionGrid, viewport);
 
-        // 中央 (128, 128) 付近にテキスト描画ピクセルが存在すること
         bool foundText = false;
         for (int y = 120; y <= 135; y++)
         {
@@ -194,6 +233,6 @@ public sealed class GsiVectorStyleTests
             }
         }
 
-        Assert.True(foundText, "Anno レイヤーの注記が描画されている必要があります。");
+        Assert.True(foundText, "vt_text による注記が描画されている必要があります。");
     }
 }

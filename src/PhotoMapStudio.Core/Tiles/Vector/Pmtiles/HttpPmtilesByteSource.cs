@@ -59,35 +59,36 @@ public sealed class HttpPmtilesByteSource : IPmtilesByteSource
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken).ConfigureAwait(false);
 
-            if (response.StatusCode is not (HttpStatusCode.PartialContent or HttpStatusCode.OK))
+            // 200 OK 全体応答は Range 非対応であり、巨大なアーカイブの全量ダウンロードにつながるため即座に拒否する
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                var ex = new TileFetchException(
+                throw new TileFetchException(
+                    $"PMTiles 配信元が HTTP Range (206 Partial Content) に対応しておらず、200 OK 全体応答を返しました (要求 offset: {offset}, length: {length})。",
+                    this.archiveUri,
+                    response.StatusCode,
+                    null);
+            }
+
+            if (response.StatusCode != HttpStatusCode.PartialContent)
+            {
+                throw new TileFetchException(
                     $"PMTiles Range 取得失敗: {(int)response.StatusCode} {response.ReasonPhrase} (offset: {offset}, length: {length})",
                     this.archiveUri,
                     response.StatusCode,
                     null);
-
-                session?.RecordFailure(ex);
-                session?.ThrowIfStopped();
-                throw ex;
             }
 
             byte[] content = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
-            // 200 OK で全体が返ってきた場合は要求範囲をスライス
-            if (response.StatusCode == HttpStatusCode.OK && content.Length > length)
+            if (content.Length != length)
             {
-                if (offset + length > content.Length)
-                {
-                    throw new EndOfStreamException($"PMTiles の応答バイト長が不足しています (要求 offset: {offset}, length: {length}, 全長: {content.Length})。");
-                }
-
-                byte[] sliced = new byte[length];
-                Array.Copy(content, offset, sliced, 0, length);
-                content = sliced;
+                throw new TileFetchException(
+                    $"PMTiles Range 応答のバイト長が不正です (要求: {length} バイト, 受信: {content.Length} バイト)。",
+                    this.archiveUri,
+                    response.StatusCode,
+                    null);
             }
 
-            session?.RecordSuccess(cached: false);
             return content;
         }
         catch (OperationCanceledException)
@@ -100,15 +101,11 @@ public sealed class HttpPmtilesByteSource : IPmtilesByteSource
         }
         catch (Exception ex)
         {
-            var fetchEx = new TileFetchException(
+            throw new TileFetchException(
                 $"PMTiles Range 取得中にエラーが発生しました: {ex.Message}",
                 this.archiveUri,
                 null,
                 ex);
-
-            session?.RecordFailure(fetchEx);
-            session?.ThrowIfStopped();
-            throw fetchEx;
         }
         finally
         {

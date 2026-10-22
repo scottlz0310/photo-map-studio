@@ -204,7 +204,9 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
                 continue;
             }
 
-            string? text = feature.GetString("knj")
+            // 国土地理院 最適化ベクトルタイル現行仕様: vt_text (公式 std.json 準拠)
+            string? text = feature.GetString("vt_text")
+                ?? feature.GetString("knj")
                 ?? feature.GetString("name")
                 ?? feature.GetString("text");
 
@@ -268,9 +270,14 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 
     private static (GsiRoadKind Kind, float Width) GetRoadCategory(VectorTileFeature feature)
     {
-        // 国土地理院 rdCtg: 0: 国道, 1: 都道府県道, 2: 市区町村道, 3: 高速自動車国道等, 5: その他
-        long rdCtg = feature.GetInt64("rdCtg") ?? 2;
-        long rnkWidth = feature.GetInt64("rnkWidth") ?? 1;
+        // 国土地理院 最適化ベクトルタイル現行仕様: vt_rdctg / vt_rnkwidth (公式 std.json 準拠)
+        // 0: 国道, 1: 都道府県道, 2: 市区町村道, 3: 高速自動車国道等, 5: その他
+        long rdCtg = feature.GetInt64("vt_rdctg")
+            ?? feature.GetInt64("rdCtg")
+            ?? 2;
+        long rnkWidth = feature.GetInt64("vt_rnkwidth")
+            ?? feature.GetInt64("rnkWidth")
+            ?? 1;
 
         float baseWidth = rnkWidth switch
         {

@@ -1,5 +1,6 @@
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 using SkiaSharp;
 
@@ -17,15 +18,18 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
     private static readonly SKSamplingOptions NearestNeighbor = new(SKFilterMode.Nearest, SKMipmapMode.None);
 
     private readonly ITileProvider tileProvider;
+    private readonly IVectorMapRenderer? vectorMapRenderer;
 
     /// <summary>
     /// コンポーザーを初期化する。
     /// </summary>
     /// <param name="tileProvider">タイルの供給元。</param>
-    public SkiaMapImageComposer(ITileProvider tileProvider)
+    /// <param name="vectorMapRenderer">ベクター地図レンダラー。未指定の場合はベクタータイル描画時に例外を送出する。</param>
+    public SkiaMapImageComposer(ITileProvider tileProvider, IVectorMapRenderer? vectorMapRenderer = null)
     {
         ArgumentNullException.ThrowIfNull(tileProvider);
         this.tileProvider = tileProvider;
+        this.vectorMapRenderer = vectorMapRenderer;
     }
 
     /// <inheritdoc />
@@ -37,16 +41,34 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.Width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.Height);
 
-        TilePoint center = WebMercator.ToTilePoint(request.Center, request.Zoom);
-        TileRange range = TileRange.Compute(center, request.Width, request.Height);
-
         using var surface = SKSurface.Create(
             new SKImageInfo(request.Width, request.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
 
         SKCanvas canvas = surface.Canvas;
         canvas.Clear(SKColors.Transparent);
 
-        await this.DrawTilesAsync(canvas, request, range, cancellationToken).ConfigureAwait(false);
+        if (request.TileSource.IsVector)
+        {
+            if (this.vectorMapRenderer is null)
+            {
+                throw new InvalidOperationException("ベクタータイルの描画エンジンが設定されていません。");
+            }
+
+            await this.vectorMapRenderer.RenderToCanvasAsync(
+                canvas,
+                request.Center,
+                request.Zoom,
+                request.Width,
+                request.Height,
+                request.TileSession,
+                cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            TilePoint center = WebMercator.ToTilePoint(request.Center, request.Zoom);
+            TileRange range = TileRange.Compute(center, request.Width, request.Height);
+            await this.DrawTilesAsync(canvas, request, range, cancellationToken).ConfigureAwait(false);
+        }
 
         DrawPin(canvas, request);
         DrawAttribution(canvas, request);

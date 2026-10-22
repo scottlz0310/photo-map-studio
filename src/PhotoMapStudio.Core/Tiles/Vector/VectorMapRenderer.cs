@@ -7,7 +7,7 @@ namespace PhotoMapStudio.Core.Tiles.Vector;
 /// <summary>
 /// ベクタータイルから SkiaSharp キャンバスへ直接地図を描画するレンダラー。
 /// </summary>
-public sealed class VectorMapRenderer
+public sealed class VectorMapRenderer : IVectorMapRenderer
 {
     private readonly IVectorTileSource tileSource;
     private readonly IVectorMapStyle style;
@@ -23,22 +23,62 @@ public sealed class VectorMapRenderer
         this.style = style ?? throw new ArgumentNullException(nameof(style));
     }
 
-    /// <summary>
-    /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する。
-    /// </summary>
-    /// <param name="center">描画領域の中心地理座標。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">出力画像の幅（ピクセル）。</param>
-    /// <param name="height">出力画像の高さ（ピクセル）。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    /// <returns>描画されたビットマップ画像。</returns>
-    public async Task<SKBitmap> RenderMapAsync(
+    /// <inheritdoc />
+    public Task<SKBitmap> RenderMapAsync(
         GeoCoordinate center,
         int zoom,
         int width,
         int height,
         CancellationToken cancellationToken = default)
+        => this.RenderMapAsync(center, zoom, width, height, session: null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<SKBitmap> RenderMapAsync(
+        GeoCoordinate center,
+        int zoom,
+        int width,
+        int height,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        try
+        {
+            using var canvas = new SKCanvas(bitmap);
+            await this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, cancellationToken).ConfigureAwait(false);
+            return bitmap;
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public Task RenderToCanvasAsync(
+        SKCanvas canvas,
+        GeoCoordinate center,
+        int zoom,
+        int width,
+        int height,
+        CancellationToken cancellationToken = default)
+        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session: null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task RenderToCanvasAsync(
+        SKCanvas canvas,
+        GeoCoordinate center,
+        int zoom,
+        int width,
+        int height,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentOutOfRangeException.ThrowIfNegative(zoom);
@@ -82,7 +122,7 @@ public sealed class VectorMapRenderer
                 // X 座標は経度方向（左右）で世界一周 wrap する
                 int fetchX = ((tx % maxTiles) + maxTiles) % maxTiles;
 
-                byte[]? tileData = await this.tileSource.GetTileAsync(tileZoom, fetchX, ty, cancellationToken).ConfigureAwait(false);
+                byte[]? tileData = await this.tileSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
                 if (tileData is null || tileData.Length == 0)
                 {
                     continue;
@@ -104,9 +144,6 @@ public sealed class VectorMapRenderer
         }
 
         // 5. SkiaSharp によるキャンバス描画
-        var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        using var canvas = new SKCanvas(bitmap);
-
         // 背景クリア
         canvas.Clear(this.style.BackgroundColor);
 
@@ -148,7 +185,5 @@ public sealed class VectorMapRenderer
 
             this.style.RenderLabels(canvas, item.tile, tileToCanvasMatrix, zoom, collisionGrid, viewport);
         }
-
-        return bitmap;
     }
 }

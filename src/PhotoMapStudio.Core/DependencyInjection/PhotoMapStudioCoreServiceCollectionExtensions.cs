@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.Core.DependencyInjection;
 
@@ -45,9 +46,20 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
             provider.GetRequiredService<ITileClient>(),
             provider.GetRequiredService<ITileCache>()));
 
+        services.TryAddSingleton<IVectorMapStyle, OpenMapTilesStyle>();
+        services.TryAddSingleton<OpenFreeMapTileSource>(provider =>
+            new OpenFreeMapTileSource(provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName)));
+        services.TryAddSingleton<IVectorTileSource>(provider =>
+            new CachedVectorTileSource(
+                provider.GetRequiredService<OpenFreeMapTileSource>(),
+                provider.GetRequiredService<ITileCache>()));
+        services.TryAddSingleton<IVectorMapRenderer, VectorMapRenderer>();
+
         // 既定のタイルソース（地理院タイル）は日本国外を配信しないため、切り替えを既定の経路に組み込む
         services.TryAddSingleton<IMapImageComposer>(provider => new FallbackMapImageComposer(
-            new SkiaMapImageComposer(provider.GetRequiredService<ITileProvider>()),
+            new SkiaMapImageComposer(
+                provider.GetRequiredService<ITileProvider>(),
+                provider.GetRequiredService<IVectorMapRenderer>()),
             TileSources.WorldwideFallback));
 
         return services;

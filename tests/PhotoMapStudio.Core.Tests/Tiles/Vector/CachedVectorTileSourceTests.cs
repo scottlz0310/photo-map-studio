@@ -163,11 +163,53 @@ public class CachedVectorTileSourceTests
         }
     }
 
+    [Fact]
+    public async Task セッション指定時はキャッシュヒット時にCacheCountを更新する()
+    {
+        var session = new TileFetchSession(TimeProvider.System);
+        var stubCache = new MemoryTileCache();
+        string key = VectorTileCacheKey.Create("test-source", 14, 100, 200);
+        await stubCache.WriteAsync(key, [1, 2, 3], CancellationToken.None);
+
+        var stubSource = new StubVectorTileSource("test-source", 14, (_, _, _) => throw new InvalidOperationException());
+        var cachedSource = new CachedVectorTileSource(stubSource, stubCache);
+
+        byte[]? result = await cachedSource.GetTileAsync(14, 100, 200, session, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, session.Snapshot().CacheCount);
+        Assert.Equal(0, session.Snapshot().NetworkCount);
+    }
+
+    [Fact]
+    public async Task 取得失敗時はセッションに失敗を記録し中止後は要求を送らない()
+    {
+        var session = new TileFetchSession(TimeProvider.System);
+        var stubCache = new MemoryTileCache();
+        var stubSource = new StubVectorTileSource("test-source", 14, (_, _, _) =>
+            throw new TileFetchException("HTTP 503", new Uri("https://example.com"), System.Net.HttpStatusCode.ServiceUnavailable, null));
+        var cachedSource = new CachedVectorTileSource(stubSource, stubCache);
+
+        for (int i = 0; i < TileFetchSession.FailureLimit - 1; i++)
+        {
+            await Assert.ThrowsAsync<TileFetchException>(() =>
+                cachedSource.GetTileAsync(14, 100, i, session, CancellationToken.None));
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            cachedSource.GetTileAsync(14, 100, 10, session, CancellationToken.None));
+
+        Assert.True(session.IsStopped);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            cachedSource.GetTileAsync(14, 100, 999, session, CancellationToken.None));
+    }
+
     private sealed class StubVectorTileSource(string sourceId, int maxZoom, Func<int, int, int, byte[]?> handler) : IVectorTileSource
     {
         public string SourceId => sourceId;
         public int MaxZoom => maxZoom;
-        public Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
+        public Task<byte[]?> GetTileAsync(int z, int x, int y, TileFetchSession? session, CancellationToken cancellationToken = default)
             => Task.FromResult(handler(z, x, y));
     }
 

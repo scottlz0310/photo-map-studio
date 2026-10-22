@@ -31,5 +31,26 @@ public interface IVectorTileSource
     /// <param name="y">Y タイル座標。</param>
     /// <param name="cancellationToken">キャンセルトークン。</param>
     /// <returns>ベクタータイルのバイト列。存在しない場合や取得失敗時は <see langword="null"/>。</returns>
-    Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default);
+    Task<byte[]?> GetTileAsync(
+        int z,
+        int x,
+        int y,
+        CancellationToken cancellationToken = default)
+        => this.GetTileAsync(z, x, y, session: null, cancellationToken);
+
+    /// <summary>
+    /// 指定されたズーム・タイル座標のベクタータイルデータをセッション統計・レート管理付きで取得する。
+    /// </summary>
+    /// <param name="z">ズームレベル。</param>
+    /// <param name="x">X タイル座標。</param>
+    /// <param name="y">Y タイル座標。</param>
+    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    /// <returns>ベクタータイルのバイト列。存在しない場合や取得失敗時は <see langword="null"/>。</returns>
+    Task<byte[]?> GetTileAsync(
+        int z,
+        int x,
+        int y,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default);
 }

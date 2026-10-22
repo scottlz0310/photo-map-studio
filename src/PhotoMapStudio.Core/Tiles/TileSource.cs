@@ -29,6 +29,7 @@ public sealed record TileSource
     /// <param name="attribution">出典表示（FR-08 で生成画像に焼き込む）。</param>
     /// <param name="rateLimit">レート制御方針。</param>
     /// <param name="attributionUri">出典・ライセンスページへのリンク。</param>
+    /// <param name="isVector">Core 内蔵エンジンによる直接ベクター描画を行うかどうか。</param>
     public TileSource(
         string name,
         string urlTemplate,
@@ -36,7 +37,8 @@ public sealed record TileSource
         int maxZoom,
         string attribution,
         TileRateLimit rateLimit,
-        Uri? attributionUri = null)
+        Uri? attributionUri = null,
+        bool isVector = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(attribution);
@@ -53,6 +55,7 @@ public sealed record TileSource
         this.Attribution = attribution;
         this.RateLimit = rateLimit;
         this.AttributionUri = attributionUri;
+        this.IsVector = isVector;
     }
 
     /// <summary>表示名。</summary>
@@ -75,6 +78,9 @@ public sealed record TileSource
 
     /// <summary>レート制御方針。</summary>
     public TileRateLimit RateLimit { get; }
+
+    /// <summary>Core 内蔵エンジンによる直接ベクター描画を行うかどうか。</summary>
+    public bool IsVector { get; init; }
 
     /// <summary>公式 OSM のタイル配信元かどうか。</summary>
     public bool IsOfficialOpenStreetMap

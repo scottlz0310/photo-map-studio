@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PhotoMapStudio.Core.DependencyInjection;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.Core.Tests.DependencyInjection;
 
@@ -46,6 +47,14 @@ public sealed class PhotoMapStudioCoreServiceCollectionExtensionsTests : IDispos
         using HttpClient client = factory.CreateClient(HttpTileClient.HttpClientName);
 
         Assert.Equal(PhotoMapStudioCoreServiceCollectionExtensions.DefaultTileRequestTimeout, client.Timeout);
+    }
+
+    [Fact]
+    public void ベクタータイル直接描画エンジンを登録する()
+    {
+        Assert.NotNull(this.provider.GetRequiredService<IVectorMapStyle>());
+        Assert.NotNull(this.provider.GetRequiredService<IVectorTileSource>());
+        Assert.NotNull(this.provider.GetRequiredService<IVectorMapRenderer>());
     }
 
     [Fact]

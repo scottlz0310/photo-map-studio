@@ -54,7 +54,7 @@ public sealed partial class HelpView : UserControl
                 break;
             case 3:
                 this.AddText($"既定サイズ: {MapCompositionRequest.DefaultWidth}×{MapCompositionRequest.DefaultHeight}px、ズーム: {MapCompositionRequest.DefaultZoom}。ズームを上げるほど狭い範囲を詳しく表示します。ピンはPNGを指定できます。未指定では同梱の緑ピンを使用します。");
-                foreach (TileSource source in new[] { TileSources.GsiPale, TileSources.GsiStandard, TileSources.OpenStreetMap })
+                foreach (TileSource source in TileSources.All)
                 {
                     this.AddText($"{source.Name}: ズーム {source.MinZoom}〜{source.MaxZoom}\n{source.Attribution}");
                 }
@@ -72,10 +72,12 @@ public sealed partial class HelpView : UserControl
             case 6:
                 this.AddText("地理院タイルは日本国内用です。一括生成では国外への自動切替を行いません。画像には配信元の出典を焼き込みます。地理院の利用規約と各タイルの利用手続を確認してください。取得速度の数値上限・大量アクセスの事前連絡条件は、今回確認した一覧・規約・仕様の本文では見つかりませんでした（2026-10-05確認）。");
                 this.AddNotice("OSM公式サーバーは対話プレビューに使用します。一括生成には、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。公式OSMのbulk downloading禁止は直列取得や減速でも解除されません。");
+                this.AddText("OpenFreeMap（ベクター）は OpenStreetMap データを基にしたパブリックベクタータイルです。Core 内蔵エンジンによりタイル境界の文字切れやにじみのない鮮明な地図を直接描画します。全世界の写真に対応し、一括生成でも利用可能です。端末内にベクタータイルを自動キャッシュします。");
                 this.AddText($"カスタム一括取得は1接続・1秒間隔です。同じホストへのプレビューも一括実行中は共有の間隔に揃えます。100枚超は開始前に確認します。ただし、この PC 上の配信元（localhost、127.0.0.0/8、::1）は他者のサーバーではないため、8接続・5ミリ秒間隔で行い、100枚超の確認も省略します。LAN やプライベート IP は対象外です。ループバックの先が他者のサーバーへの転送（SSH のポートフォワードなど）の場合も同じ間隔になるため、その場合は使わないでください。404以外の取得失敗が連続{TileFetchSession.FailureLimit}件になると中止し、自動再試行はしません。Retry-Afterは利用者が再実行時期を判断するため表示します。\nタイルのネットワーク取得／キャッシュ命中、開始からの平均レート／直近1秒窓の最大要求数を表示します。キャッシュはURLテンプレートとズームごとに分かれ、既定30日保持します。キャッシュ命中は減速しません。ただし期限切れやキャッシュ削除後は再取得します。ズームや配信元を変える場合も再取得が必要です。\n既定の800×600では1写真あたり12〜20タイル程度です。5,200枚が全て異なるタイルなら約6〜10万要求ですが、撮影地点が狭い範囲ならタイルを再利用できます。");
                 this.AddLink("地理院タイル一覧", "https://maps.gsi.go.jp/development/ichiran.html");
                 this.AddLink("国土地理院コンテンツ利用規約", "https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html");
                 this.AddLink("OSM Tile Usage Policy", "https://operations.osmfoundation.org/policies/tiles/");
+                this.AddLink("OpenFreeMap", "https://openfreemap.org");
                 break;
             case 7:
                 this.AddText("パスに空白がある場合は引用符で囲みます。--output-dirの相対指定も写真のフォルダ基準です。起動中のインスタンスに設定を転送します。再帰探索と付加文字は画面で設定してください。");

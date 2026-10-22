@@ -9,7 +9,7 @@
 ### Added
 
 - ベクタータイル直接描画アーキテクチャ設計仕様書（docs/vector-map-architecture.md）。中間ラスターを介さない直接ベクター合成描画（Direct Vector Composition）を採用し、共通描画エンジン上に OpenStreetMap（OpenFreeMap）と国土地理院（最適化ベクトルタイル）の 2 本立てスタイル（役所対応・公的測量基準図／現場確認・民間・世界対応）を選択可能とするアーキテクチャおよび段階的実装ロードマップ（M0〜M4）を策定（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
-- ベクタータイル取得境界・キャッシュ層（IVectorTileSource、VectorTileCacheKey、CachedVectorTileSource、OpenFreeMapTileSource）を追加。OpenFreeMap パブリック配信（TileJSON 動的解決および最新 PBF）からの取得、固有 User-Agent 表明、URL 切替に応じたキャッシュ分離、および透過的なローカルディスクキャッシュ機構を実装（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
+- ベクタータイル取得境界・キャッシュ層（IVectorTileSource、VectorTileCacheKey、CachedVectorTileSource、OpenFreeMapTileSource）を追加。OpenFreeMap パブリック配信（TileJSON 動的解決および最新 PBF）からの取得、固有 User-Agent 表明、実効識別子の非同期確定による URL 切替・配信更新に応じたキャッシュ分離、および透過的なローカルディスクキャッシュ機構を実装（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 
 ## [0.2.3] - 2026-10-18

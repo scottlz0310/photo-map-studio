@@ -16,6 +16,14 @@ public interface IVectorTileSource
     int MaxZoom { get; }
 
     /// <summary>
+    /// 実効的な識別子を非同期に解決・確定して取得する。
+    /// 動的メタデータ（TileJSON等）を解決するソースではメタデータ取得後に確定した識別子を返す。
+    /// </summary>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    /// <returns>確定した識別子。</returns>
+    Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(this.SourceId);
+
+    /// <summary>
     /// 指定されたズーム・タイル座標のベクタータイルデータを取得する。
     /// </summary>
     /// <param name="z">ズームレベル。</param>

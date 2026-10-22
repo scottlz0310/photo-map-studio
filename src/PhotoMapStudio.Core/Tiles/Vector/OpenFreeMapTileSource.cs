@@ -58,6 +58,13 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
     /// <inheritdoc />
     public int MaxZoom { get; }
 
+    /// <inheritdoc />
+    public async Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
+    {
+        await this.ResolveUrlTemplateAsync(cancellationToken).ConfigureAwait(false);
+        return this.SourceId;
+    }
+
     /// <summary>
     /// 現在解決されている実効 URL テンプレート。未解決時はフォールバック URL を返す。
     /// </summary>
@@ -122,9 +129,14 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
                 }
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 呼び出し元の明示的なキャンセル要求は状態を確定せず上位へ伝播させる
+            throw;
+        }
         catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or OperationCanceledException)
         {
-            // オフラインや一時エラー時はフォールバックテンプレートを使用
+            // オフラインや一時エラー、内部タイムアウト時はフォールバックテンプレートを使用
         }
         finally
         {

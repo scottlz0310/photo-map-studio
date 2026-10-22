@@ -26,9 +26,14 @@ public sealed class CachedVectorTileSource : IVectorTileSource
     public int MaxZoom => this.inner.MaxZoom;
 
     /// <inheritdoc />
+    public Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
+        => this.inner.GetSourceIdAsync(cancellationToken);
+
+    /// <inheritdoc />
     public async Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
     {
-        string key = VectorTileCacheKey.Create(this.SourceId, z, x, y);
+        string sourceId = await this.inner.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
+        string key = VectorTileCacheKey.Create(sourceId, z, x, y);
 
         byte[]? cached = await this.cache.TryReadAsync(key, cancellationToken).ConfigureAwait(false);
         if (cached is not null && cached.Length > 0)

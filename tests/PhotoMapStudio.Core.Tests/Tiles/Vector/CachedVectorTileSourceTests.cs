@@ -102,6 +102,67 @@ public class CachedVectorTileSourceTests
         Assert.Equal(bytesB, await stubCache.TryReadAsync(keyB, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task OpenFreeMapTileSourceのTileJSON更新時に共有キャッシュで古いデータが返らず新バージョンを取得する()
+    {
+        string currentTileJson = """{"tiles":["https://tiles.openfreemap.org/planet/v1/{z}/{x}/{y}.pbf"]}""";
+        byte[] v1Tile = [0x01, 0x01];
+        byte[] v2Tile = [0x02, 0x02];
+        var sharedCache = new MemoryTileCache();
+
+        using var factory = new StubHttpClientFactory(req =>
+        {
+            if (req.RequestUri == new Uri(OpenFreeMapTileSource.DefaultTileJsonUrl))
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(currentTileJson),
+                };
+            }
+
+            if (req.RequestUri?.ToString().Contains("/v1/", StringComparison.Ordinal) == true)
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(v1Tile),
+                };
+            }
+
+            if (req.RequestUri?.ToString().Contains("/v2/", StringComparison.Ordinal) == true)
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(v2Tile),
+                };
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        });
+
+        // 1回目のインスタンス：v1 を取得してキャッシュに保存
+        using (var clientA = factory.CreateClient("test"))
+        using (var ofmA = new OpenFreeMapTileSource(clientA))
+        {
+            var cachedA = new CachedVectorTileSource(ofmA, sharedCache);
+            byte[]? resultA = await cachedA.GetTileAsync(14, 100, 200, CancellationToken.None);
+            Assert.Equal(v1Tile, resultA);
+        }
+
+        // TileJSON が v2 に更新されたとする
+        currentTileJson = """{"tiles":["https://tiles.openfreemap.org/planet/v2/{z}/{x}/{y}.pbf"]}""";
+
+        // 2回目のインスタンス（再起動・再生成を模擬）：同じ共有キャッシュを渡す
+        using (var clientB = factory.CreateClient("test"))
+        using (var ofmB = new OpenFreeMapTileSource(clientB))
+        {
+            var cachedB = new CachedVectorTileSource(ofmB, sharedCache);
+            byte[]? resultB = await cachedB.GetTileAsync(14, 100, 200, CancellationToken.None);
+
+            // v1 の古いキャッシュではなく、新しい v2 のタイルが取得されて返ること
+            Assert.Equal(v2Tile, resultB);
+        }
+    }
+
     private sealed class StubVectorTileSource(string sourceId, int maxZoom, Func<int, int, int, byte[]?> handler) : IVectorTileSource
     {
         public string SourceId => sourceId;

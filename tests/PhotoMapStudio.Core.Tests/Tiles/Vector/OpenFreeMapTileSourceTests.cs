@@ -163,4 +163,42 @@ public class OpenFreeMapTileSourceTests
         Assert.Equal("openfreemap:https://server-b/{z}/{x}/{y}.pbf", sourceB.SourceId);
         Assert.Equal(14, sourceA.MaxZoom);
     }
+
+    [Fact]
+    public async Task TileJSON取得中の呼出し元キャンセルは状態を確定せず再実行時に最新URLを解決する()
+    {
+        int tileJsonRequestCount = 0;
+        using var factory = new StubHttpClientFactory(req =>
+        {
+            if (req.RequestUri == new Uri(OpenFreeMapTileSource.DefaultTileJsonUrl))
+            {
+                tileJsonRequestCount++;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(SampleTileJson),
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3]),
+            };
+        });
+
+        using var client = factory.CreateClient("test");
+        using var source = new OpenFreeMapTileSource(client);
+
+        var canceledToken = new CancellationToken(canceled: true);
+
+        // 呼出し元がキャンセルを要求した場合は OperationCanceledException がスローされる
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => source.ResolveUrlTemplateAsync(canceledToken));
+
+        // 有効なトークンで再実行すると TileJSON を再取得して最新 URL を解決する
+        string resolved = await source.ResolveUrlTemplateAsync(CancellationToken.None);
+
+        Assert.Equal("https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", resolved);
+        Assert.Equal("openfreemap:https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", source.SourceId);
+        Assert.True(tileJsonRequestCount >= 1);
+    }
 }

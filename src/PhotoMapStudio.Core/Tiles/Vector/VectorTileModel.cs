@@ -1,28 +1,21 @@
 namespace PhotoMapStudio.Core.Tiles.Vector;
 
 /// <summary>
-/// MVT (Mapbox Vector Tile) のジオメトリ種別。
+/// ベクタータイルのジオメトリ種別。
 /// </summary>
 public enum VectorGeometryType
 {
-    /// <summary>未定義または不明。</summary>
     Unknown = 0,
-
-    /// <summary>点（Point または MultiPoint）。</summary>
     Point = 1,
-
-    /// <summary>線（LineString または MultiLineString）。</summary>
     LineString = 2,
-
-    /// <summary>面（Polygon または MultiPolygon）。</summary>
     Polygon = 3,
 }
 
 /// <summary>
-/// タイルローカル座標系（0〜Extent、既定 4096）における整数座標点。
+/// タイルローカル座標系における 2D 整数座標。
 /// </summary>
-/// <param name="X">X 座標。</param>
-/// <param name="Y">Y 座標。</param>
+/// <param name="X">タイル左上を原点とする X 座標。</param>
+/// <param name="Y">タイル左上を原点とする Y 座標。</param>
 public readonly record struct VectorPoint(int X, int Y);
 
 /// <summary>
@@ -54,6 +47,36 @@ public sealed class VectorTileFeature
     public string? GetString(string key)
     {
         return this.Properties.TryGetValue(key, out object? val) ? val?.ToString() : null;
+    }
+
+    /// <summary>
+    /// 整数属性を取得する。存在しないまたは変換できない場合は <see langword="null"/>。
+    /// </summary>
+    /// <param name="key">プロパティ名。</param>
+    /// <returns>64-bit 整数値または <see langword="null"/>。</returns>
+    public long? GetInt64(string key)
+    {
+        if (!this.Properties.TryGetValue(key, out object? val) || val is null)
+        {
+            return null;
+        }
+
+        if (val is long l)
+        {
+            return l;
+        }
+
+        if (val is int i)
+        {
+            return i;
+        }
+
+        if (val is ulong ul && ul <= long.MaxValue)
+        {
+            return (long)ul;
+        }
+
+        return long.TryParse(val.ToString(), out long parsed) ? parsed : null;
     }
 }
 

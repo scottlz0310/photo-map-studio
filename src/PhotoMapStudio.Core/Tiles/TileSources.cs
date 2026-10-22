@@ -13,6 +13,7 @@ public static class TileSources
 {
     private const string GsiAttribution = "国土地理院（https://maps.gsi.go.jp/development/ichiran.html）";
     private static readonly Uri GsiAttributionUri = new("https://maps.gsi.go.jp/development/ichiran.html");
+    private static readonly Uri GsiOptimalVectorAttributionUri = new("https://github.com/gsi-cyberjapan/optimal_bvmap");
     private static readonly Uri OpenStreetMapAttributionUri = new("https://www.openstreetmap.org/copyright");
     private static readonly Uri OpenFreeMapAttributionUri = new("https://openfreemap.org");
 
@@ -36,6 +37,17 @@ public static class TileSources
         TileRateLimit.Relaxed,
         GsiAttributionUri);
 
+    /// <summary>地理院タイル（最適化ベクトルタイル）。Core 内蔵描画エンジンにより直接描画。</summary>
+    public static TileSource GsiVector { get; } = new(
+        "地理院タイル（最適化ベクトル）",
+        "https://cyberjapandata.gsi.go.jp/xyz/optimal_bvmap-v1/{z}/{x}/{y}.pbf",
+        minZoom: 4,
+        maxZoom: 18,
+        "地理院タイル（最適化ベクトルタイル）",
+        TileRateLimit.Relaxed,
+        GsiOptimalVectorAttributionUri,
+        isVector: true);
+
     /// <summary>OpenFreeMap ベクタータイル。Core 内蔵描画エンジンにより直接描画。</summary>
     public static TileSource OpenFreeMap { get; } = new(
         "OpenFreeMap（ベクター）",
@@ -58,7 +70,7 @@ public static class TileSources
         OpenStreetMapAttributionUri);
 
     /// <summary>プリセット一覧（表示順）。</summary>
-    public static IReadOnlyList<TileSource> All { get; } = [GsiPale, GsiStandard, OpenFreeMap, OpenStreetMap];
+    public static IReadOnlyList<TileSource> All { get; } = [GsiPale, GsiStandard, GsiVector, OpenFreeMap, OpenStreetMap];
 
     /// <summary>
     /// 既定のタイルソース。

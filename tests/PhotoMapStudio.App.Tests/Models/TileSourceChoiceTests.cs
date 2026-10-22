@@ -9,6 +9,7 @@ public sealed class TileSourceChoiceTests
     {
         Assert.Contains(TileSourceChoices.GsiPale, TileSourceChoices.All);
         Assert.Contains(TileSourceChoices.GsiStandard, TileSourceChoices.All);
+        Assert.Contains(TileSourceChoices.GsiVector, TileSourceChoices.All);
         Assert.Contains(TileSourceChoices.OpenFreeMap, TileSourceChoices.All);
         Assert.Contains(TileSourceChoices.OpenStreetMap, TileSourceChoices.All);
         Assert.Contains(TileSourceChoices.Custom, TileSourceChoices.All);
@@ -26,9 +27,22 @@ public sealed class TileSourceChoiceTests
         Assert.Equal(19, choice.MaxZoom);
     }
 
+    [Fact]
+    public void GsiVector選択肢はベクター設定を持つ()
+    {
+        TileSourceChoice choice = TileSourceChoices.GsiVector;
+        Assert.Equal(TileSourceChoices.GsiVectorKey, choice.Key);
+        Assert.False(choice.IsCustom);
+        Assert.NotNull(choice.Source);
+        Assert.True(choice.Source.IsVector);
+        Assert.Equal(4, choice.MinZoom);
+        Assert.Equal(18, choice.MaxZoom);
+    }
+
     [Theory]
     [InlineData("gsi-pale", "gsi-pale")]
     [InlineData("gsi-standard", "gsi-standard")]
+    [InlineData("gsi-vector", "gsi-vector")]
     [InlineData("openfreemap", "openfreemap")]
     [InlineData("openstreetmap", "openstreetmap")]
     [InlineData("custom", "custom")]

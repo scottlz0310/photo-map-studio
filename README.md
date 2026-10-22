@@ -39,8 +39,11 @@
 | --- | --- | --- | --- |
 | **地理院タイル（淡色）** | 国土地理院 | 5–18 | **既定**。日本国内のみ。[地理院タイル一覧](https://maps.gsi.go.jp/development/ichiran.html) |
 | 地理院タイル（標準） | 国土地理院 | 5–18 | 日本国内のみ |
-| **OpenFreeMap（ベクター）** | OpenFreeMap / OSM | 0–19 | Core内蔵直接ベクター描画。全世界対応・文字切れのない鮮明な表示。一括生成可能 |
+| **地理院タイル（最適化ベクトル）** | 国土地理院 | 4–18 | Core内蔵直接描画（PMTiles Range取得）。等高線・道路縁・公的注記。役所提出・調査報告書の参考位置図向け※ |
+| **OpenFreeMap（ベクター）** | OpenFreeMap / OSM | 0–19 | Core内蔵直接描画。全世界対応・文字切れのない鮮明な表示。現場確認・民間向け |
 | OpenStreetMap | OpenStreetMap contributors | 0–19 | 対話プレビュー用（ラスター）。一括生成は利用条件に合うOSM系配信元をカスタム設定で指定 |
+
+※ **地理院最適化ベクトルタイルの適用範囲と非保証事項**: 写真台帳や調査報告書における「参考位置図・背景案内図」としての利用を想定したものです。国土地理院の最適化ベクトルタイルは測量法に基づく「基本測量成果」そのものとは位置付けられていないため、法的証明や基本測量成果自体の添付が厳密に義務付けられている用途（不動産登記・境界確定等）の証明能力を保証するものではありません。厳密な測量成果が必須の提出先に対しては、別途正規の測量成果交付データ等の確認・利用を案内します。
 
 任意のタイル URL も設定できます。
 
@@ -58,69 +61,45 @@ PhotoMapStudio.exe --input-dir "C:\写真 (2026)" --output-dir maps
 
 - 一括生成は OpenStreetMap の Tile Usage Policy が禁じる bulk downloading に該当するが、地理院タイルにこの制限はない
 - 写真 20 枚の一括生成が地理院で約 10 秒、OpenStreetMap で約 16 秒（レート制御を含む実測）
-- 山間部では地理院タイルに等高線・登山路・地名が出るのに対し、OpenStreetMap はほぼ緑一色になる
-- 淡色は背景の彩度が低く、ピンが最も見分けやすい
+- 写真 20 枚で取得するタイル数は、重複除外後で地理院 106 枚、OpenStreetMap 105 枚（大差なし）
+- OpenStreetMap はコントラストが高く、ピンが見づらくなる場面がある
+- 山間部では地理院タイルの方が地形（等高線など）がわかりやすい
 
-**日本国外の写真**は地理院タイルの配信範囲外です。プレビューと単発の生成では自動的に OpenStreetMap へ切り替えて生成し、その旨を結果に表示します。
+OpenStreetMap を利用する場合は、ローカル PC 上にタイルサーバーを立てる運用を推奨します。設定画面でタイルソースに `http://localhost:8080/tile/{z}/{x}/{y}.png` などを指定することで、一括生成の並列度や待機時間が大幅に緩和されます。
 
-**一括生成では自動切替を行いません。** OpenStreetMap への一括取得は [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) が禁じる bulk downloading に該当するためです。一括生成で国外の写真に当たった場合はスキップとして結果一覧に残るので、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。公式OSMをカスタムURLへ入力しても一括生成は開始できません。利用条件、キャッシュ、固定減速、連続失敗による中止の詳細はアプリ内ヘルプを参照してください。
+## システム要件
 
-## 配布版のインストール
-
-GitHub Releases では x64 / ARM64 向けの署名済み MSIX と、アーキテクチャ別の `.appinstaller` を提供します。Windows のアプリ インストーラーから `.appinstaller` を開くと、以後の更新確認を自動化できます。
-
-更新はアプリの起動とは独立して、Windows が8時間間隔でバックグラウンド確認します。起動時の更新確認は行わず、バックグラウンド確認の画面も表示しません。更新は即時には反映されず、PC の稼働・通信状況などによって遅れる場合があります。すぐに更新したい場合は、最新 Release の自分のアーキテクチャ用 `.appinstaller` を開いてください。
-
-従来の起動時確認設定でインストール済みの場合は、新しい設定を含む `.appinstaller` の適用後に切り替わります。次のリリース公開前には切り替わりません。
-
-PowerShell からインストールする場合は、Release から `Install-PhotoMapStudio.ps1` を保存して実行します。
-
-このスクリプトは Windows PowerShell 5.1 でも実行できます。署名証明書が未登録の場合だけ、`LocalMachine\TrustedPeople` への登録のため UAC の管理者許可を求めます。AppX のインストールは起動元のユーザーとして行います。証明書を信頼済みルート（`Root`）へ登録する必要はありません。
-
-```pwsh
-Set-ExecutionPolicy -Scope Process Bypass
-.\Install-PhotoMapStudio.ps1 -Architecture x64
-```
-
-ARM64 環境では `-Architecture ARM64` を指定してください。自己署名証明書を使った開発用パッケージでは、インストール前に証明書を信頼済みにする必要があります。リリース手順と署名Secretの設定は [アーキテクチャ・配布仕様](docs/architecture.md) を、データ取り扱いと地図タイルの通信先は [プライバシーポリシー](docs/privacy-policy.html) を参照してください。
+- Windows 10 バージョン 22H2（ビルド 19045）以降、または Windows 11
+- x64 または ARM64 プロセッサ
+- .NET 10 ランタイム（自己完結型パッケージの場合は不要）
 
 ## 開発
 
-### 必要な環境
-
-- .NET 10 SDK
-- Visual Studio 2022 以降（MSIX パッケージングに MSBuild が必要）
-
-### ビルドとテスト
-
-```pwsh
-dotnet restore PhotoMapStudio.slnx
-dotnet build PhotoMapStudio.slnx -c Release -p:Platform=x64
+```shell
+dotnet build PhotoMapStudio.slnx
 dotnet test tests/PhotoMapStudio.Core.Tests
 dotnet test tests/PhotoMapStudio.App.Tests
-dotnet format PhotoMapStudio.slnx --verify-no-changes
 ```
 
-### プロジェクト構成
+## アーキテクチャ
 
-| プロジェクト | 役割 |
-| --- | --- |
-| `src/PhotoMapStudio.App` | WinUI 3 の UI 層（XAML / ViewModel / MSIX マニフェスト） |
-| `src/PhotoMapStudio.Core` | ドメイン層（EXIF 解析・タイル取得・地図合成）。UI 非依存 |
-| `tests/PhotoMapStudio.Core.Tests` | ドメイン層の単体テスト |
-| `tests/PhotoMapStudio.App.Tests` | ViewModel の単体テスト |
+Windows App SDK（WinUI 3）によるデスクトップアプリケーションです。ドメインロジック（EXIF 読み取り、Web メルカトル座標変換、タイルキャッシュ、画像合成）は `PhotoMapStudio.Core`（.NET Standard / .NET 10 クラスライブラリ）に分離されており、UI レイヤーに依存しません。
+
+詳細なアーキテクチャ設計仕様は [docs/vector-map-architecture.md](docs/vector-map-architecture.md) を参照してください。
+
+```
+PhotoMapStudio/
+├── src/
+│   ├── PhotoMapStudio.App/     # WinUI 3 デスクトップアプリケーション
+│   └── PhotoMapStudio.Core/    # コアドメインライブラリ
+├── tests/
+│   ├── PhotoMapStudio.App.Tests/
+│   └── PhotoMapStudio.Core.Tests/
+└── docs/                       # 設計仕様書
+```
 
 ## ライセンス
 
-[MIT](LICENSE)
+本プロジェクトは [MIT License](LICENSE) の下で公開されています。
 
-## 使用ライブラリ
-
-| ライブラリ | ライセンス | 用途 |
-| --- | --- | --- |
-| [MetadataExtractor](https://github.com/drewnoakes/metadata-extractor-dotnet) | Apache-2.0 | EXIF GPS の読み取り |
-| [SkiaSharp](https://github.com/mono/SkiaSharp) | MIT | 地図タイルの合成・PNG 出力 |
-| [Windows App SDK](https://github.com/microsoft/WindowsAppSDK) | MIT | WinUI 3 |
-| [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | MIT | MVVM |
-| [CommunityToolkit.WinUI.Controls.Sizers](https://github.com/CommunityToolkit/Windows) | MIT | `GridSplitter` |
-| [WinUIEx](https://github.com/dotMorten/WinUIEx) | MIT | ウィンドウ状態の永続化 |
+利用している地図タイルの著作権および利用条件については、アプリ内のヘルプおよび各配信元の利用規約を確認してください。

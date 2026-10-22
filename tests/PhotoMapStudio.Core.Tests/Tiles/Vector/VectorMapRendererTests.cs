@@ -47,6 +47,37 @@ public class VectorMapRendererTests
     }
 
     [Fact]
+    public async Task TileSourceの指定に応じて適切なソースとスタイルに切り替えて描画する()
+    {
+        var center = new GeoCoordinate(35.685, 139.752);
+        byte[] ofmTile = CreateWaterTile(); // 水色 #A5D6E7
+        byte[] gsiTile = CreateWaterTile(); // テスト用ダミー
+
+        var ofmSource = new MockVectorTileSource(14, (z, x, y) => ofmTile);
+        var gsiSource = new MockVectorTileSource(16, (z, x, y) => gsiTile);
+        using var ofmStyle = new OpenMapTilesStyle();
+        using var gsiStyle = new GsiVectorStyle();
+
+        var renderer = new VectorMapRenderer(
+            defaultTileSource: ofmSource,
+            defaultStyle: ofmStyle,
+            resolver: source => source == TileSources.GsiVector ? (gsiSource, gsiStyle) : (ofmSource, ofmStyle));
+
+        // 1. GsiVector 指定時
+        using var gsiBitmap = await renderer.RenderMapAsync(
+            center, 14, 256, 256, session: null, tileSource: TileSources.GsiVector, CancellationToken.None);
+        Assert.NotNull(gsiBitmap);
+        // GSI 背景色は #F8F7F2
+        Assert.Equal(new SKColor(0xF8, 0xF7, 0xF2), gsiStyle.BackgroundColor);
+
+        // 2. OpenFreeMap 指定時
+        using var ofmBitmap = await renderer.RenderMapAsync(
+            center, 14, 256, 256, session: null, tileSource: TileSources.OpenFreeMap, CancellationToken.None);
+        Assert.NotNull(ofmBitmap);
+        Assert.Equal(new SKColor(0xF2, 0xEF, 0xE9), ofmStyle.BackgroundColor);
+    }
+
+    [Fact]
     public async Task sourceのMaxZoomを超えるズームレベルでは過拡大としてMaxZoomのタイルを要求する()
     {
         var center = new GeoCoordinate(35.685, 139.752);

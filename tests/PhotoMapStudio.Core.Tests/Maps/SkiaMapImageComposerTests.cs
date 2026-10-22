@@ -145,6 +145,28 @@ public sealed class SkiaMapImageComposerTests : IDisposable
     }
 
     [Fact]
+    public async Task GsiVectorプリセット指定時もベクターレンダラーで直接描画する()
+    {
+        var stubRenderer = new StubVectorRenderer(new SKColor(248, 247, 242));
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor), stubRenderer);
+
+        var request = new MapCompositionRequest
+        {
+            Center = Tokyo,
+            TileSource = TileSources.GsiVector,
+            Width = 200,
+            Height = 200,
+        };
+
+        MapCompositionResult result = await composer.ComposeAsync(request, CancellationToken.None);
+
+        Assert.Equal(TileSources.GsiVector, result.TileSource);
+        Assert.False(result.UsedFallback);
+        Assert.True(stubRenderer.RenderCalled);
+        Assert.Equal(TileSources.GsiVector, stubRenderer.LastTileSource);
+    }
+
+    [Fact]
     public async Task ベクターレンダラー未設定でベクタータイルを指定すると例外を送出する()
     {
         var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor), vectorMapRenderer: null);
@@ -438,6 +460,29 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         public int LastWidth { get; private set; }
         public int LastHeight { get; private set; }
         public TileFetchSession? LastSession { get; private set; }
+        public TileSource? LastTileSource { get; private set; }
+
+        public Task RenderToCanvasAsync(
+            SKCanvas canvas,
+            GeoCoordinate center,
+            int zoom,
+            int width,
+            int height,
+            TileFetchSession? session,
+            TileSource? tileSource,
+            CancellationToken cancellationToken = default)
+        {
+            this.RenderCalled = true;
+            this.LastCenter = center;
+            this.LastZoom = zoom;
+            this.LastWidth = width;
+            this.LastHeight = height;
+            this.LastSession = session;
+            this.LastTileSource = tileSource;
+
+            canvas.Clear(fillColor);
+            return Task.CompletedTask;
+        }
 
         public Task RenderToCanvasAsync(
             SKCanvas canvas,
@@ -447,17 +492,17 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int height,
             TileFetchSession? session,
             CancellationToken cancellationToken = default)
-        {
-            this.RenderCalled = true;
-            this.LastCenter = center;
-            this.LastZoom = zoom;
-            this.LastWidth = width;
-            this.LastHeight = height;
-            this.LastSession = session;
+            => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource: null, cancellationToken);
 
-            canvas.Clear(fillColor);
-            return Task.CompletedTask;
-        }
+        public Task<SKBitmap> RenderMapAsync(
+            GeoCoordinate center,
+            int zoom,
+            int width,
+            int height,
+            TileFetchSession? session,
+            TileSource? tileSource,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
 
         public Task<SKBitmap> RenderMapAsync(
             GeoCoordinate center,

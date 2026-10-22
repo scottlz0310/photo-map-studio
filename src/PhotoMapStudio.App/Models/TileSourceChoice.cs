@@ -76,6 +76,9 @@ public static class TileSourceChoices
     /// <summary>地理院タイル（標準）のキー。</summary>
     public const string GsiStandardKey = "gsi-standard";
 
+    /// <summary>地理院タイル（最適化ベクトル）のキー。</summary>
+    public const string GsiVectorKey = "gsi-vector";
+
     /// <summary>OpenFreeMap のキー。</summary>
     public const string OpenFreeMapKey = "openfreemap";
 
@@ -91,6 +94,9 @@ public static class TileSourceChoices
     /// <summary>地理院タイル（標準）。</summary>
     public static TileSourceChoice GsiStandard { get; } = new(GsiStandardKey, TileSources.GsiStandard.Name, TileSources.GsiStandard);
 
+    /// <summary>地理院タイル（最適化ベクトル）。</summary>
+    public static TileSourceChoice GsiVector { get; } = new(GsiVectorKey, TileSources.GsiVector.Name, TileSources.GsiVector);
+
     /// <summary>OpenFreeMap（ベクター）。</summary>
     public static TileSourceChoice OpenFreeMap { get; } = new(OpenFreeMapKey, TileSources.OpenFreeMap.Name, TileSources.OpenFreeMap);
 
@@ -101,7 +107,7 @@ public static class TileSourceChoices
     public static TileSourceChoice Custom { get; } = new(CustomKey, "カスタム URL", null);
 
     /// <summary>表示順に並べた選択肢。</summary>
-    public static IReadOnlyList<TileSourceChoice> All { get; } = [GsiPale, GsiStandard, OpenFreeMap, OpenStreetMap, Custom];
+    public static IReadOnlyList<TileSourceChoice> All { get; } = [GsiPale, GsiStandard, GsiVector, OpenFreeMap, OpenStreetMap, Custom];
 
     /// <summary>
     /// 永続化されたキーから選択肢を取得する。未知のキーは既定値へ戻す。

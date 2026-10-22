@@ -109,7 +109,16 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
     private readonly SKPaint minorFill = new() { Color = SKColors.White, Style = SKPaintStyle.Stroke, IsAntialias = true };
 
     // 注記用ペイント・フォント
-    private readonly SKFont labelFont = new(SKTypeface.Default, 11f);
+    private readonly SKTypeface labelTypeface = VectorMapFontHelper.CreateJapaneseTypeface();
+    private readonly SKFont labelFont;
+
+    /// <summary>
+    /// 国土地理院 最適化ベクトルスタイルを初期化する。
+    /// </summary>
+    public GsiVectorStyle()
+    {
+        this.labelFont = new SKFont(this.labelTypeface, 11f);
+    }
     private readonly SKPaint labelFillPaint = new()
     {
         Color = new SKColor(0x33, 0x33, 0x33), // #333333
@@ -531,6 +540,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         this.minorCasing.Dispose();
         this.minorFill.Dispose();
         this.labelFont.Dispose();
+        this.labelTypeface.Dispose();
         this.labelFillPaint.Dispose();
         this.labelHaloPaint.Dispose();
     }

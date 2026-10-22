@@ -17,6 +17,10 @@
 - Core 内蔵ベクタータイル直接描画エンジン（VectorTileDecoder、VectorTileModel、IVectorMapStyle、OpenMapTilesStyle、LabelCollisionGrid、VectorMapRenderer）を追加。外部依存を持たないゼロアロケーション指向の MVT/PBF デコーダー、OpenMapTiles スキーマ対応の面・線・注記スタイル、および SkiaSharp による過拡大対応・AABB 衝突判定付き直接ラスタライズ機構を実装（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 
+### Fixed
+
+- ベクター地図スタイル（国土地理院 最適化ベクトルおよび OpenFreeMap）において、Windows 標準の日本語フォント（Yu Gothic UI / 日本語対応 Typeface）を自動解決する VectorMapFontHelper を導入し、地名・施設名・等高線注記の漢字・ひらがなが豆腐（□）として描画される不具合を修正（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
+
 ## [0.2.3] - 2026-10-18
 
 ### Changed

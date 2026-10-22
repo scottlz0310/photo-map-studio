@@ -49,6 +49,33 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void タイルキャッシュ消去失敗時に警告が表示される()
+    {
+        var repository = new InMemorySettingsRepository();
+        var stubCache = new StubTileCache { ClearResult = false };
+        var viewModel = new MainViewModel(repository, tileCache: stubCache);
+
+        viewModel.ClearTileCacheCommand.Execute(null);
+        Assert.True(stubCache.ClearCalled);
+        Assert.Contains("一部のキャッシュファイルを消去できませんでした", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("10.0 MB / 1024 MB", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void タイルキャッシュ容量変更時にPruneAsyncが呼ばれ使用量が更新される()
+    {
+        var repository = new InMemorySettingsRepository();
+        var stubCache = new StubTileCache { Size = 1000L * 1024L * 1024L };
+        var viewModel = new MainViewModel(repository, tileCache: stubCache);
+
+        viewModel.TileCacheSizeMb = 100;
+
+        Assert.Equal(100L * 1024L * 1024L, stubCache.LastPrunedTarget);
+        Assert.Equal(100L * 1024L * 1024L, stubCache.MaxSizeBytes);
+        Assert.Contains("100.0 MB / 100 MB", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ピン形状をCustomImageに変更するとカスタム画像欄の可視性がtrueになる()
     {
         var viewModel = new MainViewModel(new InMemorySettingsRepository());
@@ -196,13 +223,24 @@ public class MainViewModelTests
         public long MaxSizeBytes { get; set; }
         public long Size { get; set; } = 10L * 1024L * 1024L;
         public bool ClearCalled { get; private set; }
+        public bool ClearResult { get; set; } = true;
+        public long? LastPrunedTarget { get; private set; }
 
         public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
         public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken) => Task.CompletedTask;
-        public long GetCurrentSizeBytes() => this.ClearCalled ? 0 : this.Size;
-        public Task ClearAsync(CancellationToken cancellationToken = default)
+        public long GetCurrentSizeBytes() => this.ClearCalled && this.ClearResult ? 0 : this.Size;
+        public Task<bool> ClearAsync(CancellationToken cancellationToken = default)
         {
             this.ClearCalled = true;
+            return Task.FromResult(this.ClearResult);
+        }
+        public Task PruneAsync(long targetSizeBytes, CancellationToken cancellationToken = default)
+        {
+            this.LastPrunedTarget = targetSizeBytes;
+            if (this.Size > targetSizeBytes)
+            {
+                this.Size = targetSizeBytes;
+            }
             return Task.CompletedTask;
         }
     }

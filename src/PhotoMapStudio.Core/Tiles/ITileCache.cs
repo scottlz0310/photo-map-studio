@@ -37,8 +37,8 @@ public interface ITileCache
     /// キャッシュ内のすべてのタイルを削除する。
     /// </summary>
     /// <param name="cancellationToken">キャンセルトークン。</param>
-    /// <returns>削除完了を表すタスク。</returns>
-    Task ClearAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    /// <returns>すべてのファイルが正常に削除された場合は <see langword="true"/>、一部または全部の削除に失敗した場合は <see langword="false"/>。</returns>
+    Task<bool> ClearAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
 
     /// <summary>
     /// 指定された容量（バイト数）以下になるよう古いタイルを削除する。

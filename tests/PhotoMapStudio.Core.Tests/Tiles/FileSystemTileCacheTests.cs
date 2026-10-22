@@ -21,7 +21,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [Fact]
     public async Task 書き出した内容をそのまま読み出せる()
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
         byte[] content = [0x89, 0x50, 0x4E, 0x47];
 
         await cache.WriteAsync(Key, content, CancellationToken.None);
@@ -32,7 +32,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [Fact]
     public async Task 未保存のキーではnullを返す()
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
 
         Assert.Null(await cache.TryReadAsync(Key, CancellationToken.None));
     }
@@ -43,7 +43,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     public async Task 保持期間を過ぎたキャッシュは無効とする(int elapsedDays, bool expectedExpired)
     {
         var clock = new FixedTimeProvider(BaseTime);
-        var cache = new FileSystemTileCache(this.root, TimeSpan.FromDays(7), clock);
+        using var cache = new FileSystemTileCache(this.root, TimeSpan.FromDays(7), clock);
 
         await cache.WriteAsync(Key, [0x01], CancellationToken.None);
         File.SetLastWriteTimeUtc(Path.Combine(this.root, Key), BaseTime.UtcDateTime);
@@ -65,7 +65,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [InlineData("sub\\dir.png")]
     public async Task キャッシュディレクトリ外を指すキーは拒否する(string key)
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
 
         await Assert.ThrowsAsync<ArgumentException>(() => cache.TryReadAsync(key, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentException>(() => cache.WriteAsync(key, [0x01], CancellationToken.None));
@@ -74,7 +74,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [Fact]
     public async Task 同じキーへの書き出しは上書きする()
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
 
         await cache.WriteAsync(Key, [0x01], CancellationToken.None);
         await cache.WriteAsync(Key, [0x02, 0x03], CancellationToken.None);
@@ -85,7 +85,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [Fact]
     public async Task 読み取りに失敗したキャッシュは無視する()
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
         await cache.WriteAsync(Key, [0x01], CancellationToken.None);
 
         // 他プロセスが掴んでいる状態を再現する
@@ -101,7 +101,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [Fact]
     public async Task 一時ファイルを残さない()
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
 
         await cache.WriteAsync(Key, [0x01], CancellationToken.None);
 
@@ -112,7 +112,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     public async Task 容量上限を超過した場合はアクセス日時の古いファイルから自動削除される()
     {
         var clock = new FixedTimeProvider(BaseTime);
-        var cache = new FileSystemTileCache(this.root, timeProvider: clock, maxSizeBytes: 25);
+        using var cache = new FileSystemTileCache(this.root, timeProvider: clock, maxSizeBytes: 25);
 
         byte[] data1 = new byte[10];
         byte[] data2 = new byte[10];
@@ -148,7 +148,7 @@ public sealed class FileSystemTileCacheTests : IDisposable
     public async Task 読み取られたファイルはLRU削除対象から保護される()
     {
         var clock = new FixedTimeProvider(BaseTime);
-        var cache = new FileSystemTileCache(this.root, timeProvider: clock, maxSizeBytes: 25);
+        using var cache = new FileSystemTileCache(this.root, timeProvider: clock, maxSizeBytes: 25);
 
         byte[] data1 = new byte[10];
         byte[] data2 = new byte[10];
@@ -186,16 +186,93 @@ public sealed class FileSystemTileCacheTests : IDisposable
     [Fact]
     public async Task ClearAsyncで全ファイルが削除される()
     {
-        var cache = new FileSystemTileCache(this.root);
+        using var cache = new FileSystemTileCache(this.root);
         await cache.WriteAsync("tile1.pbf", [0x01], CancellationToken.None);
         await cache.WriteAsync("tile2.pbf", [0x02], CancellationToken.None);
 
         Assert.Equal(2, cache.GetCurrentSizeBytes());
 
-        await cache.ClearAsync(CancellationToken.None);
+        bool result = await cache.ClearAsync(CancellationToken.None);
+
+        Assert.True(result);
 
         Assert.Equal(0, cache.GetCurrentSizeBytes());
         Assert.Null(await cache.TryReadAsync("tile1.pbf", CancellationToken.None));
         Assert.Null(await cache.TryReadAsync("tile2.pbf", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ClearAsyncとWriteAsyncが並行実行されても例外なく正常完了する()
+    {
+        using var cache = new FileSystemTileCache(this.root);
+        const int writeIterations = 200;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        var writeTask = Task.Run(async () =>
+        {
+            for (int i = 0; i < writeIterations; i++)
+            {
+                byte[] data = new byte[100];
+                data[0] = (byte)(i % 256);
+                await cache.WriteAsync($"tile_{i % 20}.pbf", data, cts.Token).ConfigureAwait(false);
+            }
+        });
+
+        var clearTask = Task.Run(async () =>
+        {
+            for (int i = 0; i < 20; i++)
+            {
+                await cache.ClearAsync(cts.Token).ConfigureAwait(false);
+                await Task.Delay(5).ConfigureAwait(false);
+            }
+        });
+
+        await Task.WhenAll(writeTask, clearTask).ConfigureAwait(true);
+
+        Assert.True(cache.GetCurrentSizeBytes() >= 0);
+    }
+
+    [Fact]
+    public async Task 他プロセスにロックされたファイルが残る場合ClearAsyncはfalseを返す()
+    {
+        using var cache = new FileSystemTileCache(this.root);
+        await cache.WriteAsync("locked.pbf", new byte[1000], CancellationToken.None);
+
+        string path = Path.Combine(this.root, "locked.pbf");
+        using (FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            bool success = await cache.ClearAsync(CancellationToken.None);
+            Assert.False(success);
+            Assert.True(cache.GetCurrentSizeBytes() > 0);
+        }
+
+        bool retrySuccess = await cache.ClearAsync(CancellationToken.None);
+        Assert.True(retrySuccess);
+        Assert.Equal(0, cache.GetCurrentSizeBytes());
+    }
+
+    [Fact]
+    public async Task 容量上限を縮小した際に追加ダウンロードなしでも指定容量以下に自動整理される()
+    {
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 2000);
+
+        await cache.WriteAsync("large.pbf", new byte[1000], CancellationToken.None);
+        Assert.Equal(1000, cache.GetCurrentSizeBytes());
+
+        cache.MaxSizeBytes = 100;
+
+        Assert.True(cache.GetCurrentSizeBytes() <= 100);
+        Assert.Null(await cache.TryReadAsync("large.pbf", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task 初期化時に既存キャッシュが上限を超過していれば自動整理される()
+    {
+        Directory.CreateDirectory(this.root);
+        await File.WriteAllBytesAsync(Path.Combine(this.root, "existing.pbf"), new byte[1000]);
+
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100);
+
+        Assert.True(cache.GetCurrentSizeBytes() <= 100);
     }
 }

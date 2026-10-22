@@ -121,7 +121,9 @@ public sealed class MainViewModel : ObservableObject
         this.tileCacheSizeMb = settings.TileCacheSizeMb;
         if (this.tileCache is not null && this.tileCacheSizeMb > 0)
         {
-            this.tileCache.MaxSizeBytes = (long)this.tileCacheSizeMb * 1024L * 1024L;
+            long targetBytes = (long)this.tileCacheSizeMb * 1024L * 1024L;
+            this.tileCache.MaxSizeBytes = targetBytes;
+            _ = this.PruneTileCacheAndRefreshAsync(targetBytes);
         }
         this.ClearTileCacheCommand = new AsyncRelayCommand(this.ClearTileCacheAsync);
         this.UpdateTileCacheUsage();
@@ -271,7 +273,9 @@ public sealed class MainViewModel : ObservableObject
             {
                 if (this.tileCache is not null && value > 0)
                 {
-                    this.tileCache.MaxSizeBytes = (long)value * 1024L * 1024L;
+                    long targetBytes = (long)value * 1024L * 1024L;
+                    this.tileCache.MaxSizeBytes = targetBytes;
+                    _ = this.PruneTileCacheAndRefreshAsync(targetBytes);
                 }
                 this.ClearFeedback();
                 this.UpdateTileCacheUsage();
@@ -309,9 +313,29 @@ public sealed class MainViewModel : ObservableObject
     {
         if (this.tileCache is not null)
         {
-            await this.tileCache.ClearAsync().ConfigureAwait(true);
+            bool success = await this.tileCache.ClearAsync().ConfigureAwait(true);
             this.UpdateTileCacheUsage();
-            this.StatusMessage = "タイルキャッシュを消去しました。";
+            this.StatusMessage = success
+                ? "タイルキャッシュを消去しました。"
+                : "一部のキャッシュファイルを消去できませんでした（使用中または書き込み保護）。";
+        }
+    }
+
+    private async Task PruneTileCacheAndRefreshAsync(long targetBytes)
+    {
+        if (this.tileCache is not null)
+        {
+            try
+            {
+                await this.tileCache.PruneAsync(targetBytes).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+            finally
+            {
+                this.UpdateTileCacheUsage();
+            }
         }
     }
 

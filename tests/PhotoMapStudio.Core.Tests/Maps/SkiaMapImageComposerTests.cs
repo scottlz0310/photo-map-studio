@@ -114,10 +114,12 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         var stubRenderer = new StubVectorRenderer(new SKColor(10, 20, 30));
         var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor), stubRenderer);
 
+        var session = new TileFetchSession(TimeProvider.System);
         var request = new MapCompositionRequest
         {
             Center = Tokyo,
             TileSource = TileSources.OpenFreeMap,
+            TileSession = session,
             Width = 200,
             Height = 200,
         };
@@ -131,6 +133,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         Assert.Equal(15, stubRenderer.LastZoom);
         Assert.Equal(200, stubRenderer.LastWidth);
         Assert.Equal(200, stubRenderer.LastHeight);
+        Assert.Same(session, stubRenderer.LastSession);
 
         using SKBitmap bitmap = SKBitmap.Decode(result.Png.ToArray());
         Assert.Equal(200, bitmap.Width);
@@ -434,6 +437,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         public int LastZoom { get; private set; }
         public int LastWidth { get; private set; }
         public int LastHeight { get; private set; }
+        public TileFetchSession? LastSession { get; private set; }
 
         public Task RenderToCanvasAsync(
             SKCanvas canvas,
@@ -441,6 +445,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int zoom,
             int width,
             int height,
+            TileFetchSession? session,
             CancellationToken cancellationToken = default)
         {
             this.RenderCalled = true;
@@ -448,6 +453,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             this.LastZoom = zoom;
             this.LastWidth = width;
             this.LastHeight = height;
+            this.LastSession = session;
 
             canvas.Clear(fillColor);
             return Task.CompletedTask;
@@ -458,6 +464,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int zoom,
             int width,
             int height,
+            TileFetchSession? session,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }

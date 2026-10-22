@@ -30,18 +30,42 @@ public sealed class CachedVectorTileSource : IVectorTileSource
         => this.inner.GetSourceIdAsync(cancellationToken);
 
     /// <inheritdoc />
-    public async Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
+    public Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
+        => this.GetTileAsync(z, x, y, session: null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<byte[]?> GetTileAsync(
+        int z,
+        int x,
+        int y,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default)
     {
+        session?.ThrowIfStopped();
+
         string sourceId = await this.inner.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
         string key = VectorTileCacheKey.Create(sourceId, z, x, y);
 
         byte[]? cached = await this.cache.TryReadAsync(key, cancellationToken).ConfigureAwait(false);
         if (cached is not null && cached.Length > 0)
         {
+            session?.RecordSuccess(cached: true);
             return cached;
         }
 
-        byte[]? fetched = await this.inner.GetTileAsync(z, x, y, cancellationToken).ConfigureAwait(false);
+        byte[]? fetched;
+        try
+        {
+            fetched = await this.inner.GetTileAsync(z, x, y, session, cancellationToken).ConfigureAwait(false);
+            session?.RecordSuccess(cached: false);
+        }
+        catch (TileFetchException ex)
+        {
+            session?.RecordFailure(ex);
+            session?.ThrowIfStopped();
+            throw;
+        }
+
         if (fetched is not null && fetched.Length > 0)
         {
             try

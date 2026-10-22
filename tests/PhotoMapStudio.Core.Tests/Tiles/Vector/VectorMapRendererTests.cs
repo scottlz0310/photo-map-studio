@@ -1,4 +1,5 @@
 using PhotoMapStudio.Core.Geo;
+using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
 
 using SkiaSharp;
@@ -213,7 +214,7 @@ public class VectorMapRendererTests
         public string SourceId => "mock-source";
         public int MaxZoom => maxZoom;
 
-        public Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
+        public Task<byte[]?> GetTileAsync(int z, int x, int y, TileFetchSession? session, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(fetchHandler(z, x, y));
         }

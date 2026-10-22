@@ -24,11 +24,21 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
     }
 
     /// <inheritdoc />
+    public Task<SKBitmap> RenderMapAsync(
+        GeoCoordinate center,
+        int zoom,
+        int width,
+        int height,
+        CancellationToken cancellationToken = default)
+        => this.RenderMapAsync(center, zoom, width, height, session: null, cancellationToken);
+
+    /// <inheritdoc />
     public async Task<SKBitmap> RenderMapAsync(
         GeoCoordinate center,
         int zoom,
         int width,
         int height,
+        TileFetchSession? session,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
@@ -38,7 +48,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         try
         {
             using var canvas = new SKCanvas(bitmap);
-            await this.RenderToCanvasAsync(canvas, center, zoom, width, height, cancellationToken).ConfigureAwait(false);
+            await this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, cancellationToken).ConfigureAwait(false);
             return bitmap;
         }
         catch
@@ -49,12 +59,23 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
     }
 
     /// <inheritdoc />
+    public Task RenderToCanvasAsync(
+        SKCanvas canvas,
+        GeoCoordinate center,
+        int zoom,
+        int width,
+        int height,
+        CancellationToken cancellationToken = default)
+        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session: null, cancellationToken);
+
+    /// <inheritdoc />
     public async Task RenderToCanvasAsync(
         SKCanvas canvas,
         GeoCoordinate center,
         int zoom,
         int width,
         int height,
+        TileFetchSession? session,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(canvas);
@@ -101,7 +122,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                 // X 座標は経度方向（左右）で世界一周 wrap する
                 int fetchX = ((tx % maxTiles) + maxTiles) % maxTiles;
 
-                byte[]? tileData = await this.tileSource.GetTileAsync(tileZoom, fetchX, ty, cancellationToken).ConfigureAwait(false);
+                byte[]? tileData = await this.tileSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
                 if (tileData is null || tileData.Length == 0)
                 {
                     continue;

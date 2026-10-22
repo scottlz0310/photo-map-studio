@@ -148,8 +148,18 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
+    public Task<byte[]?> GetTileAsync(int z, int x, int y, CancellationToken cancellationToken = default)
+        => this.GetTileAsync(z, x, y, session: null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<byte[]?> GetTileAsync(
+        int z,
+        int x,
+        int y,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default)
     {
+        session?.ThrowIfStopped();
         string template = await this.ResolveUrlTemplateAsync(cancellationToken).ConfigureAwait(false);
 
         string requestUrl = template
@@ -163,6 +173,7 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
 
         try
         {
+            session?.RecordRequest();
             using HttpResponseMessage response = await this.httpClient
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false);

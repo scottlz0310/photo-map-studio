@@ -60,6 +60,7 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
                 request.Zoom,
                 request.Width,
                 request.Height,
+                request.TileSession,
                 cancellationToken).ConfigureAwait(false);
         }
         else

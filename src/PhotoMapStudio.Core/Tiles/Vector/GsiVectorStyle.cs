@@ -298,21 +298,41 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         GsiRoadKind kind = GsiRoadKind.Minor;
         if (!string.IsNullOrEmpty(rdCtgStr))
         {
-            if (rdCtgStr.Contains("高速", StringComparison.Ordinal))
+            string trimmed = rdCtgStr.Trim();
+            switch (trimmed)
             {
-                kind = GsiRoadKind.Highway;
-            }
-            else if (rdCtgStr.Contains("国道", StringComparison.Ordinal) || rdCtgStr.Contains("主要道路", StringComparison.Ordinal))
-            {
-                kind = GsiRoadKind.National;
-            }
-            else if (rdCtgStr.Contains("都道府県道", StringComparison.Ordinal))
-            {
-                kind = GsiRoadKind.Prefectural;
-            }
-            else if (long.TryParse(rdCtgStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsedNum))
-            {
-                kind = MapNumericRoadCategory(parsedNum);
+                case "高速自動車国道等":
+                    kind = GsiRoadKind.Highway;
+                    break;
+                case "国道":
+                case "主要道路":
+                    kind = GsiRoadKind.National;
+                    break;
+                case "都道府県道":
+                    kind = GsiRoadKind.Prefectural;
+                    break;
+                case "市区町村道等":
+                case "その他":
+                    kind = GsiRoadKind.Minor;
+                    break;
+                default:
+                    if (trimmed.Contains("高速", StringComparison.Ordinal))
+                    {
+                        kind = GsiRoadKind.Highway;
+                    }
+                    else if (trimmed.Contains("国道", StringComparison.Ordinal) || trimmed.Contains("主要道路", StringComparison.Ordinal))
+                    {
+                        kind = GsiRoadKind.National;
+                    }
+                    else if (trimmed.Contains("都道府県道", StringComparison.Ordinal))
+                    {
+                        kind = GsiRoadKind.Prefectural;
+                    }
+                    else if (long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsedNum))
+                    {
+                        kind = MapNumericRoadCategory(parsedNum);
+                    }
+                    break;
             }
         }
         else if (rdCtgNum.HasValue)
@@ -347,34 +367,27 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         string? rnkStr = feature.GetString("vt_rnkwidth") ?? feature.GetString("rnkWidth");
         if (!string.IsNullOrEmpty(rnkStr))
         {
-            if (rnkStr.Contains("3m未満", StringComparison.Ordinal))
+            string trimmed = rnkStr.Trim();
+            switch (trimmed)
             {
-                return 1.5f;
-            }
-
-            if (rnkStr.Contains("3m-5.5m未満", StringComparison.Ordinal))
-            {
-                return 2.2f;
-            }
-
-            if (rnkStr.Contains("5.5m-13m未満", StringComparison.Ordinal))
-            {
-                return 3.2f;
-            }
-
-            if (rnkStr.Contains("13m-19.5m未満", StringComparison.Ordinal))
-            {
-                return 4.2f;
-            }
-
-            if (rnkStr.Contains("19.5m以上", StringComparison.Ordinal))
-            {
-                return 5.2f;
-            }
-
-            if (long.TryParse(rnkStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out long num))
-            {
-                return MapNumericRankWidth(num);
+                case "3m未満":
+                    return 1.5f;
+                case "3m-5.5m未満":
+                    return 2.2f;
+                case "5.5m-13m未満":
+                    return 3.2f;
+                case "13m-19.5m未満":
+                    return 4.2f;
+                case "19.5m以上":
+                    return 5.2f;
+                case "不明":
+                    return 2.2f;
+                default:
+                    if (long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out long num))
+                    {
+                        return MapNumericRankWidth(num);
+                    }
+                    break;
             }
         }
 

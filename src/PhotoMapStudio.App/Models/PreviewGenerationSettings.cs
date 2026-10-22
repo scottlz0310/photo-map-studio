@@ -33,7 +33,13 @@ public sealed record PreviewGenerationSettings
     /// <summary>ズームレベル。</summary>
     public double Zoom { get; init; } = MapCompositionRequest.DefaultZoom;
 
-    /// <summary>ピン画像のパス。</summary>
+    /// <summary>ピン種別。</summary>
+    public PinKind PinKind { get; init; } = PinKind.GreenPin;
+
+    /// <summary>ピンアンカー基準点。</summary>
+    public PinAnchor PinAnchor { get; init; } = PinAnchor.BottomCenter;
+
+    /// <summary>ピン画像のパス（カスタム画像時等）。</summary>
     public string PinImagePath { get; init; } = string.Empty;
 
     /// <summary>選択中のタイルソース。</summary>

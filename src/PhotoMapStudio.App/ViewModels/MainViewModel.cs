@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
+using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
 
 namespace PhotoMapStudio.App.ViewModels;
@@ -48,6 +49,8 @@ public sealed class MainViewModel : ObservableObject
     private double width;
     private double height;
     private double zoom;
+    private PinKindChoice selectedPinKindChoice;
+    private PinAnchorChoice selectedPinAnchorChoice;
     private string pinImagePath;
     private TileSourceChoice selectedTileSource;
     private string customTileUrlTemplate;
@@ -102,6 +105,8 @@ public sealed class MainViewModel : ObservableObject
         this.outputFilePostfix = settings.OutputFilePostfix;
         this.width = settings.Width;
         this.height = settings.Height;
+        this.selectedPinKindChoice = PinKindChoice.FromKind(settings.PinKind);
+        this.selectedPinAnchorChoice = PinAnchorChoice.FromAnchor(settings.PinAnchor);
         this.pinImagePath = settings.PinImagePath;
         this.customTileUrlTemplate = settings.CustomTileUrlTemplate;
         this.customTileAttribution = settings.CustomTileAttribution;
@@ -111,6 +116,8 @@ public sealed class MainViewModel : ObservableObject
         this.zoom = Math.Clamp(settings.Zoom, this.minimumZoom, this.maximumZoom);
 
         this.TileSourceOptions = PhotoMapStudio.App.Models.TileSourceChoices.All;
+        this.PinKindOptions = PinKindChoice.All;
+        this.PinAnchorOptions = PinAnchorChoice.All;
         this.SaveSettingsCommand = new RelayCommand(this.SaveSettings);
         this.GenerateCommand = new AsyncRelayCommand(this.GenerateAsync, this.CanGenerate);
         this.CancelGenerationCommand = new RelayCommand(this.CancelGeneration, this.CanCancelGeneration);
@@ -242,6 +249,49 @@ public sealed class MainViewModel : ObservableObject
             }
         }
     }
+
+    /// <summary>ピン形状の選択肢一覧。</summary>
+    public IReadOnlyList<PinKindChoice> PinKindOptions { get; }
+
+    /// <summary>アンカー基準点の選択肢一覧。</summary>
+    public IReadOnlyList<PinAnchorChoice> PinAnchorOptions { get; }
+
+    /// <summary>選択中のピン形状。</summary>
+    public PinKindChoice SelectedPinKindChoice
+    {
+        get => this.selectedPinKindChoice;
+        set
+        {
+            if (this.SetProperty(ref this.selectedPinKindChoice, value ?? PinKindChoice.Default))
+            {
+                if (this.selectedPinKindChoice.Kind != PinKind.CustomImage)
+                {
+                    this.SelectedPinAnchorChoice = PinAnchorChoice.Default;
+                }
+
+                this.ClearFeedback();
+                this.OnPropertyChanged(nameof(this.IsCustomPinImageVisible));
+                this.NotifyPreviewChanged();
+            }
+        }
+    }
+
+    /// <summary>選択中のアンカー基準点。</summary>
+    public PinAnchorChoice SelectedPinAnchorChoice
+    {
+        get => this.selectedPinAnchorChoice;
+        set
+        {
+            if (this.SetProperty(ref this.selectedPinAnchorChoice, value ?? PinAnchorChoice.Default))
+            {
+                this.ClearFeedback();
+                this.NotifyPreviewChanged();
+            }
+        }
+    }
+
+    /// <summary>カスタムピン画像パス・アンカー指定欄を表示するかどうか。</summary>
+    public bool IsCustomPinImageVisible => this.SelectedPinKindChoice.Kind == PinKind.CustomImage;
 
     /// <summary>ピン画像のパス。</summary>
     public string PinImagePath
@@ -540,6 +590,8 @@ public sealed class MainViewModel : ObservableObject
             Width = width,
             Height = height,
             Zoom = zoom,
+            PinKind = this.SelectedPinKindChoice.Kind,
+            PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath.Trim(),
             TileSourceKey = this.SelectedTileSource.Key,
             CustomTileUrlTemplate = this.CustomTileUrlTemplate.Trim(),
@@ -790,6 +842,8 @@ public sealed class MainViewModel : ObservableObject
             Width = width,
             Height = height,
             Zoom = zoom,
+            PinKind = this.SelectedPinKindChoice.Kind,
+            PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath.Trim(),
             TileSource = tileSource,
         };
@@ -844,6 +898,8 @@ public sealed class MainViewModel : ObservableObject
             Width = this.Width,
             Height = this.Height,
             Zoom = this.Zoom,
+            PinKind = this.SelectedPinKindChoice.Kind,
+            PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath,
             SelectedTileSource = this.SelectedTileSource,
             CustomTileUrlTemplate = this.CustomTileUrlTemplate,

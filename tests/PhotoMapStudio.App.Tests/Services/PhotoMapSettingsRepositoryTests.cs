@@ -1,5 +1,6 @@
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
+using PhotoMapStudio.Core.Maps;
 
 namespace PhotoMapStudio.App.Tests.Services;
 
@@ -24,6 +25,21 @@ public class PhotoMapSettingsRepositoryTests
         Assert.False(settings.IncludeSubfolders);
         Assert.Empty(settings.OutputFilePrefix);
         Assert.Equal("_map", settings.OutputFilePostfix);
+        Assert.Equal(PinKind.GreenPin, settings.PinKind);
+        Assert.Equal(PinAnchor.BottomCenter, settings.PinAnchor);
+    }
+
+    [Fact]
+    public void 旧保存値にpinKindキーがなくpinImagePathがある場合はCustomImageとして移行する()
+    {
+        var store = new InMemorySettingsValueStore();
+        store.Write("pin-image-path", "C:\\custom\\old-pin.png");
+
+        var settings = new PhotoMapSettingsRepository(store).Load();
+
+        Assert.Equal(PinKind.CustomImage, settings.PinKind);
+        Assert.Equal(PinAnchor.BottomCenter, settings.PinAnchor);
+        Assert.Equal("C:\\custom\\old-pin.png", settings.PinImagePath);
     }
 
     [Fact]
@@ -38,6 +54,8 @@ public class PhotoMapSettingsRepositoryTests
             Width = 1280,
             Height = 720,
             Zoom = 12,
+            PinKind = PinKind.Crosshair,
+            PinAnchor = PinAnchor.Center,
             PinImagePath = "C:\\pin.png",
             TileSourceKey = TileSourceChoices.CustomKey,
             CustomTileUrlTemplate = "https://tiles.example.com/{z}/{x}/{y}.png",

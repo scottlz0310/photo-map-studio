@@ -61,10 +61,23 @@
                 Text="{Binding CustomTileAttribution, Mode=TwoWay}" />
         </StackPanel>
 
-        <TextBox
-            Header="ピン画像"
-            PlaceholderText="PNG ファイルのパス（未指定時は既定ピン）"
-            Text="{Binding PinImagePath, Mode=TwoWay}" />
+        <ComboBox
+            Header="ピン形状"
+            DisplayMemberPath="DisplayName"
+            ItemsSource="{Binding PinKindOptions}"
+            SelectedItem="{Binding SelectedPinKindChoice, Mode=TwoWay}" />
+
+        <StackPanel Spacing="8" Visibility="{Binding IsCustomPinImageVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ComboBox
+                Header="アンカー基準点"
+                DisplayMemberPath="DisplayName"
+                ItemsSource="{Binding PinAnchorOptions}"
+                SelectedItem="{Binding SelectedPinAnchorChoice, Mode=TwoWay}" />
+            <TextBox
+                Header="カスタムピン画像"
+                PlaceholderText="PNG ファイルのパス（未指定時は既定ピン）"
+                Text="{Binding PinImagePath, Mode=TwoWay}" />
+        </StackPanel>
 
         <InfoBar
             IsOpen="{Binding HasValidationError}"

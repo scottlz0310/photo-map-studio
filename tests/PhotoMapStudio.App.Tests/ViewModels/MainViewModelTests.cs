@@ -1,6 +1,7 @@
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.App.ViewModels;
+using PhotoMapStudio.Core.Maps;
 
 namespace PhotoMapStudio.App.Tests.ViewModels;
 
@@ -16,8 +17,24 @@ public class MainViewModelTests
         Assert.Equal(600, viewModel.Height);
         Assert.Equal(15, viewModel.Zoom);
         Assert.Same(TileSourceChoices.GsiPale, viewModel.SelectedTileSource);
+        Assert.Equal(PinKind.GreenPin, viewModel.SelectedPinKindChoice.Kind);
+        Assert.Equal(PinAnchor.BottomCenter, viewModel.SelectedPinAnchorChoice.Anchor);
+        Assert.False(viewModel.IsCustomPinImageVisible);
         Assert.Equal(5, viewModel.MinimumZoom);
         Assert.Equal(18, viewModel.MaximumZoom);
+    }
+
+    [Fact]
+    public void ピン形状をCustomImageに変更するとカスタム画像欄の可視性がtrueになる()
+    {
+        var viewModel = new MainViewModel(new InMemorySettingsRepository());
+        Assert.False(viewModel.IsCustomPinImageVisible);
+
+        viewModel.SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.CustomImage);
+        Assert.True(viewModel.IsCustomPinImageVisible);
+
+        viewModel.SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.Crosshair);
+        Assert.False(viewModel.IsCustomPinImageVisible);
     }
 
     [Fact]
@@ -69,6 +86,8 @@ public class MainViewModelTests
             Width = 1024,
             Height = 768,
             Zoom = 10,
+            SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.Crosshair),
+            SelectedPinAnchorChoice = PinAnchorChoice.FromAnchor(PinAnchor.Center),
             PinImagePath = " C:\\pin.png ",
             SelectedTileSource = TileSourceChoices.OpenStreetMap,
         };
@@ -82,6 +101,8 @@ public class MainViewModelTests
         Assert.Equal(1024, reloaded.Width);
         Assert.Equal(768, reloaded.Height);
         Assert.Equal(10, reloaded.Zoom);
+        Assert.Equal(PinKind.Crosshair, reloaded.SelectedPinKindChoice.Kind);
+        Assert.Equal(PinAnchor.Center, reloaded.SelectedPinAnchorChoice.Anchor);
         Assert.Equal("C:\\pin.png", reloaded.PinImagePath);
         Assert.Equal(TileSourceChoices.OpenStreetMap, reloaded.SelectedTileSource);
         Assert.Equal("設定を保存しました。", viewModel.StatusMessage);

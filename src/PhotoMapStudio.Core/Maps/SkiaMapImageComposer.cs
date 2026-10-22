@@ -127,19 +127,33 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         float centerX = request.Width / 2f;
         float centerY = request.Height / 2f;
 
+        switch (request.PinKind)
+        {
+            case PinKind.TargetCircle:
+                DrawTargetCircle(canvas, centerX, centerY);
+                return;
+
+            case PinKind.Crosshair:
+                DrawCrosshair(canvas, centerX, centerY);
+                return;
+
+            default:
+                break;
+        }
+
         using SKImage? pin = LoadPin(request.PinImagePath);
         if (pin is null)
         {
-            DrawFallbackPin(canvas, centerX, centerY);
+            DrawTargetCircle(canvas, centerX, centerY);
             return;
         }
 
-        // アンカーはピン画像の下端中央。ピンの先端が撮影地点を指す（仕様書 §6.4）
-        canvas.DrawImage(
-            pin,
-            MathF.Round(centerX - (pin.Width / 2f)),
-            MathF.Round(centerY - pin.Height),
-            NearestNeighbor);
+        float x = MathF.Round(centerX - (pin.Width / 2f));
+        float y = request.PinAnchor == PinAnchor.Center
+            ? MathF.Round(centerY - (pin.Height / 2f))
+            : MathF.Round(centerY - pin.Height);
+
+        canvas.DrawImage(pin, x, y, NearestNeighbor);
     }
 
     private static SKImage? LoadPin(string? pinImagePath)
@@ -164,12 +178,74 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         }
     }
 
-    private static void DrawFallbackPin(SKCanvas canvas, float centerX, float centerY)
+    private static void DrawTargetCircle(SKCanvas canvas, float centerX, float centerY)
     {
         // 同心円 3 枚。この場合のアンカーは円の中心（仕様書 §6.5）
         DrawCircle(canvas, centerX, centerY, 12f, new SKColor(255, 255, 255), new SKColor(100, 100, 100));
         DrawCircle(canvas, centerX, centerY, 10f, new SKColor(235, 59, 36), new SKColor(180, 20, 20));
         DrawCircle(canvas, centerX, centerY, 3f, new SKColor(255, 255, 255), outline: null);
+    }
+
+    private static void DrawCrosshair(SKCanvas canvas, float centerX, float centerY)
+    {
+        // 測量標・クロスヘア（十字線マーク）。白フチ付き＋中央ターゲットリング
+        const float armLength = 14f;
+        const float centerGap = 3f;
+
+        // 1. 白フチ（下地）
+        using var haloPaint = new SKPaint
+        {
+            Color = SKColors.White,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 4.5f,
+            StrokeCap = SKStrokeCap.Round,
+            IsAntialias = true,
+        };
+
+        canvas.DrawLine(centerX - armLength, centerY, centerX - centerGap, centerY, haloPaint);
+        canvas.DrawLine(centerX + centerGap, centerY, centerX + armLength, centerY, haloPaint);
+        canvas.DrawLine(centerX, centerY - armLength, centerX, centerY - centerGap, haloPaint);
+        canvas.DrawLine(centerX, centerY + centerGap, centerX, centerY + armLength, haloPaint);
+
+        using var ringHaloPaint = new SKPaint
+        {
+            Color = SKColors.White,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 4f,
+            IsAntialias = true,
+        };
+        canvas.DrawCircle(centerX, centerY, 8f, ringHaloPaint);
+
+        // 2. 赤色実線
+        using var crossPaint = new SKPaint
+        {
+            Color = new SKColor(235, 59, 36),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 2.0f,
+            StrokeCap = SKStrokeCap.Round,
+            IsAntialias = true,
+        };
+        canvas.DrawLine(centerX - armLength, centerY, centerX - centerGap, centerY, crossPaint);
+        canvas.DrawLine(centerX + centerGap, centerY, centerX + armLength, centerY, crossPaint);
+        canvas.DrawLine(centerX, centerY - armLength, centerX, centerY - centerGap, crossPaint);
+        canvas.DrawLine(centerX, centerY + centerGap, centerX, centerY + armLength, crossPaint);
+
+        using var ringPaint = new SKPaint
+        {
+            Color = new SKColor(235, 59, 36),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1.5f,
+            IsAntialias = true,
+        };
+        canvas.DrawCircle(centerX, centerY, 8f, ringPaint);
+
+        using var centerDotPaint = new SKPaint
+        {
+            Color = new SKColor(235, 59, 36),
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true,
+        };
+        canvas.DrawCircle(centerX, centerY, 1.5f, centerDotPaint);
     }
 
     private static void DrawCircle(SKCanvas canvas, float x, float y, float radius, SKColor fill, SKColor? outline)

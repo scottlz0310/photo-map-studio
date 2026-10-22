@@ -1,5 +1,6 @@
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
+using PhotoMapStudio.Core.Maps;
 
 namespace PhotoMapStudio.App.Tests.Services;
 
@@ -24,6 +25,8 @@ public class PhotoMapSettingsRepositoryTests
         Assert.False(settings.IncludeSubfolders);
         Assert.Empty(settings.OutputFilePrefix);
         Assert.Equal("_map", settings.OutputFilePostfix);
+        Assert.Equal(PinKind.GreenPin, settings.PinKind);
+        Assert.Equal(PinAnchor.BottomCenter, settings.PinAnchor);
     }
 
     [Fact]
@@ -38,6 +41,8 @@ public class PhotoMapSettingsRepositoryTests
             Width = 1280,
             Height = 720,
             Zoom = 12,
+            PinKind = PinKind.Crosshair,
+            PinAnchor = PinAnchor.Center,
             PinImagePath = "C:\\pin.png",
             TileSourceKey = TileSourceChoices.CustomKey,
             CustomTileUrlTemplate = "https://tiles.example.com/{z}/{x}/{y}.png",

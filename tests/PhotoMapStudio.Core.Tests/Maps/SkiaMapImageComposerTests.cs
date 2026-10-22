@@ -94,6 +94,105 @@ public sealed class SkiaMapImageComposerTests : IDisposable
     }
 
     [Fact]
+    public async Task ピン形状TargetCircle指定時は同心円ターゲットが描画される()
+    {
+        const int Width = 200;
+        const int Height = 200;
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
+
+        MapCompositionResult result = await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = Tokyo,
+                TileSource = TileSources.OpenStreetMap,
+                Width = Width,
+                Height = Height,
+                Zoom = 15,
+                PinKind = PinKind.TargetCircle,
+            },
+            CancellationToken.None);
+
+        using SKBitmap bitmap = SKBitmap.Decode(result.Png.ToArray());
+        int centerX = Width / 2;
+        int centerY = Height / 2;
+
+        Assert.Equal(SKColors.White, bitmap.GetPixel(centerX, centerY));
+        Assert.Equal(new SKColor(235, 59, 36), bitmap.GetPixel(centerX, centerY - 7));
+        Assert.Equal(TileColor, bitmap.GetPixel(centerX, centerY - 14));
+    }
+
+    [Fact]
+    public async Task ピン形状Crosshair指定時は十字線ターゲットが描画される()
+    {
+        const int Width = 200;
+        const int Height = 200;
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
+
+        MapCompositionResult result = await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = Tokyo,
+                TileSource = TileSources.OpenStreetMap,
+                Width = Width,
+                Height = Height,
+                Zoom = 15,
+                PinKind = PinKind.Crosshair,
+            },
+            CancellationToken.None);
+
+        using SKBitmap bitmap = SKBitmap.Decode(result.Png.ToArray());
+        int centerX = Width / 2;
+        int centerY = Height / 2;
+
+        // 中心には赤いドット
+        Assert.Equal(new SKColor(235, 59, 36), bitmap.GetPixel(centerX, centerY));
+        // 十字線の腕（centerX - 10, centerY）は赤系
+        Assert.Equal(new SKColor(235, 59, 36), bitmap.GetPixel(centerX - 10, centerY));
+        // 腕の外側（centerX - 20, centerY）はタイルの色
+        Assert.Equal(TileColor, bitmap.GetPixel(centerX - 20, centerY));
+    }
+
+    [Fact]
+    public async Task ピンアンカーCenter指定時は画像の中心が中央座標に配置される()
+    {
+        const int Width = 200;
+        const int Height = 200;
+        string pinPath = this.CreatePinImage(width: 10, height: 10, SKColors.Magenta);
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor));
+
+        MapCompositionResult result = await composer.ComposeAsync(
+            new MapCompositionRequest
+            {
+                Center = Tokyo,
+                TileSource = TileSources.OpenStreetMap,
+                Width = Width,
+                Height = Height,
+                Zoom = 15,
+                PinImagePath = pinPath,
+                PinKind = PinKind.CustomImage,
+                PinAnchor = PinAnchor.Center,
+            },
+            CancellationToken.None);
+
+        using SKBitmap bitmap = SKBitmap.Decode(result.Png.ToArray());
+        int centerX = Width / 2;
+        int centerY = Height / 2;
+
+        // 中心 (100, 100) はピンの色
+        Assert.Equal(SKColors.Magenta, bitmap.GetPixel(centerX, centerY));
+        // 中心から上下左右 4px はピンの内部 (10x10 なので -5 ~ +4)
+        Assert.Equal(SKColors.Magenta, bitmap.GetPixel(centerX - 4, centerY));
+        Assert.Equal(SKColors.Magenta, bitmap.GetPixel(centerX + 4, centerY));
+        Assert.Equal(SKColors.Magenta, bitmap.GetPixel(centerX, centerY - 4));
+        Assert.Equal(SKColors.Magenta, bitmap.GetPixel(centerX, centerY + 4));
+        // 範囲外 (6px 離れた点) はタイルの色
+        Assert.Equal(TileColor, bitmap.GetPixel(centerX - 6, centerY));
+        Assert.Equal(TileColor, bitmap.GetPixel(centerX + 6, centerY));
+        Assert.Equal(TileColor, bitmap.GetPixel(centerX, centerY - 6));
+        Assert.Equal(TileColor, bitmap.GetPixel(centerX, centerY + 6));
+    }
+
+    [Fact]
     public async Task 出典を右下に焼き込む()
     {
         const int Width = 400;

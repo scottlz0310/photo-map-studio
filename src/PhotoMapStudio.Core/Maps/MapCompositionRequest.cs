@@ -34,6 +34,11 @@ public sealed record MapCompositionRequest
 
     /// <summary>ズームレベル。</summary>
     public int Zoom { get; init; } = DefaultZoom;
+    /// <summary>ピン・マーカーの形状種別。</summary>
+    public PinKind PinKind { get; init; } = PinKind.GreenPin;
+
+    /// <summary>ピン画像の配置基準点（アンカー位置）。</summary>
+    public PinAnchor PinAnchor { get; init; } = PinAnchor.BottomCenter;
 
     /// <summary>ピン画像のパス。未指定・不存在・読み込み失敗の場合は代替描画に切り替える。</summary>
     public string? PinImagePath { get; init; }

@@ -171,7 +171,9 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
                     Width = width,
                     Height = height,
                     Zoom = zoom,
-                    PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinImagePath),
+                    PinKind = settings.PinKind,
+                    PinAnchor = settings.PinAnchor,
+                    PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinKind, settings.PinImagePath),
                     AllowWorldwideFallback = true,
                 },
                 cancellationToken).ConfigureAwait(false);

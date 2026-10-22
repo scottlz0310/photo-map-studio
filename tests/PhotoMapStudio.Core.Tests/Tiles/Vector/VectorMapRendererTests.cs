@@ -74,6 +74,46 @@ public class VectorMapRendererTests
         Assert.All(requestedTiles, t => Assert.Equal(sourceMaxZoom, t.z));
     }
 
+    [Fact]
+    public async Task 日付変更線付近および低ズームで範囲外のXを要求せず世界幅でwrapする()
+    {
+        // 中心: 緯度 0, 経度 179.99 度、zoom = 2
+        var center = new GeoCoordinate(0.0, 179.99);
+        int zoom = 2;
+        int width = 256;
+        int height = 256;
+
+        var requestedTiles = new List<(int z, int x, int y)>();
+        var mockSource = new MockVectorTileSource(
+            maxZoom: 14,
+            fetchHandler: (z, x, y) =>
+            {
+                requestedTiles.Add((z, x, y));
+                return CreateWaterTile();
+            });
+
+        using var style = new OpenMapTilesStyle();
+        var renderer = new VectorMapRenderer(mockSource, style);
+
+        using SKBitmap bitmap = await renderer.RenderMapAsync(center, zoom, width, height, CancellationToken.None);
+
+        Assert.NotNull(bitmap);
+        Assert.NotEmpty(requestedTiles);
+
+        int maxTiles = 1 << zoom; // 2^2 = 4
+        foreach (var (z, x, y) in requestedTiles)
+        {
+            Assert.Equal(zoom, z);
+            // X は 0〜3 の範囲内に正規化（wrap）されていること (x=4 などにならない)
+            Assert.InRange(x, 0, maxTiles - 1);
+            // Y は 0〜3 の範囲内であること
+            Assert.InRange(y, 0, maxTiles - 1);
+        }
+
+        // 東側にまたいだ x = 0 のタイルが要求されていること
+        Assert.Contains(requestedTiles, t => t.x == 0);
+    }
+
     [Theory]
     [InlineData(0, 100, 14)]
     [InlineData(100, 0, 14)]

@@ -107,19 +107,23 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
 
-        // 1. 鉄道（railway）
-        VectorTileLayer? railwayLayer = tile.GetLayer("railway");
-        if (railwayLayer is not null)
-        {
-            this.railwayPaint.StrokeWidth = 1.2f / tileScale;
-            RenderLayerLines(canvas, railwayLayer, this.railwayPaint);
-        }
-
-        // 2. 道路（transportation）
         VectorTileLayer? roadLayer = tile.GetLayer("transportation");
         if (roadLayer is not null)
         {
+            // 1. 鉄道（transportation 内の class="rail", "transit", "subway", "tram"）
+            this.railwayPaint.StrokeWidth = 1.2f / tileScale;
+            RenderTransportationRailways(canvas, roadLayer, this.railwayPaint);
+
+            // 2. 道路（motorway, primary, secondary 等）
             RenderRoads(canvas, roadLayer, tileScale, zoom);
+        }
+
+        // フォールバック: 別途 railway レイヤーが存在する場合も描画
+        VectorTileLayer? fallbackRailwayLayer = tile.GetLayer("railway");
+        if (fallbackRailwayLayer is not null)
+        {
+            this.railwayPaint.StrokeWidth = 1.2f / tileScale;
+            RenderLayerLines(canvas, fallbackRailwayLayer, this.railwayPaint);
         }
     }
 
@@ -127,7 +131,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     public void RenderLabels(
         SKCanvas canvas,
         VectorTile tile,
-        float tileScale,
+        SKMatrix tileToCanvasMatrix,
         int zoom,
         LabelCollisionGrid collisionGrid,
         SKRect viewport)
@@ -155,7 +159,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                 }
 
                 VectorPoint pt = feature.GeometryParts[0][0];
-                SKPoint canvasPt = canvas.TotalMatrix.MapPoint(new SKPoint(pt.X, pt.Y));
+                SKPoint canvasPt = tileToCanvasMatrix.MapPoint(new SKPoint(pt.X, pt.Y));
 
                 float textWidth = this.placeFont.MeasureText(name);
                 var bounds = new SKRect(
@@ -195,7 +199,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                     }
 
                     VectorPoint pt = feature.GeometryParts[0][0];
-                    SKPoint canvasPt = canvas.TotalMatrix.MapPoint(new SKPoint(pt.X, pt.Y));
+                    SKPoint canvasPt = tileToCanvasMatrix.MapPoint(new SKPoint(pt.X, pt.Y));
 
                     float textWidth = this.placeFont.MeasureText(name);
                     var bounds = new SKRect(
@@ -287,6 +291,24 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
             using SKPath path = builder.Detach();
             canvas.DrawPath(path, paint);
+        }
+    }
+
+    private static void RenderTransportationRailways(SKCanvas canvas, VectorTileLayer layer, SKPaint paint)
+    {
+        for (int i = 0; i < layer.Features.Count; i++)
+        {
+            VectorTileFeature feature = layer.Features[i];
+            if (feature.GeometryType != VectorGeometryType.LineString)
+            {
+                continue;
+            }
+
+            string cls = feature.GetString("class") ?? string.Empty;
+            if (cls is "rail" or "transit" or "subway" or "tram")
+            {
+                DrawFeatureLines(canvas, feature, paint);
+            }
         }
     }
 

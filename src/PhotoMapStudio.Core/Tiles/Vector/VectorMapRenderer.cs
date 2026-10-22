@@ -46,6 +46,7 @@ public sealed class VectorMapRenderer
         // 1. タイル取得用ズームとスケール比の決定（過拡大対応）
         int tileZoom = Math.Min(zoom, this.tileSource.MaxZoom);
         double scaleRatio = Math.Pow(2.0, zoom - tileZoom);
+        int maxTiles = 1 << tileZoom;
 
         // 2. 世界ピクセル座標系での表示範囲計算
         TilePoint centerTilePoint = WebMercator.ToTilePoint(center, zoom);
@@ -70,9 +71,18 @@ public sealed class VectorMapRenderer
 
         for (int ty = minTy; ty <= maxTy; ty++)
         {
+            // Y 座標は極地方向（上下）でループしないため、有効範囲外はスキップ
+            if (ty < 0 || ty >= maxTiles)
+            {
+                continue;
+            }
+
             for (int tx = minTx; tx <= maxTx; tx++)
             {
-                byte[]? tileData = await this.tileSource.GetTileAsync(tileZoom, tx, ty, cancellationToken).ConfigureAwait(false);
+                // X 座標は経度方向（左右）で世界一周 wrap する
+                int fetchX = ((tx % maxTiles) + maxTiles) % maxTiles;
+
+                byte[]? tileData = await this.tileSource.GetTileAsync(tileZoom, fetchX, ty, cancellationToken).ConfigureAwait(false);
                 if (tileData is null || tileData.Length == 0)
                 {
                     continue;
@@ -129,17 +139,14 @@ public sealed class VectorMapRenderer
             canvas.Restore();
         }
 
-        // パス 3: 全タイルの注記・ラベル
+        // パス 3: 全タイルの注記・ラベル（画面座標系で直接描画）
         for (int i = 0; i < loadedTiles.Count; i++)
         {
             var item = loadedTiles[i];
-            canvas.Save();
-            canvas.Translate(item.dx, item.dy);
-            canvas.Scale(item.scale, item.scale);
+            SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
+            tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
 
-            this.style.RenderLabels(canvas, item.tile, item.scale, zoom, collisionGrid, viewport);
-
-            canvas.Restore();
+            this.style.RenderLabels(canvas, item.tile, tileToCanvasMatrix, zoom, collisionGrid, viewport);
         }
 
         return bitmap;

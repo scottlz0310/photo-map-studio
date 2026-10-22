@@ -34,16 +34,16 @@ public interface IVectorMapStyle
     /// <summary>
     /// 注記・ラベル（道路名、地名、施設シンボル等）を描画する。
     /// </summary>
-    /// <param name="canvas">描画先 SkiaSharp キャンバス。</param>
+    /// <param name="canvas">描画先 SkiaSharp キャンバス（画面座標系）。</param>
     /// <param name="tile">対象ベクタータイルデータ。</param>
-    /// <param name="tileScale">タイルのスケール係数。</param>
+    /// <param name="tileToCanvasMatrix">タイルローカル座標から画面ピクセル座標への変換行列。</param>
     /// <param name="zoom">現在の表示ズームレベル。</param>
     /// <param name="collisionGrid">ラベル衝突判定グリッド。</param>
     /// <param name="viewport">描画画面全体の矩形。</param>
     void RenderLabels(
         SKCanvas canvas,
         VectorTile tile,
-        float tileScale,
+        SKMatrix tileToCanvasMatrix,
         int zoom,
         LabelCollisionGrid collisionGrid,
         SKRect viewport);

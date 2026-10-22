@@ -8,6 +8,8 @@
 
 ### Added
 
+- タイルキャッシュ容量上限（既定 1GB / 1024MB）と LRU 自動整理・消去機能を追加。ITileCache / FileSystemTileCache に容量上限指定（MaxSizeBytes）、アクセス日時に基づく LRU クリーンアップ（書き込み時および PruneAsync）、現在のキャッシュ容量取得（GetCurrentSizeBytes）、一括消去（ClearAsync）を実装。設定画面（GenerationOptionsView）から上限容量（MB）の変更、使用量表示、およびキャッシュ消去を実行可能にした（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
+
 - ピン形状選択（緑・赤・青の同梱ピン、二重円ターゲット、十字ターゲット、カスタム画像）およびアンカー基準点（下端中央／中央）指定機能を追加。Core 側でのプロシージャル描画（同心円・白フチ付き十字クロスヘア）およびアンカー追従幾何計算、App 側での PinKindChoice / PinAnchorChoice 選択 UI、設定永続化（pin-kind / pin-anchor）、同梱アセットの出力ディレクトリ展開（NFR-DIST-02準拠）を実装（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 - 国土地理院 最適化ベクトルタイル対応（TileSources.GsiVector、TileSourceChoices.GsiVector）と PMTiles v3 HTTP Range 取得基盤を追加。PmtilesHilbert、PmtilesDirectory、HttpPmtilesByteSource、FilePmtilesByteSource、PmtilesVectorTileSource、GsiVectorTileSource、GsiVectorStyle を実装。国土地理院の最適化ベクトルタイル（optimal_bvmap-v1.pmtiles）から等高線・道路縁・建物・公的漢字注記（Anno / knj）を直接ラスタライズし、役所対応・公的測量基準図としての参考位置図案内、出典焼き込み（地理院タイル（最適化ベクトルタイル））、設定 UI 連携、ヘルプ・README・非保証事項を整備（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）

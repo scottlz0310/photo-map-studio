@@ -2,6 +2,7 @@ using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.App.ViewModels;
 using PhotoMapStudio.Core.Maps;
+using PhotoMapStudio.Core.Tiles;
 
 namespace PhotoMapStudio.App.Tests.ViewModels;
 
@@ -16,12 +17,35 @@ public class MainViewModelTests
         Assert.Equal(800, viewModel.Width);
         Assert.Equal(600, viewModel.Height);
         Assert.Equal(15, viewModel.Zoom);
+        Assert.Equal(1024, viewModel.TileCacheSizeMb);
         Assert.Same(TileSourceChoices.GsiPale, viewModel.SelectedTileSource);
         Assert.Equal(PinKind.GreenPin, viewModel.SelectedPinKindChoice.Kind);
         Assert.Equal(PinAnchor.BottomCenter, viewModel.SelectedPinAnchorChoice.Anchor);
         Assert.False(viewModel.IsCustomPinImageVisible);
         Assert.Equal(5, viewModel.MinimumZoom);
         Assert.Equal(18, viewModel.MaximumZoom);
+    }
+
+    [Fact]
+    public void タイルキャッシュ設定と消去コマンドが動作する()
+    {
+        var repository = new InMemorySettingsRepository();
+        var stubCache = new StubTileCache();
+        var viewModel = new MainViewModel(repository, tileCache: stubCache);
+
+        Assert.Equal(1024L * 1024L * 1024L, stubCache.MaxSizeBytes);
+        Assert.Contains("10.0 MB / 1024 MB", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+
+        // 容量変更
+        viewModel.TileCacheSizeMb = 512;
+        Assert.Equal(512L * 1024L * 1024L, stubCache.MaxSizeBytes);
+        Assert.Contains("10.0 MB / 512 MB", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+
+        // キャッシュ消去
+        viewModel.ClearTileCacheCommand.Execute(null);
+        Assert.True(stubCache.ClearCalled);
+        Assert.Contains("0.0 MB / 512 MB", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+        Assert.Equal("タイルキャッシュを消去しました。", viewModel.StatusMessage);
     }
 
     [Fact]
@@ -80,14 +104,17 @@ public class MainViewModelTests
     }
 
     [Theory]
-    [InlineData(0, 600, 15, "画像サイズ(幅・高さ)は正の整数を指定してください。")]
-    [InlineData(800, 0, 15, "画像サイズ(幅・高さ)は正の整数を指定してください。")]
-    [InlineData(800, 600, 0, "ズームレベルは 1 〜 19 の範囲で指定してください。")]
-    [InlineData(800, 600, 20, "ズームレベルは 1 〜 19 の範囲で指定してください。")]
+    [InlineData(0, 600, 15, 1024, "画像サイズ(幅・高さ)は正の整数を指定してください。")]
+    [InlineData(800, 0, 15, 1024, "画像サイズ(幅・高さ)は正の整数を指定してください。")]
+    [InlineData(800, 600, 0, 1024, "ズームレベルは 1 〜 19 の範囲で指定してください。")]
+    [InlineData(800, 600, 20, 1024, "ズームレベルは 1 〜 19 の範囲で指定してください。")]
+    [InlineData(800, 600, 15, 0, "キャッシュ容量上限は正の整数を指定してください。")]
+    [InlineData(800, 600, 15, -100, "キャッシュ容量上限は正の整数を指定してください。")]
     public void 不正な設定は仕様順のメッセージで拒否する(
         double width,
         double height,
         double zoom,
+        double cacheSizeMb,
         string expectedMessage)
     {
         var viewModel = new MainViewModel(new InMemorySettingsRepository())
@@ -95,6 +122,7 @@ public class MainViewModelTests
             Width = width,
             Height = height,
             Zoom = zoom,
+            TileCacheSizeMb = cacheSizeMb,
         };
 
         Assert.False(viewModel.TrySaveSettings());
@@ -112,6 +140,7 @@ public class MainViewModelTests
             Width = 1024,
             Height = 768,
             Zoom = 10,
+            TileCacheSizeMb = 2048,
             SelectedPinKindChoice = PinKindChoice.FromKind(PinKind.CustomImage),
             SelectedPinAnchorChoice = PinAnchorChoice.FromAnchor(PinAnchor.Center),
             PinImagePath = " C:\\pin.png ",
@@ -127,6 +156,7 @@ public class MainViewModelTests
         Assert.Equal(1024, reloaded.Width);
         Assert.Equal(768, reloaded.Height);
         Assert.Equal(10, reloaded.Zoom);
+        Assert.Equal(2048, reloaded.TileCacheSizeMb);
         Assert.Equal(PinKind.CustomImage, reloaded.SelectedPinKindChoice.Kind);
         Assert.Equal(PinAnchor.Center, reloaded.SelectedPinAnchorChoice.Anchor);
         Assert.Equal("C:\\pin.png", reloaded.PinImagePath);
@@ -159,5 +189,21 @@ public class MainViewModelTests
         public PhotoMapSettings Load() => this.Settings;
 
         public void Save(PhotoMapSettings settings) => this.Settings = settings;
+    }
+
+    private sealed class StubTileCache : ITileCache
+    {
+        public long MaxSizeBytes { get; set; }
+        public long Size { get; set; } = 10L * 1024L * 1024L;
+        public bool ClearCalled { get; private set; }
+
+        public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
+        public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken) => Task.CompletedTask;
+        public long GetCurrentSizeBytes() => this.ClearCalled ? 0 : this.Size;
+        public Task ClearAsync(CancellationToken cancellationToken = default)
+        {
+            this.ClearCalled = true;
+            return Task.CompletedTask;
+        }
     }
 }

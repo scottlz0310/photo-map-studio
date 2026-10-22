@@ -25,6 +25,7 @@ public class PhotoMapSettingsRepositoryTests
         Assert.False(settings.IncludeSubfolders);
         Assert.Empty(settings.OutputFilePrefix);
         Assert.Equal("_map", settings.OutputFilePostfix);
+        Assert.Equal(1024, settings.TileCacheSizeMb);
         Assert.Equal(PinKind.GreenPin, settings.PinKind);
         Assert.Equal(PinAnchor.BottomCenter, settings.PinAnchor);
     }
@@ -54,6 +55,7 @@ public class PhotoMapSettingsRepositoryTests
             Width = 1280,
             Height = 720,
             Zoom = 12,
+            TileCacheSizeMb = 2048,
             PinKind = PinKind.Crosshair,
             PinAnchor = PinAnchor.Center,
             PinImagePath = "C:\\pin.png",

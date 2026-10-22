@@ -5,7 +5,7 @@
 - [x] 所有者承認のもと、Epic Issue #49 を起票
 - [x] M0: ベクタータイル直接描画アーキテクチャ設計・ドキュメント策定（docs/vector-map-architecture.md、handoff 参照更新、OSM・地理院2本立て方針確立）
 - [x] M1: ベクタータイル取得・キャッシュ層の抽象化（IVectorTileSource、VectorTileCacheKey、CachedVectorTileSource、OpenFreeMapTileSource、単体テスト）
-- [ ] M2: Core 内蔵ベクタータイル描画エンジン（MVT デコーダー、SkiaSharp レンダラー、ITileClient 統合）
+- [x] M2: Core 内蔵ベクタータイル描画エンジン（VectorTileDecoder、OpenMapTilesStyle、LabelCollisionGrid、VectorMapRenderer、Core 単体テスト）
 - [ ] M3: UI 連携・設定・出典表示（WinUI 3 設定UI、ODbL 出典焼き込み、ヘルプ・ドキュメント更新）
 - [ ] M4: ネットワーク取得元連携・BYO対応（OpenFreeMap等の規約準拠接続、BYOフォールバック）
 - [ ] （将来・任意）M5: 拡張機能（カスタム PMTiles / スタイル指定、直接ベクター合成描画）

@@ -10,7 +10,7 @@ PhotoMapStudio における地図生成は、これまで国土地理院タイ�
 2. **地域無制限のオンデマンド展開**: 事前生成ではカバー地域が限定されるため、写真の位置情報（EXIF GPS）から必要な領域を自動取得・展開したい。
 3. **OSS としての持続性**: 自前のホスティングサーバー（Cloudflare R2 等）をアプリの既定値として抱え込むと、運用コスト・不正利用・費用負担のリスクが生じるため、自前サーバーは持たない。
 4. **二大実務ユースケースの両立**:
-   - **公的・役所対応**: 提出書類や工事・調査報告等で国土地理院の地形図（測量成果・等高線・公的基準）が必要とされる。
+   - **公的・役所対応（参考位置図）**: 工事写真台帳や各種提出書類・調査報告書の添付位置図において、国土地理院の地形図調（等高線・標高点・公的表記）の参考背景図が求められる。
    - **現場確認・民間・世界対応**: 生活道路名、店舗・施設（POI）、国外写真の対応には OpenStreetMap の詳細データが不可欠である。
 
 本設計では、Core 内蔵の SkiaSharp レンダリングエンジンにより、**中間ラスター（256×256 PNG）を介さずベクタータイルから直接出力画像へ描画・合成する方式（直接ベクター合成描画）** を採用し、OpenStreetMap（OpenFreeMap）と国土地理院（最適化ベクトルタイル）の双方を選択可能なアーキテクチャを確立します。
@@ -42,9 +42,9 @@ flowchart TD
         Renderer["VectorMapRenderer (直接ベクター描画)"]
 
         subgraph Sources ["取得・キャッシュ層 (IVectorTileSource)"]
-            OFMSource["OpenFreeMapTileSource<br>(HTTP Range/PBF + ローカルキャッシュ)"]
-            GsiSource["GsiVectorTileSource<br>(地理院最適化ベクトル + ローカルキャッシュ)"]
-            LocalFileSource["LocalPmtilesSource<br>(ユーザー指定 BYO ファイル)"]
+            OFMSource["OpenFreeMapTileSource<br>(HTTP PBF + ローカルキャッシュ)"]
+            GsiSource["GsiVectorTileSource<br>(最適化ベクトルPMTiles HTTP Range + ローカルキャッシュ)"]
+            PmtilesSource["PmtilesVectorTileSource<br>(ローカルファイル / リモートPMTiles BYO)"]
         end
 
         subgraph Styles ["スタイル・スキーマ解釈層 (IVectorMapStyle)"]
@@ -71,10 +71,10 @@ flowchart TD
   指定されたタイル座標のバイナリ（MVT / PBF）を返します。
 - **キャッシュ責務**:
   一度取得したタイルはローカルディスク（`LocalState/vector-cache/` 等）にキャッシュし、同一セッションおよび次回以降の一括生成でネットワークリクエストを発生させません。
-- **実装クラス**:
-  - `HttpVectorTileSource`: OpenFreeMap などのパブリックエンドポイントから取得。固有 User-Agent と並列数制限（最大 4 並列以下）を厳守。
-  - `GsiVectorTileSource`: 国土地理院の最適化ベクトルタイル配信（`experimental_bvmap`）から取得。
-  - `PmtilesVectorTileSource`: ユーザー指定のローカル `.pmtiles` ファイルを読み取り（BYO）。
+- **取得方式と実装クラス**:
+  - `OpenFreeMapTileSource`: OpenFreeMap パブリックエンドポイント（最新 PBF）から取得。固有 User-Agent と並列数制限（最大 4 並列以下）を厳守。提供 maxzoom は 14（過拡大で z15 以上を描画）。
+  - `GsiVectorTileSource`: 国土地理院の最適化ベクトルタイル現行仕様に準拠。従来の個別 XYZ PBF（2023年10月で更新停止）ではなく、現行配信である単一 PMTiles（`https://cyberjapandata.gsi.go.jp/xyz/optimal_bvmap-v1/optimal_bvmap-v1.pmtiles`）に対する **HTTP Range 取得** を採用。対応ズームは z4〜16（過拡大で z17〜18 を描画）。
+  - `PmtilesVectorTileSource`: PMTiles v3 リーダー実装。国土地理院のリモート PMTiles の HTTP Range 読み取り基盤として共通利用するほか、ユーザー指定のローカル `.pmtiles` ファイルおよび任意のリモート PMTiles URL（BYO）の読み取りを担当。
 
 ### 3.2 スタイル・スキーマ解釈層 (`IVectorMapStyle`)
 
@@ -87,7 +87,8 @@ flowchart TD
   - ラベル: `name:ja` 優先、次いで `name`。道路沿いの傾き配置および施設アイコン。
 - **`GsiVectorStyle` (国土地理院系)**:
   - レイヤー: `RdEdg`（道路縁）, `RdCL`（道路中心線）, `BldA`（建物）, `WA`（水域）, `Anno`（注記・地名）, 等高線。
-  - 役所提出用図面に準拠した測量図的配色・境界線・標高表示。
+  - 地理院地図調の配色・境界線・標高表示。
+  - **適用範囲と非保証事項**: 本スタイルによる描画は、写真台帳や調査報告書における「参考位置図・背景案内図」としての利用を想定したものです。国土地理院の最適化ベクトルタイルは測量法に基づく「基本測量成果」そのものとは位置付けられていないため、法的証明や基本測量成果自体の添付が厳密に義務付けられている用途（不動産登記・境界確定等）の証明能力を保証するものではありません。厳密な測量成果が必須の提出先に対しては、別途正規の測量成果交付データ等の確認・利用を案内します。
 
 ### 3.3 レンダリング・合成層 (`VectorMapRenderer`)
 
@@ -129,4 +130,4 @@ repo 外の使い捨て検証（C# / .NET 10 / SkiaSharp）により、成立性
 | **M1** | ベクタータイル取得境界・キャッシュ層の抽象化 | `IVectorTileSource`, `VectorTileCache`, モック単体テスト |
 | **M2** | Core 内蔵ベクター直描画エンジン（OSM / OpenMapTiles） | `VectorMapRenderer`, `OpenMapTilesStyle`, Core 単体テスト |
 | **M3** | UI 連携・設定画面・出典焼き込み・既存パイプライン統合 | WinUI 3 設定UI, プリセット追加, ヘルプ・README更新 |
-| **M4** | 国土地理院ベクター対応 & BYO フォールバック | `GsiVectorStyle`, ユーザー指定 PMTiles 対応, レート制御 |
+| **M4** | 国土地理院ベクター対応（最適化PMTiles Range取得） & BYO フォールバック | `GsiVectorStyle`, `optimal_bvmap-v1` PMTiles Range取得, ユーザー指定 PMTiles 対応, レート制御 |

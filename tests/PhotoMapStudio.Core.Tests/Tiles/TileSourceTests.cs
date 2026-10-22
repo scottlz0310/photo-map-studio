@@ -65,6 +65,18 @@ public class TileSourceTests
     }
 
     [Fact]
+    public void OpenFreeMapプリセットはベクター設定を持つ()
+    {
+        Assert.True(TileSources.OpenFreeMap.IsVector);
+        Assert.Equal("© OpenStreetMap contributors, OpenFreeMap", TileSources.OpenFreeMap.Attribution);
+        Assert.Equal(new Uri("https://openfreemap.org"), TileSources.OpenFreeMap.AttributionUri);
+        Assert.Equal(0, TileSources.OpenFreeMap.MinZoom);
+        Assert.Equal(19, TileSources.OpenFreeMap.MaxZoom);
+        Assert.Equal(TileRateLimit.Relaxed, TileSources.OpenFreeMap.RateLimit);
+        Assert.Contains(TileSources.OpenFreeMap, TileSources.All);
+    }
+
+    [Fact]
     public void 任意URLからカスタムソースを構築できる()
     {
         TileSource source = TileSources.Custom("https://tile.example.com/{z}/{x}/{y}.png", "自前の出典");

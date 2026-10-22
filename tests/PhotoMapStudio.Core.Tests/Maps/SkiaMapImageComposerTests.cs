@@ -1,6 +1,7 @@
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 using SkiaSharp;
 
@@ -105,6 +106,54 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         // 右下は半透明の下地で暗くなり、左下はタイルのまま
         Assert.NotEqual(TileColor, bitmap.GetPixel(Width - 3, Height - 3));
         Assert.Equal(TileColor, bitmap.GetPixel(3, Height - 3));
+    }
+
+    [Fact]
+    public async Task ベクタータイルソース指定時はベクターレンダラーで直接描画する()
+    {
+        var stubRenderer = new StubVectorRenderer(new SKColor(10, 20, 30));
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor), stubRenderer);
+
+        var request = new MapCompositionRequest
+        {
+            Center = Tokyo,
+            TileSource = TileSources.OpenFreeMap,
+            Width = 200,
+            Height = 200,
+        };
+
+        MapCompositionResult result = await composer.ComposeAsync(request, CancellationToken.None);
+
+        Assert.Equal(TileSources.OpenFreeMap, result.TileSource);
+        Assert.False(result.UsedFallback);
+        Assert.True(stubRenderer.RenderCalled);
+        Assert.Equal(Tokyo, stubRenderer.LastCenter);
+        Assert.Equal(15, stubRenderer.LastZoom);
+        Assert.Equal(200, stubRenderer.LastWidth);
+        Assert.Equal(200, stubRenderer.LastHeight);
+
+        using SKBitmap bitmap = SKBitmap.Decode(result.Png.ToArray());
+        Assert.Equal(200, bitmap.Width);
+        Assert.Equal(200, bitmap.Height);
+
+        // 左上隅はベクターレンダラーが塗った背景色、ピン位置（中央）は代替ピンの白
+        Assert.Equal(new SKColor(10, 20, 30), bitmap.GetPixel(10, 10));
+        Assert.Equal(SKColors.White, bitmap.GetPixel(100, 100));
+    }
+
+    [Fact]
+    public async Task ベクターレンダラー未設定でベクタータイルを指定すると例外を送出する()
+    {
+        var composer = new SkiaMapImageComposer(new SolidTileProvider(TileColor), vectorMapRenderer: null);
+        var request = new MapCompositionRequest
+        {
+            Center = Tokyo,
+            TileSource = TileSources.OpenFreeMap,
+            Width = 200,
+            Height = 200,
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => composer.ComposeAsync(request, CancellationToken.None));
     }
 
     [Fact]
@@ -376,5 +425,40 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             int y,
             CancellationToken cancellationToken, TileFetchSession? session = null)
             => Task.FromResult<byte[]>([0x00, 0x01, 0x02]);
+    }
+
+    private sealed class StubVectorRenderer(SKColor fillColor) : IVectorMapRenderer
+    {
+        public bool RenderCalled { get; private set; }
+        public GeoCoordinate LastCenter { get; private set; }
+        public int LastZoom { get; private set; }
+        public int LastWidth { get; private set; }
+        public int LastHeight { get; private set; }
+
+        public Task RenderToCanvasAsync(
+            SKCanvas canvas,
+            GeoCoordinate center,
+            int zoom,
+            int width,
+            int height,
+            CancellationToken cancellationToken = default)
+        {
+            this.RenderCalled = true;
+            this.LastCenter = center;
+            this.LastZoom = zoom;
+            this.LastWidth = width;
+            this.LastHeight = height;
+
+            canvas.Clear(fillColor);
+            return Task.CompletedTask;
+        }
+
+        public Task<SKBitmap> RenderMapAsync(
+            GeoCoordinate center,
+            int zoom,
+            int width,
+            int height,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

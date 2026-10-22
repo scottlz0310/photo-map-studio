@@ -39,7 +39,8 @@
 | --- | --- | --- | --- |
 | **地理院タイル（淡色）** | 国土地理院 | 5–18 | **既定**。日本国内のみ。[地理院タイル一覧](https://maps.gsi.go.jp/development/ichiran.html) |
 | 地理院タイル（標準） | 国土地理院 | 5–18 | 日本国内のみ |
-| OpenStreetMap | OpenStreetMap contributors | 0–19 | 対話プレビュー用。一括生成は利用条件に合うOSM系配信元をカスタム設定で指定 |
+| **OpenFreeMap（ベクター）** | OpenFreeMap / OSM | 0–19 | Core内蔵直接ベクター描画。全世界対応・文字切れのない鮮明な表示。一括生成可能 |
+| OpenStreetMap | OpenStreetMap contributors | 0–19 | 対話プレビュー用（ラスター）。一括生成は利用条件に合うOSM系配信元をカスタム設定で指定 |
 
 任意のタイル URL も設定できます。
 

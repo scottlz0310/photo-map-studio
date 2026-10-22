@@ -14,6 +14,7 @@ public static class TileSources
     private const string GsiAttribution = "国土地理院（https://maps.gsi.go.jp/development/ichiran.html）";
     private static readonly Uri GsiAttributionUri = new("https://maps.gsi.go.jp/development/ichiran.html");
     private static readonly Uri OpenStreetMapAttributionUri = new("https://www.openstreetmap.org/copyright");
+    private static readonly Uri OpenFreeMapAttributionUri = new("https://openfreemap.org");
 
     /// <summary>地理院タイル（淡色）。日本国内のみ。</summary>
     public static TileSource GsiPale { get; } = new(
@@ -35,6 +36,17 @@ public static class TileSources
         TileRateLimit.Relaxed,
         GsiAttributionUri);
 
+    /// <summary>OpenFreeMap ベクタータイル。Core 内蔵描画エンジンにより直接描画。</summary>
+    public static TileSource OpenFreeMap { get; } = new(
+        "OpenFreeMap（ベクター）",
+        "https://tiles.openfreemap.org/planet/{z}/{x}/{y}.pbf",
+        minZoom: 0,
+        maxZoom: 19,
+        "© OpenStreetMap contributors, OpenFreeMap",
+        TileRateLimit.Relaxed,
+        OpenFreeMapAttributionUri,
+        isVector: true);
+
     /// <summary>OpenStreetMap。</summary>
     public static TileSource OpenStreetMap { get; } = new(
         "OpenStreetMap",
@@ -46,7 +58,7 @@ public static class TileSources
         OpenStreetMapAttributionUri);
 
     /// <summary>プリセット一覧（表示順）。</summary>
-    public static IReadOnlyList<TileSource> All { get; } = [GsiPale, GsiStandard, OpenStreetMap];
+    public static IReadOnlyList<TileSource> All { get; } = [GsiPale, GsiStandard, OpenFreeMap, OpenStreetMap];
 
     /// <summary>
     /// 既定のタイルソース。

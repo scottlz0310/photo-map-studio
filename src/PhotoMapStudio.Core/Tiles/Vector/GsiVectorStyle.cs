@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using SkiaSharp;
 
 namespace PhotoMapStudio.Core.Tiles.Vector;
@@ -8,11 +10,21 @@ namespace PhotoMapStudio.Core.Tiles.Vector;
 /// </summary>
 public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 {
-    private enum GsiRoadKind
+    /// <summary>
+    /// 国土地理院の道路分類。
+    /// </summary>
+    public enum GsiRoadKind
     {
+        /// <summary>高速自動車国道等。</summary>
         Highway,
+
+        /// <summary>国道・主要道路。</summary>
         National,
+
+        /// <summary>都道府県道。</summary>
         Prefectural,
+
+        /// <summary>市区町村道・一般道路・その他。</summary>
         Minor,
     }
 
@@ -268,34 +280,121 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         }
     }
 
-    private static (GsiRoadKind Kind, float Width) GetRoadCategory(VectorTileFeature feature)
+    /// <summary>
+    /// ベクターフィーチャーの属性から道路種別と幅員を取得します。
+    /// </summary>
+    /// <param name="feature">道路フィーチャー。</param>
+    /// <returns>道路種別と描画基準幅。</returns>
+    public static (GsiRoadKind Kind, float Width) GetRoadCategory(VectorTileFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
+
         // 国土地理院 最適化ベクトルタイル現行仕様: vt_rdctg / vt_rnkwidth (公式 std.json 準拠)
-        // 0: 国道, 1: 都道府県道, 2: 市区町村道, 3: 高速自動車国道等, 5: その他
-        long rdCtg = feature.GetInt64("vt_rdctg")
-            ?? feature.GetInt64("rdCtg")
-            ?? 2;
-        long rnkWidth = feature.GetInt64("vt_rnkwidth")
-            ?? feature.GetInt64("rnkWidth")
-            ?? 1;
+        // vt_rdctg: "高速自動車国道等", "国道", "主要道路", "都道府県道", "市区町村道等", "その他"
+        // コード値 (フォールバック): 3: 高速自動車国道等, 0: 国道, 1: 都道府県道, 2: 市区町村道, 5: その他
+        string? rdCtgStr = feature.GetString("vt_rdctg") ?? feature.GetString("rdCtg");
+        long? rdCtgNum = feature.GetInt64("vt_rdctg") ?? feature.GetInt64("rdCtg");
 
-        float baseWidth = rnkWidth switch
+        GsiRoadKind kind = GsiRoadKind.Minor;
+        if (!string.IsNullOrEmpty(rdCtgStr))
         {
-            0 => 1.5f,
-            1 => 2.2f,
-            2 => 3.2f,
-            3 => 4.2f,
-            _ => 5.2f,
-        };
+            if (rdCtgStr.Contains("高速", StringComparison.Ordinal))
+            {
+                kind = GsiRoadKind.Highway;
+            }
+            else if (rdCtgStr.Contains("国道", StringComparison.Ordinal) || rdCtgStr.Contains("主要道路", StringComparison.Ordinal))
+            {
+                kind = GsiRoadKind.National;
+            }
+            else if (rdCtgStr.Contains("都道府県道", StringComparison.Ordinal))
+            {
+                kind = GsiRoadKind.Prefectural;
+            }
+            else if (long.TryParse(rdCtgStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsedNum))
+            {
+                kind = MapNumericRoadCategory(parsedNum);
+            }
+        }
+        else if (rdCtgNum.HasValue)
+        {
+            kind = MapNumericRoadCategory(rdCtgNum.Value);
+        }
 
-        return rdCtg switch
+        float baseWidth = ParseRoadWidth(feature);
+
+        return kind switch
         {
-            3 => (GsiRoadKind.Highway, Math.Max(baseWidth, 3.8f)),
-            0 => (GsiRoadKind.National, Math.Max(baseWidth, 3.2f)),
-            1 => (GsiRoadKind.Prefectural, Math.Max(baseWidth, 2.8f)),
+            GsiRoadKind.Highway => (GsiRoadKind.Highway, Math.Max(baseWidth, 3.8f)),
+            GsiRoadKind.National => (GsiRoadKind.National, Math.Max(baseWidth, 3.2f)),
+            GsiRoadKind.Prefectural => (GsiRoadKind.Prefectural, Math.Max(baseWidth, 2.8f)),
             _ => (GsiRoadKind.Minor, baseWidth),
         };
     }
+
+    private static GsiRoadKind MapNumericRoadCategory(long rdCtg) => rdCtg switch
+    {
+        3 => GsiRoadKind.Highway,
+        0 => GsiRoadKind.National,
+        1 => GsiRoadKind.Prefectural,
+        _ => GsiRoadKind.Minor,
+    };
+
+    private static float ParseRoadWidth(VectorTileFeature feature)
+    {
+        // 国土地理院 最適化ベクトルタイル現行仕様: vt_rnkwidth (公式 std.json 準拠)
+        // vt_rnkwidth: "3m未満", "3m-5.5m未満", "5.5m-13m未満", "13m-19.5m未満", "19.5m以上", "不明"
+        // ランク値 (フォールバック): 0: 3m未満, 1: 3m-5.5m未満, 2: 5.5m-13m未満, 3: 13m-19.5m未満, 4: 19.5m以上
+        string? rnkStr = feature.GetString("vt_rnkwidth") ?? feature.GetString("rnkWidth");
+        if (!string.IsNullOrEmpty(rnkStr))
+        {
+            if (rnkStr.Contains("3m未満", StringComparison.Ordinal))
+            {
+                return 1.5f;
+            }
+
+            if (rnkStr.Contains("3m-5.5m未満", StringComparison.Ordinal))
+            {
+                return 2.2f;
+            }
+
+            if (rnkStr.Contains("5.5m-13m未満", StringComparison.Ordinal))
+            {
+                return 3.2f;
+            }
+
+            if (rnkStr.Contains("13m-19.5m未満", StringComparison.Ordinal))
+            {
+                return 4.2f;
+            }
+
+            if (rnkStr.Contains("19.5m以上", StringComparison.Ordinal))
+            {
+                return 5.2f;
+            }
+
+            if (long.TryParse(rnkStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out long num))
+            {
+                return MapNumericRankWidth(num);
+            }
+        }
+
+        long? numVal = feature.GetInt64("vt_rnkwidth") ?? feature.GetInt64("rnkWidth");
+        if (numVal.HasValue)
+        {
+            return MapNumericRankWidth(numVal.Value);
+        }
+
+        return 2.2f;
+    }
+
+    private static float MapNumericRankWidth(long rank) => rank switch
+    {
+        0 => 1.5f,
+        1 => 2.2f,
+        2 => 3.2f,
+        3 => 4.2f,
+        _ => 5.2f,
+    };
 
     private SKPaint GetCasingPaint(GsiRoadKind kind) => kind switch
     {

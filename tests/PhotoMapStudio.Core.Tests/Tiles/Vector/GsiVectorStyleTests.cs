@@ -137,8 +137,47 @@ public sealed class GsiVectorStyleTests
         Assert.True(roadPixel.Alpha > 0);
     }
 
-    [Fact]
-    public void 実スキーマ道路属性による道路分類が反映される()
+    [Theory]
+    [InlineData("高速自動車国道等", "19.5m以上", GsiVectorStyle.GsiRoadKind.Highway, 5.2f)]
+    [InlineData("国道", "5.5m-13m未満", GsiVectorStyle.GsiRoadKind.National, 3.2f)]
+    [InlineData("主要道路", "3m-5.5m未満", GsiVectorStyle.GsiRoadKind.National, 3.2f)]
+    [InlineData("都道府県道", "3m-5.5m未満", GsiVectorStyle.GsiRoadKind.Prefectural, 2.8f)]
+    [InlineData("市区町村道等", "3m未満", GsiVectorStyle.GsiRoadKind.Minor, 1.5f)]
+    [InlineData("その他", "不明", GsiVectorStyle.GsiRoadKind.Minor, 2.2f)]
+    [InlineData("0", "2", GsiVectorStyle.GsiRoadKind.National, 3.2f)]
+    public void 実スキーマ文字列属性による道路分類と幅員が正確に解決される(
+        string rdCtg,
+        string rnkWidth,
+        GsiVectorStyle.GsiRoadKind expectedKind,
+        float expectedWidth)
+    {
+        var feature = new VectorTileFeature
+        {
+            GeometryType = VectorGeometryType.LineString,
+            Properties = new Dictionary<string, object>
+            {
+                ["vt_rdctg"] = rdCtg,
+                ["vt_rnkwidth"] = rnkWidth,
+            },
+        };
+
+        var (kind, width) = GsiVectorStyle.GetRoadCategory(feature);
+
+        Assert.Equal(expectedKind, kind);
+        Assert.Equal(expectedWidth, width);
+    }
+
+    [Theory]
+    [InlineData("高速自動車国道等", "19.5m以上", 76, 175, 80)] // #4CAF50
+    [InlineData("国道", "5.5m-13m未満", 230, 81, 0)]          // #E65100
+    [InlineData("都道府県道", "3m-5.5m未満", 245, 127, 23)]    // #F57F17
+    [InlineData("市区町村道等", "5.5m-13m未満", 255, 255, 255)] // SKColors.White
+    public void 実スキーマ道路属性に応じて道路固有の色で線が描画される(
+        string rdCtg,
+        string rnkWidth,
+        byte expectedR,
+        byte expectedG,
+        byte expectedB)
     {
         using var style = new GsiVectorStyle();
         using var bitmap = new SKBitmap(256, 256);
@@ -158,11 +197,11 @@ public sealed class GsiVectorStyleTests
                         new VectorTileFeature
                         {
                             GeometryType = VectorGeometryType.LineString,
-                            GeometryParts = [[new(0, 2048), new(4096, 2048)]],
+                            GeometryParts = [[new(0, 2048 + 8), new(4096, 2048 + 8)]],
                             Properties = new Dictionary<string, object>
                             {
-                                ["vt_rdctg"] = "0", // 現行 optimal_bvmap-v1 実データは文字列
-                                ["vt_rnkwidth"] = "2",
+                                ["vt_rdctg"] = rdCtg,
+                                ["vt_rnkwidth"] = rnkWidth,
                             },
                         },
                     ],
@@ -174,8 +213,12 @@ public sealed class GsiVectorStyleTests
         canvas.Scale(tileScale, tileScale);
         style.RenderLines(canvas, tile, tileScale, 14);
 
+        // y = 128 付近の道路中心ピクセル色をサンプリング
         SKColor roadPixel = bitmap.GetPixel(128, 128);
-        Assert.True(roadPixel.Alpha > 0);
+        Assert.Equal(expectedR, roadPixel.Red);
+        Assert.Equal(expectedG, roadPixel.Green);
+        Assert.Equal(expectedB, roadPixel.Blue);
+        Assert.Equal(255, roadPixel.Alpha);
     }
 
     [Fact]

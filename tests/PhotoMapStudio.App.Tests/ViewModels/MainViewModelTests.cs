@@ -209,6 +209,46 @@ public class MainViewModelTests
         Assert.Equal("Example Maps", repository.Settings.CustomTileAttribution);
     }
 
+    [Fact]
+    public async Task 保存済み容量2GBで1GB超の既存キャッシュを保持したまま再起動できる()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), "pms_cache_test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            // 1GB超の既存キャッシュファイルをシミュレート
+            string testFile = Path.Combine(tempDir, "cached_tile.pbf");
+            await File.WriteAllBytesAsync(testFile, new byte[1200]);
+
+            // DI登録順序: 既定1GBの FileSystemTileCache が先にインスタンス化される
+            using var tileCache = new FileSystemTileCache(tempDir);
+
+            // DI直後: まだ設定ロード前なので勝手に削除されない
+            Assert.Equal(1200, tileCache.GetCurrentSizeBytes());
+
+            // 設定リポジトリ: 2048MB が保存されている
+            var repository = new InMemorySettingsRepository
+            {
+                Settings = new PhotoMapSettings { TileCacheSizeMb = 2048 }
+            };
+
+            // MainViewModel の初期化: 設定から 2048MB をロードして tileCache に適用
+            var viewModel = new MainViewModel(repository, tileCache: tileCache);
+
+            Assert.Equal(2048L * 1024L * 1024L, tileCache.MaxSizeBytes);
+            Assert.True(File.Exists(testFile));
+            Assert.Equal(1200, tileCache.GetCurrentSizeBytes());
+            Assert.Contains("/ 2048 MB", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     private sealed class InMemorySettingsRepository : IPhotoMapSettingsRepository
     {
         public PhotoMapSettings Settings { get; set; } = new();

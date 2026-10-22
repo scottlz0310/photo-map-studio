@@ -266,12 +266,19 @@ public sealed class FileSystemTileCacheTests : IDisposable
     }
 
     [Fact]
-    public async Task 初期化時に既存キャッシュが上限を超過していれば自動整理される()
+    public async Task コンストラクタ直後は即時削除を行わず設定適用時に自動整理される()
     {
         Directory.CreateDirectory(this.root);
-        await File.WriteAllBytesAsync(Path.Combine(this.root, "existing.pbf"), new byte[1000]);
+        await File.WriteAllBytesAsync(Path.Combine(this.root, "existing.pbf"), new byte[1000]).ConfigureAwait(true);
 
-        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100);
+        // DI登録時と同じく引数なし（既定 1GB）で初期化
+        using var cache = new FileSystemTileCache(this.root);
+
+        // 保存済み設定が復元される前は、既定値による既存キャッシュの勝手な削除は走らない
+        Assert.Equal(1000, cache.GetCurrentSizeBytes());
+
+        // 保存済み設定（例: 100 バイト）が適用された時点で整理される
+        cache.MaxSizeBytes = 100;
 
         Assert.True(cache.GetCurrentSizeBytes() <= 100);
     }

@@ -63,7 +63,7 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
         this.rootPath = rootPath;
         this.retention = effectiveRetention;
         this.timeProvider = timeProvider ?? TimeProvider.System;
-        this.MaxSizeBytes = maxSizeBytes ?? DefaultMaxSizeBytes;
+        this.maxSizeBytes = maxSizeBytes ?? DefaultMaxSizeBytes;
     }
 
     /// <inheritdoc />

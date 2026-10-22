@@ -42,6 +42,9 @@ public sealed record BatchGenerationSettings
     /// <summary>ズームレベル。</summary>
     public int Zoom { get; init; } = MapCompositionRequest.DefaultZoom;
 
+    /// <summary>タイルキャッシュ容量上限（MB）。</summary>
+    public int TileCacheSizeMb { get; init; } = PhotoMapSettings.DefaultTileCacheSizeMb;
+
     /// <summary>ピン種別。</summary>
     public PinKind PinKind { get; init; } = PinKind.GreenPin;
 

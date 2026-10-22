@@ -10,7 +10,7 @@
 - [x] M4: 国土地理院ベクター対応・最適化PMTiles Range取得 & BYOフォールバック（GsiVectorStyle、optimal_bvmap-v1 PMTiles Range取得、PmtilesVectorTileSource、レート制御、設定UI連携・非保証事項案内）
 - [x] ベクター地図の日本語フォント自動解決と文字化け（豆腐）修正（VectorMapFontHelper、GsiVectorStyle、OpenMapTilesStyle、単体テスト）
 - [x] ピン機能の強化とアンカー基準点指定（同梱ピン緑/赤/青、二重円ターゲット、十字ターゲット、カスタム画像、アンカーBottomCenter/Center、Core・App・単体テスト）
-- [ ] （改善案②）ベクタータイルキャッシュ容量制限（1GB既定）とLRU自動クリーンアップ
+- [x] （改善案②）ベクタータイルキャッシュ容量制限（1GB既定）とLRU自動クリーンアップ（ITileCache、FileSystemTileCache LRU自動整理、設定UI・消去コマンド、単体テスト）
 - [ ] （将来・任意）M5: 拡張機能（カスタム PMTiles / スタイル指定、直接ベクター合成描画）
 
 ## リリース v0.2.3

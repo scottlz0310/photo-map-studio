@@ -79,6 +79,29 @@
                 Text="{Binding PinImagePath, Mode=TwoWay}" />
         </StackPanel>
 
+        <StackPanel Spacing="8">
+            <NumberBox
+                Header="キャッシュ容量上限 (MB)"
+                Minimum="10"
+                Maximum="1048576"
+                SpinButtonPlacementMode="Compact"
+                Value="{Binding TileCacheSizeMb, Mode=TwoWay}" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                    Text="{Binding TileCacheUsageText}" />
+                <Button
+                    Grid.Column="1"
+                    Command="{Binding ClearTileCacheCommand}"
+                    Content="キャッシュ消去" />
+            </Grid>
+        </StackPanel>
+
         <InfoBar
             IsOpen="{Binding HasValidationError}"
             IsClosable="False"

@@ -27,6 +27,9 @@ public sealed record PhotoMapSettings
     /// <summary>既定のズームレベル。</summary>
     public const int DefaultZoom = MapCompositionRequest.DefaultZoom;
 
+    /// <summary>既定のタイルキャッシュ容量上限（MB）。</summary>
+    public const int DefaultTileCacheSizeMb = 1024;
+
     /// <summary>既定のカスタムタイル URL。</summary>
     public static string DefaultCustomTileUrlTemplate => TileSources.OpenStreetMap.UrlTemplate;
 
@@ -56,6 +59,9 @@ public sealed record PhotoMapSettings
 
     /// <summary>ズームレベル。</summary>
     public int Zoom { get; init; } = DefaultZoom;
+
+    /// <summary>タイルキャッシュ容量上限（MB）。</summary>
+    public int TileCacheSizeMb { get; init; } = DefaultTileCacheSizeMb;
 
     /// <summary>ピン種別。</summary>
     public PinKind PinKind { get; init; } = PinKind.GreenPin;

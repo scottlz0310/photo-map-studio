@@ -46,6 +46,9 @@ public sealed class MainViewModel : ObservableObject
     private string generationDetails = string.Empty;
     private string generationElapsedText = string.Empty;
     private readonly TimeProvider timeProvider;
+    private readonly ITileCache? tileCache;
+    private double tileCacheSizeMb;
+    private string tileCacheUsageText = string.Empty;
     private double width;
     private double height;
     private double zoom;
@@ -73,11 +76,12 @@ public sealed class MainViewModel : ObservableObject
         IPhotoMapSettingsRepository settingsRepository,
         PreviewViewModel? preview = null,
         IBatchGenerationService? batchGenerationService = null, TimeProvider? timeProvider = null,
-        IBatchGenerationHistoryStore? historyStore = null)
+        IBatchGenerationHistoryStore? historyStore = null, ITileCache? tileCache = null)
     {
         this.settingsRepository = settingsRepository ?? throw new ArgumentNullException(nameof(settingsRepository));
         this.batchGenerationService = batchGenerationService;
         this.historyStore = historyStore;
+        this.tileCache = tileCache;
         this.Preview = preview;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         if (preview is not null)
@@ -114,6 +118,15 @@ public sealed class MainViewModel : ObservableObject
         this.minimumZoom = this.selectedTileSource.MinZoom;
         this.maximumZoom = this.selectedTileSource.MaxZoom;
         this.zoom = Math.Clamp(settings.Zoom, this.minimumZoom, this.maximumZoom);
+        this.tileCacheSizeMb = settings.TileCacheSizeMb;
+        if (this.tileCache is not null && this.tileCacheSizeMb > 0)
+        {
+            long targetBytes = (long)this.tileCacheSizeMb * 1024L * 1024L;
+            this.tileCache.MaxSizeBytes = targetBytes;
+            _ = this.PruneTileCacheAndRefreshAsync(targetBytes);
+        }
+        this.ClearTileCacheCommand = new AsyncRelayCommand(this.ClearTileCacheAsync);
+        this.UpdateTileCacheUsage();
 
         this.TileSourceOptions = PhotoMapStudio.App.Models.TileSourceChoices.All;
         this.PinKindOptions = PinKindChoice.All;
@@ -246,6 +259,82 @@ public sealed class MainViewModel : ObservableObject
             {
                 this.ClearFeedback();
                 this.NotifyPreviewChanged();
+            }
+        }
+    }
+
+    /// <summary>タイルキャッシュ容量上限（MB）。</summary>
+    public double TileCacheSizeMb
+    {
+        get => this.tileCacheSizeMb;
+        set
+        {
+            if (this.SetProperty(ref this.tileCacheSizeMb, value))
+            {
+                if (this.tileCache is not null && value > 0)
+                {
+                    long targetBytes = (long)value * 1024L * 1024L;
+                    this.tileCache.MaxSizeBytes = targetBytes;
+                    _ = this.PruneTileCacheAndRefreshAsync(targetBytes);
+                }
+                this.ClearFeedback();
+                this.UpdateTileCacheUsage();
+            }
+        }
+    }
+
+    /// <summary>タイルキャッシュの使用量テキスト。</summary>
+    public string TileCacheUsageText
+    {
+        get => this.tileCacheUsageText;
+        private set => this.SetProperty(ref this.tileCacheUsageText, value);
+    }
+
+    /// <summary>タイルキャッシュをクリアするコマンド。</summary>
+    public ICommand ClearTileCacheCommand { get; }
+
+    /// <summary>現在のキャッシュ使用量を更新する。</summary>
+    public void UpdateTileCacheUsage()
+    {
+        if (this.tileCache is null)
+        {
+            this.TileCacheUsageText = string.Empty;
+            return;
+        }
+
+        long bytes = this.tileCache.GetCurrentSizeBytes();
+        double mb = bytes / (1024.0 * 1024.0);
+        this.TileCacheUsageText = string.Create(
+            CultureInfo.InvariantCulture,
+            $"使用量: {mb:F1} MB / {this.TileCacheSizeMb:F0} MB");
+    }
+
+    private async Task ClearTileCacheAsync()
+    {
+        if (this.tileCache is not null)
+        {
+            bool success = await this.tileCache.ClearAsync().ConfigureAwait(true);
+            this.UpdateTileCacheUsage();
+            this.StatusMessage = success
+                ? "タイルキャッシュを消去しました。"
+                : "一部のキャッシュファイルを消去できませんでした（使用中または書き込み保護）。";
+        }
+    }
+
+    private async Task PruneTileCacheAndRefreshAsync(long targetBytes)
+    {
+        if (this.tileCache is not null)
+        {
+            try
+            {
+                await this.tileCache.PruneAsync(targetBytes).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+            finally
+            {
+                this.UpdateTileCacheUsage();
             }
         }
     }
@@ -561,6 +650,12 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
+        if (!TryGetPositiveInteger(this.TileCacheSizeMb, out int cacheSizeMb))
+        {
+            this.ValidationMessage = "キャッシュ容量上限は正の整数を指定してください。";
+            return false;
+        }
+
         TileSource tileSource;
         try
         {
@@ -590,6 +685,7 @@ public sealed class MainViewModel : ObservableObject
             Width = width,
             Height = height,
             Zoom = zoom,
+            TileCacheSizeMb = cacheSizeMb,
             PinKind = this.SelectedPinKindChoice.Kind,
             PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath.Trim(),
@@ -772,6 +868,12 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
+        if (!TryGetPositiveInteger(this.TileCacheSizeMb, out int cacheSizeMb))
+        {
+            this.ValidationMessage = "キャッシュ容量上限は正の整数を指定してください。";
+            return false;
+        }
+
         string inputFolderPath = this.InputFolderPath.Trim();
         if (string.IsNullOrWhiteSpace(inputFolderPath))
         {
@@ -842,6 +944,7 @@ public sealed class MainViewModel : ObservableObject
             Width = width,
             Height = height,
             Zoom = zoom,
+            TileCacheSizeMb = cacheSizeMb,
             PinKind = this.SelectedPinKindChoice.Kind,
             PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath.Trim(),
@@ -898,6 +1001,7 @@ public sealed class MainViewModel : ObservableObject
             Width = this.Width,
             Height = this.Height,
             Zoom = this.Zoom,
+            TileCacheSizeMb = (int)this.TileCacheSizeMb,
             PinKind = this.SelectedPinKindChoice.Kind,
             PinAnchor = this.SelectedPinKindChoice.Kind == PinKind.CustomImage ? this.SelectedPinAnchorChoice.Anchor : PinAnchor.BottomCenter,
             PinImagePath = this.PinImagePath,

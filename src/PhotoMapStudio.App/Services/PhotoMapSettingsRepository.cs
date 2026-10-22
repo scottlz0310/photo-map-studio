@@ -19,6 +19,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
     private const string WidthKey = "width";
     private const string HeightKey = "height";
     private const string ZoomKey = "zoom";
+    private const string TileCacheSizeMbKey = "tile-cache-size-mb";
     private const string PinKindKey = "pin-kind";
     private const string PinAnchorKey = "pin-anchor";
     private const string PinImagePathKey = "pin-image-path";
@@ -57,6 +58,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
             Width = ReadInt(WidthKey, PhotoMapSettings.DefaultWidth),
             Height = ReadInt(HeightKey, PhotoMapSettings.DefaultHeight),
             Zoom = ReadInt(ZoomKey, PhotoMapSettings.DefaultZoom),
+            TileCacheSizeMb = ReadInt(TileCacheSizeMbKey, PhotoMapSettings.DefaultTileCacheSizeMb),
             PinKind = pinKind,
             PinAnchor = ReadEnum(PinAnchorKey, PinAnchor.BottomCenter),
             PinImagePath = pinImagePath,
@@ -79,6 +81,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
         this.store.Write(WidthKey, settings.Width);
         this.store.Write(HeightKey, settings.Height);
         this.store.Write(ZoomKey, settings.Zoom);
+        this.store.Write(TileCacheSizeMbKey, settings.TileCacheSizeMb);
         this.store.Write(PinKindKey, settings.PinKind.ToString());
         this.store.Write(PinAnchorKey, settings.PinAnchor.ToString());
         this.store.Write(TileSourceKey, settings.TileSourceKey);

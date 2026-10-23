@@ -54,6 +54,7 @@ public partial class App : Application
         services.AddSingleton<IErrorDiagnosticSink>(provider => new LocalErrorDiagnosticSink(
             new DiagnosticFileStore(Path.Combine(ApplicationData.Current.LocalFolder.Path, "diagnostics")),
             $"{packageVersion.Major}.{packageVersion.Minor}.{packageVersion.Build}.{packageVersion.Revision}", provider.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(provider => TileCacheErrorReporting.CreateHandler(provider.GetRequiredService<IErrorDiagnosticSink>()));
         services.AddSingleton<ISettingsValueStore, ApplicationDataSettingsValueStore>();
         services.AddSingleton<IPhotoMapSettingsRepository, PhotoMapSettingsRepository>();
         services.AddSingleton<IPreviewGenerationService, PreviewGenerationService>();

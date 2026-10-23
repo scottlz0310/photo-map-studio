@@ -252,21 +252,25 @@ public sealed class FileSystemTileCacheTests : IDisposable
     }
 
     [Fact]
-    public async Task 容量上限を縮小した際に追加ダウンロードなしでも指定容量以下に自動整理される()
+    public async Task 容量上限の代入では整理せずPruneAsyncで指定容量以下に整理される()
     {
         using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 2000);
 
         await cache.WriteAsync("large.pbf", new byte[1000], CancellationToken.None);
         Assert.Equal(1000, cache.GetCurrentSizeBytes());
 
+        // 代入だけでは UI スレッドで列挙・削除をしない
         cache.MaxSizeBytes = 100;
+        Assert.Equal(1000, cache.GetCurrentSizeBytes());
+
+        await cache.PruneAsync(cache.MaxSizeBytes);
 
         Assert.True(cache.GetCurrentSizeBytes() <= 100);
         Assert.Null(await cache.TryReadAsync("large.pbf", CancellationToken.None));
     }
 
     [Fact]
-    public async Task コンストラクタ直後は即時削除を行わず設定適用時に自動整理される()
+    public async Task コンストラクタ直後は即時削除を行わず明示的な整理で容量以下になる()
     {
         Directory.CreateDirectory(this.root);
         await File.WriteAllBytesAsync(Path.Combine(this.root, "existing.pbf"), new byte[1000]).ConfigureAwait(true);
@@ -277,9 +281,93 @@ public sealed class FileSystemTileCacheTests : IDisposable
         // 保存済み設定が復元される前は、既定値による既存キャッシュの勝手な削除は走らない
         Assert.Equal(1000, cache.GetCurrentSizeBytes());
 
-        // 保存済み設定（例: 100 バイト）が適用された時点で整理される
+        // 保存済み設定（例: 100 バイト）を適用し、整理を明示的に行う
         cache.MaxSizeBytes = 100;
+        await cache.PruneAsync(cache.MaxSizeBytes);
 
         Assert.True(cache.GetCurrentSizeBytes() <= 100);
+    }
+
+    [Fact]
+    public async Task 合計サイズは書き込みと上書きと整理と消去のたびに実体と一致する()
+    {
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100_000);
+
+        await cache.WriteAsync("a.pbf", new byte[300], CancellationToken.None);
+        await cache.WriteAsync("b.pbf", new byte[500], CancellationToken.None);
+        AssertTrackedSizeMatchesDisk(cache, 800);
+
+        // 同じキーの上書きは差分だけ増減する
+        await cache.WriteAsync("a.pbf", new byte[100], CancellationToken.None);
+        AssertTrackedSizeMatchesDisk(cache, 600);
+
+        await cache.PruneAsync(200);
+        AssertTrackedSizeMatchesDisk(cache, DiskSize());
+        Assert.True(cache.GetCurrentSizeBytes() <= 200);
+
+        await cache.WriteAsync("c.pbf", new byte[50], CancellationToken.None);
+        AssertTrackedSizeMatchesDisk(cache, DiskSize());
+
+        Assert.True(await cache.ClearAsync());
+        Assert.Equal(0, cache.GetCurrentSizeBytes());
+        await cache.WriteAsync("d.pbf", new byte[70], CancellationToken.None);
+        AssertTrackedSizeMatchesDisk(cache, 70);
+    }
+
+    [Fact]
+    public async Task 初回の書き込みで前回の異常終了で残った一時ファイルを回収し容量に含めない()
+    {
+        Directory.CreateDirectory(this.root);
+        string orphan = Path.Combine(this.root, "tile.pbf.0123456789abcdef.tmp");
+        await File.WriteAllBytesAsync(orphan, new byte[400]).ConfigureAwait(true);
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100_000);
+
+        await cache.WriteAsync("a.pbf", new byte[100], CancellationToken.None);
+
+        Assert.False(File.Exists(orphan));
+        Assert.Equal(100, cache.GetCurrentSizeBytes());
+    }
+
+    [Fact]
+    public async Task 整理で消せないファイルがあっても残りを整理しエラーを1回だけ通知する()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            // 開いたままのファイルを削除できないのは Windows の挙動
+            return;
+        }
+
+        var errors = new List<Exception>();
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100_000, errorObserver: errors.Add);
+        var clock = BaseTime;
+        foreach (string name in new[] { "locked.pbf", "x.pbf", "y.pbf" })
+        {
+            await cache.WriteAsync(name, new byte[100], CancellationToken.None);
+            File.SetLastAccessTimeUtc(Path.Combine(this.root, name), clock.UtcDateTime);
+            File.SetLastWriteTimeUtc(Path.Combine(this.root, name), clock.UtcDateTime);
+            clock = clock.AddMinutes(1);
+        }
+
+        // 最も古い locked.pbf を開いたままにして、削除に失敗させる
+        using (new FileStream(Path.Combine(this.root, "locked.pbf"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await cache.PruneAsync(0);
+        }
+
+        Assert.True(File.Exists(Path.Combine(this.root, "locked.pbf")));
+        Assert.False(File.Exists(Path.Combine(this.root, "x.pbf")));
+        Assert.False(File.Exists(Path.Combine(this.root, "y.pbf")));
+        Assert.Single(errors);
+        Assert.IsAssignableFrom<IOException>(errors[0]);
+        Assert.Equal(100, cache.GetCurrentSizeBytes());
+    }
+
+    private long DiskSize()
+        => new DirectoryInfo(this.root).EnumerateFiles().Where(f => f.Extension != ".tmp").Sum(f => f.Length);
+
+    private void AssertTrackedSizeMatchesDisk(FileSystemTileCache cache, long expected)
+    {
+        Assert.Equal(expected, cache.GetCurrentSizeBytes());
+        Assert.Equal(DiskSize(), cache.GetCurrentSizeBytes());
     }
 }

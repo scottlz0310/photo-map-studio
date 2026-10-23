@@ -4,6 +4,7 @@ using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Core.Tiles.Vector.Pmtiles;
 
 using SkiaSharp;
 
@@ -131,6 +132,40 @@ public sealed class IncompleteVectorMapTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PMTilesのメタデータ通信失敗も10件で止めキャッシュの有無に応じて描画する(bool cachedTiles)
+    {
+        using var handler = new UnavailableHandler();
+        using var client = new HttpClient(handler);
+        using var bytes = new HttpPmtilesByteSource(client, new Uri("https://example.test/map.pmtiles"));
+        using var source = new PmtilesVectorTileSource(bytes, "pmtiles-test", fallbackMaxZoom: 1);
+        var cache = new Cache();
+        if (cachedTiles)
+        {
+            for (int x = 0; x <= 1; x++)
+            {
+                for (int y = 0; y <= 1; y++)
+                {
+                    await cache.WriteAsync(VectorTileCacheKey.Create(source.SourceId, 1, x, y), WaterTile, CancellationToken.None);
+                }
+            }
+        }
+        using var style = new OpenMapTilesStyle();
+        var composer = Composer(new CachedVectorTileSource(source, cache), style);
+        var session = new TileFetchSession(TimeProvider.System) { AllowIncompleteVectorMaps = true };
+        for (int index = 0; index < 15; index++)
+        {
+            MapCompositionResult result = await composer.ComposeAsync(Request(true) with { TileSession = session }, CancellationToken.None);
+            Assert.Equal(cachedTiles, result.Warning is null);
+        }
+        Assert.True(session.IsCacheOnly);
+        Assert.Equal(10, handler.RequestCount);
+        Assert.Equal(10, session.Snapshot().NetworkCount);
+        Assert.Equal(cachedTiles ? 60 : 0, session.Snapshot().CacheCount);
+    }
+
+    [Theory]
     [InlineData(401, false)]
     [InlineData(403, false)]
     [InlineData(404, false)]
@@ -190,6 +225,16 @@ public sealed class IncompleteVectorMapTests
     {
         public Task<byte[]> GetTileAsync(TileSource source, int zoom, int x, int y, CancellationToken cancellationToken, TileFetchSession? session = null)
             => throw new InvalidOperationException("ラスターへの切替は想定していません。");
+    }
+
+    private sealed class UnavailableHandler : HttpMessageHandler
+    {
+        public int RequestCount { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            this.RequestCount++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        }
     }
 
     private sealed class Source(Func<int, int, byte[]?> fetch) : IVectorTileSource

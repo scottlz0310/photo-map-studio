@@ -43,10 +43,17 @@ public sealed class PmtilesVectorTileSource : IVectorTileSource, IDisposable
     public async Task PrepareAsync(TileFetchSession? session = null, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(this.disposed, this);
+        bool initializing = this.header is null || this.rootEntries is null;
 
         try
         {
             await this.EnsureInitializedAsync(session, cancellationToken).ConfigureAwait(false);
+            if (initializing && session?.AllowIncompleteVectorMaps == true) { session.RecordSuccess(cached: false); }
+        }
+        catch (TileFetchException ex) when (session?.AllowIncompleteVectorMaps == true && ex.IsTransient)
+        {
+            // タイルが全件キャッシュ済みでも、メタデータの再取得失敗だけで通信停止へ移行できるようにする。
+            session.RecordFailure(ex);
         }
         catch (Exception ex) when (ex is TileFetchException or FormatException or NotSupportedException or InvalidDataException or IOException or UnauthorizedAccessException)
         {

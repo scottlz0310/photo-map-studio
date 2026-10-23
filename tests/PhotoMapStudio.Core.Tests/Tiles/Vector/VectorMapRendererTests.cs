@@ -197,6 +197,25 @@ public class VectorMapRendererTests
         Assert.Equal(512, bitmap.Width);
     }
 
+    [Fact]
+    public async Task シンボルは全タイル分を先に配置してから注記を配置する()
+    {
+        // 複数のタイルにまたがる範囲。タイルの描画順に関わらず、盾などのシンボルが注記より優先される
+        byte[] waterTile = CreateWaterTile();
+        var mockSource = new MockVectorTileSource(14, (_, _, _) => waterTile);
+        var style = new RecordingStyle();
+        var renderer = new VectorMapRenderer(mockSource, style);
+
+        using SKBitmap bitmap = await renderer.RenderMapAsync(new GeoCoordinate(35.685, 139.752), 14, 512, 512, CancellationToken.None);
+
+        int lastSymbols = style.Calls.FindLastIndex(c => c == "symbols");
+        int firstLabels = style.Calls.FindIndex(c => c == "labels");
+        Assert.True(style.Calls.Count(c => c == "symbols") > 1, "複数のタイルを描画していない");
+        Assert.Equal(style.Calls.Count(c => c == "symbols"), style.Calls.Count(c => c == "labels"));
+        Assert.True(lastSymbols < firstLabels, "注記より先に全タイルのシンボルを配置していない");
+        Assert.Equal(512, bitmap.Width);
+    }
+
     private static byte[] CreateWaterTile()
     {
         using var stream = new MemoryStream();
@@ -284,5 +303,24 @@ public class VectorMapRendererTests
         {
             return Task.FromResult(fetchHandler(z, x, y));
         }
+    }
+
+    private sealed class RecordingStyle : IVectorMapStyle
+    {
+        public List<string> Calls { get; } = [];
+
+        public string StyleId => "recording";
+
+        public SKColor BackgroundColor => SKColors.White;
+
+        public void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom) => this.Calls.Add("polygons");
+
+        public void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom) => this.Calls.Add("lines");
+
+        public void RenderSymbols(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
+            => this.Calls.Add("symbols");
+
+        public void RenderLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
+            => this.Calls.Add("labels");
     }
 }

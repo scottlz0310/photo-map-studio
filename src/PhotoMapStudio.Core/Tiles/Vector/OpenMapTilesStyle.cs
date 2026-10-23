@@ -62,6 +62,8 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     // テキスト用ペイント・フォント
     private readonly SKTypeface placeTypeface = VectorMapFontHelper.CreateJapaneseTypeface();
     private readonly SKFont placeFont;
+    private readonly SKFont roadNameFont;
+    private readonly SKFont shieldFont;
 
     /// <summary>
     /// OpenMapTiles ベクタースタイルを初期化する。
@@ -69,6 +71,8 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     public OpenMapTilesStyle()
     {
         this.placeFont = new SKFont(this.placeTypeface, 12f);
+        this.roadNameFont = new SKFont(this.placeTypeface, 10f);
+        this.shieldFont = new SKFont(this.placeTypeface, 9f) { Embolden = true };
     }
     private readonly SKPaint placeFillPaint = new()
     {
@@ -82,6 +86,21 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         Color = SKColors.White,
         Style = SKPaintStyle.StrokeAndFill,
         StrokeWidth = 3f,
+        IsAntialias = true,
+    };
+
+    private readonly SKPaint roadNameFillPaint = new()
+    {
+        Color = new SKColor(0x44, 0x44, 0x44),
+        Style = SKPaintStyle.Fill,
+        IsAntialias = true,
+    };
+
+    private readonly SKPaint roadNameHaloPaint = new()
+    {
+        Color = SKColors.White,
+        Style = SKPaintStyle.StrokeAndFill,
+        StrokeWidth = 2.5f,
         IsAntialias = true,
     };
 
@@ -139,6 +158,23 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     }
 
     /// <inheritdoc />
+    public void RenderSymbols(
+        SKCanvas canvas,
+        VectorTile tile,
+        SKMatrix tileToCanvasMatrix,
+        int zoom,
+        LabelCollisionGrid collisionGrid,
+        SKRect viewport)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(tile);
+        ArgumentNullException.ThrowIfNull(collisionGrid);
+
+        // 経路番号の盾（国道・都道府県道・高速）
+        OpenMapTilesRoadSymbols.RenderShields(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.shieldFont);
+    }
+
+    /// <inheritdoc />
     public void RenderLabels(
         SKCanvas canvas,
         VectorTile tile,
@@ -189,7 +225,11 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             }
         }
 
-        // 2. 施設（poi）: ズーム 14 以上
+        // 2. 道路名（transportation_name）: 地名の後、施設の前に配置する
+        OpenMapTilesRoadSymbols.RenderNames(
+            canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.roadNameFont, this.roadNameFillPaint, this.roadNameHaloPaint);
+
+        // 3. 施設（poi）: ズーム 14 以上
         if (zoom >= 14)
         {
             VectorTileLayer? poiLayer = tile.GetLayer("poi");
@@ -457,6 +497,10 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         this.buildingStrokePaint.Dispose();
         this.railwayPaint.Dispose();
         this.placeFont.Dispose();
+        this.roadNameFont.Dispose();
+        this.shieldFont.Dispose();
+        this.roadNameFillPaint.Dispose();
+        this.roadNameHaloPaint.Dispose();
         this.placeTypeface.Dispose();
         this.placeFillPaint.Dispose();
         this.textHaloPaint.Dispose();

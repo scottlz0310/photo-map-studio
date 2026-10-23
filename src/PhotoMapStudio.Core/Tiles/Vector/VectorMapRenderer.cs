@@ -246,7 +246,17 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             canvas.Restore();
         }
 
-        // パス 3: 全タイルの注記・ラベル（画面座標系で直接描画）
+        // パス 3a: 全タイルのシンボル（経路番号の盾など）。注記より優先して配置する
+        for (int i = 0; i < loadedTiles.Count; i++)
+        {
+            var item = loadedTiles[i];
+            SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
+            tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
+
+            activeStyle.RenderSymbols(canvas, item.tile, tileToCanvasMatrix, zoom, collisionGrid, viewport);
+        }
+
+        // パス 3b: 全タイルの注記・ラベル（画面座標系で直接描画）
         for (int i = 0; i < loadedTiles.Count; i++)
         {
             var item = loadedTiles[i];

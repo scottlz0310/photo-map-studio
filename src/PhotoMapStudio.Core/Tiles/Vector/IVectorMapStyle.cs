@@ -32,6 +32,27 @@ public interface IVectorMapStyle
     void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom);
 
     /// <summary>
+    /// 注記より優先して配置するシンボル（経路番号の盾など）を描画する。
+    /// 全タイルのシンボルを先に配置してから注記を配置するため、タイルの描画順に左右されず優先される。
+    /// </summary>
+    /// <remarks>シンボルを持たないスタイルは、既定の実装（何も描画しない）のままでよい。</remarks>
+    /// <param name="canvas">描画先 SkiaSharp キャンバス（画面座標系）。</param>
+    /// <param name="tile">対象ベクタータイルデータ。</param>
+    /// <param name="tileToCanvasMatrix">タイルローカル座標から画面ピクセル座標への変換行列。</param>
+    /// <param name="zoom">現在の表示ズームレベル。</param>
+    /// <param name="collisionGrid">ラベル衝突判定グリッド（注記と共有する）。</param>
+    /// <param name="viewport">描画画面全体の矩形。</param>
+    void RenderSymbols(
+        SKCanvas canvas,
+        VectorTile tile,
+        SKMatrix tileToCanvasMatrix,
+        int zoom,
+        LabelCollisionGrid collisionGrid,
+        SKRect viewport)
+    {
+    }
+
+    /// <summary>
     /// 注記・ラベル（道路名、地名、施設シンボル等）を描画する。
     /// </summary>
     /// <param name="canvas">描画先 SkiaSharp キャンバス（画面座標系）。</param>

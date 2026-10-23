@@ -116,12 +116,15 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
 
+        // 共有のペイントは書き換えず、描画ごとに線幅を設定した複製を使う（並行して描画しても線幅が混ざらない）
+        using SKPaint railway = this.railwayPaint.Clone();
+        railway.StrokeWidth = 1.2f / tileScale;
+
         VectorTileLayer? roadLayer = tile.GetLayer("transportation");
         if (roadLayer is not null)
         {
             // 1. 鉄道（transportation 内の class="rail", "transit", "subway", "tram"）
-            this.railwayPaint.StrokeWidth = 1.2f / tileScale;
-            RenderTransportationRailways(canvas, roadLayer, this.railwayPaint);
+            RenderTransportationRailways(canvas, roadLayer, railway);
 
             // 2. 道路（motorway, primary, secondary 等）
             RenderRoads(canvas, roadLayer, tileScale, zoom);
@@ -131,8 +134,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         VectorTileLayer? fallbackRailwayLayer = tile.GetLayer("railway");
         if (fallbackRailwayLayer is not null)
         {
-            this.railwayPaint.StrokeWidth = 1.2f / tileScale;
-            RenderLayerLines(canvas, fallbackRailwayLayer, this.railwayPaint);
+            RenderLayerLines(canvas, fallbackRailwayLayer, railway);
         }
     }
 

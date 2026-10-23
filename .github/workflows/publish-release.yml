@@ -1,0 +1,256 @@
+name: Publish Release
+
+# main への push のうち、リリースコミット（件名が `chore(release): vX.Y.Z` で始まるもの）だけが公開の対象になる。
+# 通常の push では draft ジョブ内の reusable workflow がスキップされ、後続のジョブも実行されない。
+#
+# 段階的に公開する（タグは GITHUB_TOKEN で作られ、タグ push を契機とする別の workflow は起動しないため、
+# すべてこの workflow の needs でつなぐ）。
+#   draft    : タグと draft Release を作る（リリースノートは CHANGELOG から抽出）
+#   package  : x64 / ARM64 の MSIX をビルドする
+#   attach   : 署名し、.cer・.appinstaller・Install スクリプトとあわせて draft に添付する
+#   verify   : draft から資産を再取得して検証する（scripts/Verify-ReleaseAssets.ps1）
+#   finalize : 検証が成功した場合だけ、draft を公開する
+# 失敗した場合は draft が残る。同じ run の「Re-run failed jobs」で再実行できる。
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    uses: scottlz0310/release-automate/.github/workflows/reusable-publish-release.yml@fde6d796e366b4a70d73a992a48241c03f49ee68 # v3.1.0
+    permissions:
+      contents: write
+    with:
+      draft: true
+
+  package:
+    needs: draft
+    if: needs.draft.outputs.release_state == 'draft'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.402
+
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
+
+      - name: Generate formal MSIX assets
+        shell: pwsh
+        run: .\scripts\Generate-MsixAssets.ps1
+
+      - name: Resolve and apply package version
+        shell: pwsh
+        env:
+          TAG: ${{ needs.draft.outputs.tag_name }}
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "タグは v<major>.<minor>.<patch> 形式である必要があります: $env:TAG"
+          }
+          $version = "$($env:TAG.TrimStart('v')).0"
+          $path = "src/PhotoMapStudio.App/Package.appxmanifest"
+          $content = [IO.File]::ReadAllText($path)
+          $content = $content -replace '(<Identity\b[^>]*\bVersion=")[^"]+(")', ('${1}' + $version + '${2}')
+          [IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))
+
+      - name: Build unsigned MSIX (${{ matrix.platform }})
+        shell: pwsh
+        run: |
+          msbuild src/PhotoMapStudio.App/PhotoMapStudio.App.csproj `
+            -restore -t:Build -p:Configuration=Release -p:Platform=${{ matrix.platform }} `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxPackageSigningEnabled=false `
+            -p:AppxPackageDir="$env:RUNNER_TEMP\appx\"
+
+          $msix = Get-ChildItem "$env:RUNNER_TEMP\appx" -Recurse -Filter "PhotoMapStudio.App_*_${{ matrix.platform }}.msix" |
+            Where-Object { $_.DirectoryName -notmatch "Dependencies" } | Select-Object -First 1
+          if (-not $msix) {
+            throw "${{ matrix.platform }} のMSIXが生成されていません"
+          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $msix.FullName "dist/PhotoMapStudio_${{ matrix.platform }}.msix"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: msix-${{ matrix.platform }}
+          path: dist/PhotoMapStudio_${{ matrix.platform }}.msix
+          if-no-files-found: error
+
+  attach:
+    needs: [draft, package]
+    if: needs.draft.outputs.release_state == 'draft'
+    runs-on: windows-latest
+    permissions:
+      # draft Release の取得・資産の添付には書き込み権限が必要
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.402
+
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
+
+      - name: Restore build tools
+        run: dotnet restore PhotoMapStudio.slnx
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: msix-*
+          merge-multiple: true
+          path: dist
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        env:
+          TAG: ${{ needs.draft.outputs.tag_name }}
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "タグは v<major>.<minor>.<patch> 形式である必要があります: $env:TAG"
+          }
+          $version = "$($env:TAG.TrimStart('v')).0"
+          "tag=$env:TAG" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore signing certificate
+        shell: pwsh
+        env:
+          SIGNING_CERTIFICATE_BASE64: ${{ secrets.SIGNING_CERTIFICATE_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_BASE64)) {
+            throw "Secret SIGNING_CERTIFICATE_BASE64 が未設定です。scripts/New-SigningCertificate.ps1 を参照してください。"
+          }
+          [IO.File]::WriteAllBytes(
+            "$env:RUNNER_TEMP\PhotoMapStudio-signing.pfx",
+            [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+
+      - name: Sign MSIX and prepare release assets
+        shell: pwsh
+        env:
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_PASSWORD)) {
+            throw "Secret SIGNING_CERTIFICATE_PASSWORD が未設定です。"
+          }
+
+          $pfxPath = "$env:RUNNER_TEMP\PhotoMapStudio-signing.pfx"
+          $signtool = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.windows.sdk.buildtools\*\bin\*\x64\signtool.exe" |
+            Sort-Object FullName | Select-Object -Last 1
+          if (-not $signtool) {
+            throw "signtool.exe が NuGet キャッシュに見つかりません"
+          }
+
+          $msixFiles = @(Get-ChildItem -LiteralPath dist -Filter "PhotoMapStudio_*.msix" -File)
+          if ($msixFiles.Count -ne 2) {
+            throw "x64 / ARM64 のMSIXが揃っていません: $($msixFiles.Count) 件"
+          }
+
+          foreach ($msix in $msixFiles) {
+            & $signtool.FullName sign /fd SHA256 /f $pfxPath /p $env:SIGNING_CERTIFICATE_PASSWORD $msix.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "MSIX署名に失敗しました: $($msix.Name)"
+            }
+            $signature = Get-AuthenticodeSignature -FilePath $msix.FullName
+            if (-not $signature.SignerCertificate) {
+              throw "MSIXの署名証明書を確認できません: $($msix.Name)"
+            }
+          }
+
+          $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfxPath,
+            $env:SIGNING_CERTIFICATE_PASSWORD,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+          try {
+            if ($certificate.Subject -ne "CN=scottlz0310") {
+              throw "署名証明書のSubjectがマニフェストと一致しません: $($certificate.Subject)"
+            }
+            [IO.File]::WriteAllBytes(
+              "dist/PhotoMapStudio.cer",
+              $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          }
+          finally {
+            $certificate.Dispose()
+          }
+
+          foreach ($architecture in @("x64", "arm64")) {
+            $templatePath = "distribution/PhotoMapStudio-$architecture.appinstaller.template"
+            $appInstaller = [IO.File]::ReadAllText($templatePath)
+            $appInstaller = $appInstaller.Replace("{VERSION}", $env:VERSION).Replace("{TAG}", $env:TAG)
+            [IO.File]::WriteAllText(
+              "dist/PhotoMapStudio-$architecture.appinstaller",
+              $appInstaller,
+              [Text.UTF8Encoding]::new($false))
+          }
+
+          Copy-Item scripts/Install-PhotoMapStudio.ps1 dist/
+
+      - name: Attach assets to the draft Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # draft は tags/{tag} では取得できないため、一覧から探す
+          $releases = @(gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json | ForEach-Object { $_ })
+          $release = @($releases | Where-Object { $_.tag_name -eq $env:TAG })
+          if ($release.Count -ne 1 -or -not $release[0].draft) {
+            throw "タグ $env:TAG の draft Release が 1 件ではありません: $($release.Count) 件"
+          }
+          $releaseId = $release[0].id
+
+          foreach ($file in Get-ChildItem -LiteralPath dist -File) {
+            # 再実行で重複しないよう、同名の資産が既にあれば置き換える
+            foreach ($existing in @($release[0].assets | Where-Object { $_.name -eq $file.Name })) {
+              gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/releases/assets/$($existing.id)"
+              if ($LASTEXITCODE -ne 0) { throw "既存の資産を削除できません: $($file.Name)" }
+            }
+
+            gh api --method POST `
+              -H "Content-Type: application/octet-stream" `
+              --input $file.FullName `
+              "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$([Uri]::EscapeDataString($file.Name))" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "資産を添付できません: $($file.Name)" }
+            Write-Host "添付: $($file.Name)"
+          }
+
+  verify:
+    needs: [draft, attach]
+    if: needs.draft.outputs.release_state == 'draft'
+    runs-on: windows-latest
+    permissions:
+      # 読み取りだけでも、draft Release の取得には書き込み権限が必要
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.draft.outputs.tag_name }}
+        run: ./scripts/Verify-ReleaseAssets.ps1 -Tag $env:TAG -ExpectedInstallScriptPath scripts/Install-PhotoMapStudio.ps1
+
+  finalize:
+    needs: [draft, verify]
+    if: needs.draft.outputs.release_state == 'draft' && needs.verify.result == 'success'
+    uses: scottlz0310/release-automate/.github/workflows/reusable-finalize-release.yml@fde6d796e366b4a70d73a992a48241c03f49ee68 # v3.1.0
+    permissions:
+      contents: write
+    with:
+      tag_name: ${{ needs.draft.outputs.tag_name }}
+      target_sha: ${{ needs.draft.outputs.target_sha }}

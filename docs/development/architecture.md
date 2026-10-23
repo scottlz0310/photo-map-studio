@@ -14,12 +14,31 @@
 
 ## リリースフロー
 
-`v<major>.<minor>.<patch>` タグを push すると、`.github/workflows/release.yml` が次の処理を行います。
+リリースは [release-automate](https://github.com/scottlz0310/release-automate)（Reusable Workflows）で自動化し、準備と公開の 2 段階で行います。参照はすべて固定コミット SHA で、Renovate の更新対象です。
 
-1. x64 / ARM64 を並列に self-contained ビルドする
-2. 生成した MSIX に GitHub Secrets の証明書で署名する
-3. 各アーキテクチャ用の App Installer XML とインストールスクリプトを生成する
-4. 署名済み MSIX、証明書チェーン用 `.cer`、App Installer、スクリプトを GitHub Release に添付する
+1. **準備**: `Prepare Release`（`.github/workflows/prepare-release.yml`、手動起動）に `target_version`（例: `0.3.0`）を指定して起動します。CHANGELOG の `[Unreleased]` を指定の版で確定し、GitHub App 名義のリリース準備 PR（件名 `chore(release): vX.Y.Z`）を起票します。版数はリポジトリのファイルを更新しません（`bump_strategy: none`）。MSIX の版は、タグからビルド時に `Package.appxmanifest` へ注入します。
+2. **公開**: リリース準備 PR を独立レビューのうえマージすると、`Publish Release`（`.github/workflows/publish-release.yml`、`main` への push）が段階的に公開します。対象は、件名が `chore(release):` で始まるコミットだけです。通常の push では何も起きません。
+
+| 段階 | 内容 |
+| --- | --- |
+| draft | タグと draft Release を作成する。リリースノートは CHANGELOG の該当版から抽出する |
+| package | x64 / ARM64 を並列に self-contained ビルドする（署名しない） |
+| attach | 署名し、`.cer`、App Installer XML、Install スクリプトとあわせて draft に添付する |
+| verify | draft から資産を再取得して検証する（`scripts/Verify-ReleaseAssets.ps1`） |
+| finalize | 検証に成功した場合だけ draft を公開する |
+
+タグは `GITHUB_TOKEN` で作られ、タグ push を契機とする別の workflow は起動しないため、すべて同じ workflow の `needs` でつないでいます。いずれかの段階が失敗しても draft は公開されず、同じ run の「Re-run failed jobs」で再開できます。
+
+`scripts/Verify-ReleaseAssets.ps1` は、次の項目を確認します（失敗した項目はすべて列挙します）。
+
+- 6 つの資産（MSIX × 2、`.cer`、`.appinstaller` × 2、Install スクリプト）が過不足なくそろっている
+- MSIX の Identity（名前・版・アーキテクチャ・Publisher）がタグと一致する
+- MSIX が署名されていて、署名が壊れていない（自己署名のため、信頼済みストアにない環境では「信頼されていない」状態を許容し、署名の欠落と改ざんを失敗とする）
+- `.cer` の拇印が、両方の MSIX の署名者と一致する
+- `.appinstaller` の版・URL・更新設定が正しい（`AutomaticBackgroundTask` のみ）
+- Install スクリプトが構文として解釈でき、リポジトリのものと一致する
+
+公開済みの Release は、`-RunInstallTest` で Install スクリプトの `-Test`（資産の取得と定義の検証だけ。証明書登録とインストールはしない）まで確認できます。`-Test` は最新の公開 Release の資産を取得するため、draft の検証では実行しません。
 
 App Installer の `MainPackage` はタグ付き Release の MSIX を、ルートの `Uri` は最新 Release のアーキテクチャ別 `.appinstaller` を参照します。x64 と ARM64 の App Installer は異なるパッケージ URI を持つため、利用環境に合う方を選択してください。
 
@@ -35,12 +54,12 @@ App Installer の `MainPackage` はタグ付き Release の MSIX を、ルート
 .\scripts\New-SigningCertificate.ps1
 ```
 
-リリースワークフローには、所有者が次の GitHub Secrets を登録します。
+公開ワークフロー（`publish-release.yml`）には、所有者が次の GitHub Secrets を登録します。
 
 - `SIGNING_CERTIFICATE_BASE64`: PFX ファイルを Base64 化した値
 - `SIGNING_CERTIFICATE_PASSWORD`: PFX のパスワード
 
-証明書の秘密鍵とパスワードはリポジトリへコミットせず、ログにも出力しません。証明書の発行、Secret の登録、実際の `v0.1.0` タグ push と公開は、リリース所有者が確認して実行する作業です。
+証明書の秘密鍵とパスワードはリポジトリへコミットせず、ログにも出力しません。証明書の発行と Secret の登録は、リリース所有者が行う作業です。公開は、リリース準備 PR のマージで起動します。リリース準備 PR の起票に使う GitHub App の認証情報（`RELEASE_BOT_CLIENT_ID` / `RELEASE_BOT_PRIVATE_KEY`）は、組織の Actions secrets に登録します。
 
 ## ローカル検証
 

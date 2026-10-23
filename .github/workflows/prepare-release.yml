@@ -1,0 +1,27 @@
+name: Prepare Release
+
+# リリース準備 PR を起票する（手動起動）。
+# CHANGELOG の [Unreleased] を指定の版で確定し、GitHub App 名義の PR（件名 `chore(release): vX.Y.Z`）を作る。
+# この PR をレビューしてマージすると、publish-release.yml が成果物の作成・検証・公開を行う。
+#
+# 版数はリポジトリのファイルを更新しない（bump_strategy: none）。
+# MSIX の版は、従来どおりタグからビルド時に Package.appxmanifest へ注入する（publish-release.yml）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'リリースする版（例: 0.3.0）'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    uses: scottlz0310/release-automate/.github/workflows/reusable-prepare-release.yml@fde6d796e366b4a70d73a992a48241c03f49ee68 # v3.1.0
+    secrets: inherit
+    with:
+      target_version: ${{ inputs.target_version }}
+      bump_strategy: none

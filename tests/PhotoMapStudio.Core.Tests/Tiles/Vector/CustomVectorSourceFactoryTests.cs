@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
+using Microsoft.Extensions.Time.Testing;
+
 using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
 
@@ -191,19 +193,29 @@ public sealed class CustomVectorSourceFactoryTests : IDisposable
         loopbackGate.Dispose();
     }
 
-    [Fact]
-    public async Task 待機中のキャンセルは関門を塞がない()
+    [Theory]
+    [InlineData(500)]
+    [InlineData(2000)]
+    public async Task 待機中のキャンセルは関門を塞がない(int intervalMilliseconds)
     {
-        using var gate = new RequestIntervalGate(new TileRateLimit(1, TimeSpan.FromMilliseconds(500)), TimeProvider.System);
+        var clock = new FakeTimeProvider();
+        TimeSpan interval = TimeSpan.FromMilliseconds(intervalMilliseconds);
+        using var gate = new RequestIntervalGate(new TileRateLimit(1, interval), clock);
         using (await gate.EnterAsync(CancellationToken.None))
         {
         }
 
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(30));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => gate.EnterAsync(cancellation.Token));
+        using var cancellation = new CancellationTokenSource();
+        Task<IDisposable> pending = gate.EnterAsync(cancellation.Token);
+        Assert.False(pending.IsCompleted);
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
 
-        // キャンセル後も次の要求を通せる（関門の解放漏れがない）
-        using (await gate.EnterAsync(CancellationToken.None))
+        // キャンセル後の要求が間隔待機へ進み、時刻の進行だけで通過できることを確認する。
+        Task<IDisposable> next = gate.EnterAsync(CancellationToken.None);
+        Assert.False(next.IsCompleted);
+        clock.Advance(interval);
+        using (await next.WaitAsync(TimeSpan.FromSeconds(5)))
         {
         }
     }

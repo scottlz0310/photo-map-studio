@@ -12,7 +12,7 @@ public class OpenMapTilesStyleTests
         using var style = new OpenMapTilesStyle();
 
         Assert.Equal("openmaptiles", style.StyleId);
-        Assert.Equal(new SKColor(0xF2, 0xEF, 0xE9), style.BackgroundColor);
+        Assert.Equal(new SKColor(0xEB, 0xE8, 0xE1), style.BackgroundColor);
     }
 
     [Fact]
@@ -55,9 +55,9 @@ public class OpenMapTilesStyleTests
         canvas.Scale(100f / 4096f, 100f / 4096f);
         style.RenderPolygons(canvas, tile, 100f / 4096f, 14);
 
-        // 中央のピクセルが水色（#A5D6E7）になっていること
+        // 中央のピクセルが水色（#A0C8F0）になっていること
         SKColor centerPixel = bitmap.GetPixel(50, 50);
-        Assert.Equal(new SKColor(0xA5, 0xD6, 0xE7), centerPixel);
+        Assert.Equal(new SKColor(0xA0, 0xC8, 0xF0), centerPixel);
     }
 
     [Fact]
@@ -102,9 +102,9 @@ public class OpenMapTilesStyleTests
         canvas.Scale(tileScale, tileScale);
         style.RenderLines(canvas, tile, tileScale, 14);
 
-        // 道路中心（y = 50）が fill 色（#F9B29C）
+        // 道路中心（y = 50）が fill 色（#9AD8A8）
         SKColor roadCenter = bitmap.GetPixel(50, 50);
-        Assert.Equal(new SKColor(0xF9, 0xB2, 0x9C), roadCenter);
+        Assert.Equal(new SKColor(0x9A, 0xD8, 0xA8), roadCenter);
 
         // 道路外側（y = 0）は透明のまま
         Assert.Equal(0, bitmap.GetPixel(50, 0).Alpha);

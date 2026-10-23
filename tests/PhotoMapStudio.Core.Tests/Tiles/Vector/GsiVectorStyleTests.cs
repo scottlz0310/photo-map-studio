@@ -6,6 +6,32 @@ namespace PhotoMapStudio.Core.Tests.Tiles.Vector;
 
 public sealed class GsiVectorStyleTests
 {
+    [Theory]
+    [InlineData("vt_text")]
+    [InlineData("knj")]
+    public void 線形状の注記は線に沿わせポイント注記は従来の表示を保つ(string nameKey)
+    {
+        using var style = new GsiVectorStyle();
+        using var bitmap = new SKBitmap(300, 300);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.White);
+        var line = new VectorTileFeature
+        {
+            GeometryType = VectorGeometryType.LineString,
+            Properties = new Dictionary<string, object> { [nameKey] = "北２丁目通り" },
+            GeometryParts = [[new(150, 20), new(150, 280)]],
+        };
+        var tile = new VectorTile { Layers = [new VectorTileLayer { Name = "Anno", Features = [line] }] };
+        var grid = new LabelCollisionGrid();
+        var viewport = new SKRect(0, 0, 300, 300);
+        style.RenderLineLabels(canvas, tile, SKMatrix.Identity, 18, grid, viewport);
+        SKColor[] linePixels = bitmap.Pixels;
+        Assert.Contains(linePixels, color => color.Red < 160);
+        // 線注記をポイント注記のパスで二重に描画しない。
+        style.RenderLabels(canvas, tile, SKMatrix.Identity, 18, grid, viewport);
+        Assert.Equal(linePixels, bitmap.Pixels);
+    }
+
     [Fact]
     public void StyleIdとBackgroundColorが期待通り定義されている()
     {

@@ -43,7 +43,7 @@ public class VectorMapRendererTests
 
         // 水域（#A5D6E7）が描画されていること
         SKColor samplePixel = bitmap.GetPixel(width / 2, height / 2);
-        Assert.Equal(new SKColor(0xA5, 0xD6, 0xE7), samplePixel);
+        Assert.Equal(new SKColor(0xA0, 0xC8, 0xF0), samplePixel);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class VectorMapRendererTests
         using var ofmBitmap = await renderer.RenderMapAsync(
             center, 14, 256, 256, session: null, tileSource: TileSources.OpenFreeMap, CancellationToken.None);
         Assert.NotNull(ofmBitmap);
-        Assert.Equal(new SKColor(0xF2, 0xEF, 0xE9), ofmStyle.BackgroundColor);
+        Assert.Equal(new SKColor(0xEB, 0xE8, 0xE1), ofmStyle.BackgroundColor);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class VectorMapRendererTests
     }
 
     [Fact]
-    public async Task シンボルは全タイル分を先に配置してから注記を配置する()
+    public async Task 全タイルの盾と道路名を地名や施設名より先に配置する()
     {
         // 複数のタイルにまたがる範囲。タイルの描画順に関わらず、盾などのシンボルが注記より優先される
         byte[] waterTile = CreateWaterTile();
@@ -210,9 +210,14 @@ public class VectorMapRendererTests
 
         int lastSymbols = style.Calls.FindLastIndex(c => c == "symbols");
         int firstLabels = style.Calls.FindIndex(c => c == "labels");
+        int firstRoadNames = style.Calls.FindIndex(c => c == "roadNames");
+        int lastRoadNames = style.Calls.FindLastIndex(c => c == "roadNames");
         Assert.True(style.Calls.Count(c => c == "symbols") > 1, "複数のタイルを描画していない");
         Assert.Equal(style.Calls.Count(c => c == "symbols"), style.Calls.Count(c => c == "labels"));
         Assert.True(lastSymbols < firstLabels, "注記より先に全タイルのシンボルを配置していない");
+        Assert.Equal(style.Calls.Count(c => c == "symbols"), style.Calls.Count(c => c == "roadNames"));
+        Assert.True(lastSymbols < firstRoadNames, "道路名より先に全タイルの盾を配置していない");
+        Assert.True(lastRoadNames < firstLabels, "道路名が他タイルの地名・施設名より優先されていない");
         Assert.Equal(512, bitmap.Width);
     }
 
@@ -270,7 +275,7 @@ public class VectorMapRendererTests
 
         // 最大ズーム 16 を指定すれば、ズーム 16 のタイルを要求して描画できる
         using SKBitmap bitmap = await renderer.RenderMapAsync(center, 16, 256, 256, session: null, tileSource: atZoom16, CancellationToken.None);
-        Assert.Equal(new SKColor(0xA5, 0xD6, 0xE7), bitmap.GetPixel(128, 128));
+        Assert.Equal(new SKColor(0xA0, 0xC8, 0xF0), bitmap.GetPixel(128, 128));
         Assert.Contains("16", requestedZooms);
 
         // 既定（14）のままでは z14 のタイルしか要求できず、この取得元では描画できるタイルがない
@@ -400,5 +405,8 @@ public class VectorMapRendererTests
 
         public void RenderLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
             => this.Calls.Add("labels");
+
+        public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
+            => this.Calls.Add("roadNames");
     }
 }

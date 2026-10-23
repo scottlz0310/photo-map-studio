@@ -8,6 +8,7 @@ namespace PhotoMapStudio.Core.Tiles.Vector;
 public sealed class LabelCollisionGrid
 {
     private readonly List<SKRect> placedBounds = [];
+    private readonly List<(string Key, SKPoint Center)> placedNames = [];
     private readonly float padding;
 
     /// <summary>
@@ -26,29 +27,47 @@ public sealed class LabelCollisionGrid
     /// <param name="viewport">描画画面全体の矩形（画面外判定用）。</param>
     /// <returns>配置に成功した場合は <see langword="true"/>、衝突した場合は <see langword="false"/>。</returns>
     public bool TryPlace(SKRect rect, SKRect viewport)
+        => this.TryPlace([rect], viewport);
+
+    /// <summary>曲線注記の各部分を一括判定し、全て配置可能な場合だけ登録する。</summary>
+    public bool TryPlace(IReadOnlyList<SKRect> bounds, SKRect viewport, string? key = null, float repeatDistance = 0f)
     {
-        // 画面外にはみ出している場合は配置しない
-        if (rect.Left < viewport.Left || rect.Right > viewport.Right ||
-            rect.Top < viewport.Top || rect.Bottom > viewport.Bottom)
+        ArgumentNullException.ThrowIfNull(bounds);
+        if (bounds.Count == 0)
         {
             return false;
         }
 
-        var paddedRect = new SKRect(
-            rect.Left - this.padding,
-            rect.Top - this.padding,
-            rect.Right + this.padding,
-            rect.Bottom + this.padding);
-
-        for (int i = 0; i < this.placedBounds.Count; i++)
+        SKRect envelope = bounds[0];
+        foreach (SKRect rect in bounds)
         {
-            if (this.placedBounds[i].IntersectsWith(paddedRect))
+            if (rect.Left < viewport.Left || rect.Right > viewport.Right || rect.Top < viewport.Top || rect.Bottom > viewport.Bottom)
             {
                 return false;
             }
+
+            var paddedRect = rect;
+            paddedRect.Inflate(this.padding, this.padding);
+            if (this.placedBounds.Any(placed => placed.IntersectsWith(paddedRect)))
+            {
+                return false;
+            }
+
+            envelope = SKRect.Union(envelope, rect);
         }
 
-        this.placedBounds.Add(rect);
+        var center = new SKPoint(envelope.MidX, envelope.MidY);
+        if (key is not null && this.placedNames.Any(placed => placed.Key == key && SKPoint.Distance(placed.Center, center) < repeatDistance))
+        {
+            return false;
+        }
+
+        this.placedBounds.AddRange(bounds);
+        if (key is not null)
+        {
+            this.placedNames.Add((key, center));
+        }
+
         return true;
     }
 
@@ -58,5 +77,6 @@ public sealed class LabelCollisionGrid
     public void Clear()
     {
         this.placedBounds.Clear();
+        this.placedNames.Clear();
     }
 }

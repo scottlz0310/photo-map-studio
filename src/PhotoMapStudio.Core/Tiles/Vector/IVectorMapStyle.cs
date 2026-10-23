@@ -52,6 +52,12 @@ public interface IVectorMapStyle
     {
     }
 
+    /// <summary>道路名などの線注記を地名・施設名より先に配置する。</summary>
+    void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
+        LabelCollisionGrid collisionGrid, SKRect viewport)
+    {
+    }
+
     /// <summary>
     /// 注記・ラベル（道路名、地名、施設シンボル等）を描画する。
     /// </summary>

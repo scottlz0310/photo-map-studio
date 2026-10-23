@@ -208,6 +208,24 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
     }
 
     /// <inheritdoc />
+    public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
+        LabelCollisionGrid collisionGrid, SKRect viewport)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(tile);
+        ArgumentNullException.ThrowIfNull(collisionGrid);
+        VectorTileLayer? layer = tile.GetLayer("Anno");
+        if (layer is null) { return; }
+        foreach (VectorTileFeature feature in layer.Features.Where(f => f.GeometryType == VectorGeometryType.LineString))
+        {
+            string? text = feature.GetString("vt_text") ?? feature.GetString("knj") ?? feature.GetString("name") ?? feature.GetString("text");
+            if (string.IsNullOrWhiteSpace(text)) { continue; }
+            PathLabelRenderer.Render(canvas, feature, tileToCanvasMatrix, text, this.labelFont,
+                this.labelFillPaint, this.labelHaloPaint, collisionGrid, viewport, "gsi-line:" + text);
+        }
+    }
+
+    /// <inheritdoc />
     public void RenderLabels(
         SKCanvas canvas,
         VectorTile tile,
@@ -230,7 +248,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         for (int i = 0; i < annoLayer.Features.Count; i++)
         {
             VectorTileFeature feature = annoLayer.Features[i];
-            if (feature.GeometryParts.Count == 0 || feature.GeometryParts[0].Count == 0)
+            if (feature.GeometryType == VectorGeometryType.LineString || feature.GeometryParts.Count == 0 || feature.GeometryParts[0].Count == 0)
             {
                 continue;
             }

@@ -8,6 +8,27 @@ namespace PhotoMapStudio.App.Tests.ViewModels;
 
 public class BatchHistoryViewModelTests
 {
+    [Fact]
+    public async Task 警告付き成功を集計と自動保存した履歴に表示する()
+    {
+        using var tree = new PhotoTree();
+        var summary = new BatchGenerationSummary(1, 0, 1, false)
+        {
+            Issues = [new(1, "写真.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Warning, BatchIssueReason.IncompleteMap)
+            { MissingTileCount = 2, RequestedTileCount = 4, NetworkSuspended = true }],
+        };
+        var store = new Store();
+        var batch = new Batch(summary, false);
+        var model = new MainViewModel(new Settings(), batchGenerationService: batch, historyStore: store)
+        { InputFolderPath = tree.Root, OutputFolderPath = "maps", AllowIncompleteVectorMaps = true };
+        await model.GenerateCommand.ExecuteAsync(null);
+        Assert.True(batch.LastSettings?.AllowIncompleteVectorMaps);
+        Assert.Contains("警告 1", model.GenerationSummary, StringComparison.Ordinal);
+        Assert.Equal(1, Assert.Single(store.Entries).WarningCount);
+        Assert.Contains("警告 1", model.SelectedBatchHistory!.SummaryText, StringComparison.Ordinal);
+        Assert.False(model.HasGenerationError);
+    }
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(true, false, false)]
@@ -103,10 +124,14 @@ public class BatchHistoryViewModelTests
 
     private sealed class Batch(BatchGenerationSummary summary, bool fail) : IBatchGenerationService
     {
+        public BatchGenerationSettings? LastSettings { get; private set; }
         public Task<BatchGenerationSummary> GenerateAsync(BatchGenerationSettings settings,
             IProgress<BatchGenerationProgress>? progress, CancellationToken cancellationToken)
-            => fail ? Task.FromException<BatchGenerationSummary>(new BatchGenerationException("開始失敗") { Summary = summary })
+        {
+            this.LastSettings = settings;
+            return fail ? Task.FromException<BatchGenerationSummary>(new BatchGenerationException("開始失敗") { Summary = summary })
                 : Task.FromResult(summary);
+        }
     }
 
     private sealed class Store : IBatchGenerationHistoryStore

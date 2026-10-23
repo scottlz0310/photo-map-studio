@@ -15,6 +15,7 @@ namespace PhotoMapStudio.App.Services;
     Justification = "DI コンテナーから生成される設定リポジトリ。")]
 internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
 {
+    private const string AllowIncompleteVectorMapsKey = "allow-incomplete-vector-maps";
     private const string InputFolderPathKey = "input-folder-path";
     private const string OutputFolderPathKey = "output-folder-path";
     private const string WidthKey = "width";
@@ -60,6 +61,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
             IncludeSubfolders = this.store.Read("include-subfolders") is true,
             OutputFilePrefix = ReadString("output-file-prefix", string.Empty),
             OutputFilePostfix = ReadString("output-file-postfix", "_map"),
+            AllowIncompleteVectorMaps = this.store.Read(AllowIncompleteVectorMapsKey) is true,
             Width = ReadInt(WidthKey, PhotoMapSettings.DefaultWidth),
             Height = ReadInt(HeightKey, PhotoMapSettings.DefaultHeight),
             Zoom = ReadInt(ZoomKey, PhotoMapSettings.DefaultZoom),
@@ -96,6 +98,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
         this.store.Write(TileSourceKey, settings.TileSourceKey);
         this.store.Write(CustomTileUrlTemplateKey, settings.CustomTileUrlTemplate);
         this.store.Write(CustomTileAttributionKey, settings.CustomTileAttribution);
+        this.store.Write(AllowIncompleteVectorMapsKey, settings.AllowIncompleteVectorMaps);
         this.store.Write(CustomVectorLocationKey, settings.CustomVectorLocation);
         this.store.Write(CustomVectorSchemaKey, settings.CustomVectorSchema.ToString());
         this.store.Write(CustomVectorAttributionKey, settings.CustomVectorAttribution);

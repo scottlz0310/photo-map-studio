@@ -27,7 +27,7 @@ public sealed class CachedVectorTileSource : IVectorTileSource
 
     /// <inheritdoc />
     public Task PrepareAsync(TileFetchSession? session, CancellationToken cancellationToken = default)
-        => this.inner.PrepareAsync(session, cancellationToken);
+        => session?.IsCacheOnly == true ? Task.CompletedTask : this.inner.PrepareAsync(session, cancellationToken);
 
     /// <inheritdoc />
     public Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
@@ -45,9 +45,11 @@ public sealed class CachedVectorTileSource : IVectorTileSource
         TileFetchSession? session,
         CancellationToken cancellationToken = default)
     {
-        session?.ThrowIfStopped();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (session?.IsCacheOnly != true) { session?.ThrowIfStopped(); }
 
-        string sourceId = await this.inner.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
+        string sourceId = session?.IsCacheOnly == true ? this.inner.SourceId
+            : await this.inner.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
         string key = VectorTileCacheKey.Create(sourceId, z, x, y);
 
         byte[]? cached = await this.cache.TryReadAsync(key, cancellationToken).ConfigureAwait(false);
@@ -56,6 +58,8 @@ public sealed class CachedVectorTileSource : IVectorTileSource
             session?.RecordSuccess(cached: true);
             return cached;
         }
+
+        if (session?.IsCacheOnly == true) { throw new TileFetchException("通信を停止しており、対象タイルはキャッシュにありません。") { IsCacheOnlyMiss = true }; }
 
         byte[]? fetched;
         try
@@ -66,7 +70,7 @@ public sealed class CachedVectorTileSource : IVectorTileSource
         catch (TileFetchException ex)
         {
             session?.RecordFailure(ex);
-            session?.ThrowIfStopped();
+            if (session?.IsCacheOnly != true) { session?.ThrowIfStopped(); }
             throw;
         }
 

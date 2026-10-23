@@ -26,6 +26,9 @@ public sealed record MapCompositionRequest
     /// <summary>一括生成単位の取得統計。対話プレビューでは未指定。</summary>
     public TileFetchSession? TileSession { get; init; }
 
+    /// <summary>ベクター地図の通信失敗時に、欠落を明示した画像を生成する。既定は無効。</summary>
+    public bool AllowIncompleteVectorMaps { get; init; }
+
     /// <summary>出力画像の幅（ピクセル）。</summary>
     public int Width { get; init; } = DefaultWidth;
 

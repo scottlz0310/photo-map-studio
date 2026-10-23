@@ -15,6 +15,8 @@ public sealed record BatchGenerationSummary(
     int TotalCount,
     bool IsCancelled)
 {
+    /// <summary>成功分のうち欠落警告を含む画像数。</summary>
+    public int WarningCount => this.Issues.Count(issue => issue.Status == BatchGenerationStatus.Warning);
     /// <summary>処理済みのエラー数。</summary>
     public int ErrorCount { get; init; }
     /// <summary>処理済みの写真数。</summary>

@@ -18,6 +18,9 @@ namespace PhotoMapStudio.App.Models;
     Justification = "DI サービスと App.Tests の生成契約として公開する。")]
 public sealed record BatchGenerationSettings
 {
+    /// <summary>通信失敗時に欠落を明示したベクター地図を生成する。既定は無効。</summary>
+    public bool AllowIncompleteVectorMaps { get; init; }
+
     /// <summary>写真を列挙する入力フォルダ。</summary>
     public string InputFolderPath { get; init; } = string.Empty;
 

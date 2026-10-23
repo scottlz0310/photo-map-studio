@@ -73,6 +73,7 @@ public sealed class MainViewModel : ObservableObject
     private string generationProgressMessage = string.Empty;
     private string generationSummary = string.Empty;
     private bool hasGenerationError;
+    private bool allowIncompleteVectorMaps;
 
     /// <summary>
     /// ViewModel を構築する。
@@ -114,6 +115,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var settings = this.settingsRepository.Load();
+        this.allowIncompleteVectorMaps = settings.AllowIncompleteVectorMaps;
         this.inputFolderPath = settings.InputFolderPath;
         this.outputFolderPath = settings.OutputFolderPath;
         this.includeSubfolders = settings.IncludeSubfolders;
@@ -559,6 +561,16 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>カスタム URL が選択されているかどうか。</summary>
     public bool IsCustomTileSource => this.SelectedTileSource.IsCustom;
 
+    /// <summary>通信失敗時の警告付きベクター地図を有効にする。</summary>
+    public bool AllowIncompleteVectorMaps
+    {
+        get => this.allowIncompleteVectorMaps;
+        set
+        {
+            if (this.SetProperty(ref this.allowIncompleteVectorMaps, value)) { this.NotifyPreviewChanged(); }
+        }
+    }
+
     /// <summary>カスタム（ベクター）が選択されているかどうか。</summary>
     public bool IsCustomVectorSource => this.SelectedTileSource.IsCustomVector;
 
@@ -780,6 +792,7 @@ public sealed class MainViewModel : ObservableObject
             InputFolderPath = this.InputFolderPath.Trim(),
             OutputFolderPath = this.OutputFolderPath.Trim(),
             IncludeSubfolders = this.IncludeSubfolders,
+            AllowIncompleteVectorMaps = this.AllowIncompleteVectorMaps,
             OutputFilePrefix = this.OutputFilePrefix,
             OutputFilePostfix = this.OutputFilePostfix,
             Width = width,
@@ -946,7 +959,7 @@ public sealed class MainViewModel : ObservableObject
         this.isEnumerating = progress.IsEnumerating;
         this.OnPropertyChanged(nameof(this.ProgressIsIndeterminate));
         if (!progress.IsActivity) { this.GenerationLogs.Add(progress); }
-        this.GenerationDetails = $"処理済み {progress.SuccessCount + progress.SkippedCount + progress.ErrorCount} / 全 {progress.Total} 枚、成功 {progress.SuccessCount} / スキップ {progress.SkippedCount} / エラー {progress.ErrorCount}、現在: {progress.FileName}"
+        this.GenerationDetails = $"処理済み {progress.SuccessCount + progress.SkippedCount + progress.ErrorCount} / 全 {progress.Total} 枚、成功 {progress.SuccessCount} / スキップ {progress.SkippedCount} / エラー {progress.ErrorCount}{(progress.WarningCount > 0 ? $" / 警告 {progress.WarningCount}" : string.Empty)}、現在: {progress.FileName}"
             + FormatTiles(progress.Tiles);
         this.GenerationProgressValue = progress.Total == 0
             ? 0
@@ -1047,6 +1060,7 @@ public sealed class MainViewModel : ObservableObject
             InputFolderPath = inputFolderPath,
             OutputFolderPath = outputFolderPath,
             IncludeSubfolders = this.IncludeSubfolders,
+            AllowIncompleteVectorMaps = this.AllowIncompleteVectorMaps,
             OutputFilePrefix = this.OutputFilePrefix,
             OutputFilePostfix = this.OutputFilePostfix,
             ConfirmLargeBatchAsync = this.ConfirmLargeBatchAsync,
@@ -1065,7 +1079,7 @@ public sealed class MainViewModel : ObservableObject
     private static string FormatSummary(BatchGenerationSummary summary)
         => string.Create(
             CultureInfo.InvariantCulture,
-            $"{(summary.IsCancelled ? "キャンセル" : summary.StopReason is null ? "完了" : "中止")}: 処理済み {summary.ProcessedCount} / 全 {summary.TotalCount} 枚（成功 {summary.SuccessCount} / スキップ {summary.SkippedCount} / エラー {summary.ErrorCount}）、経過 {summary.Elapsed:c}{FormatTiles(summary.Tiles)}");
+            $"{(summary.IsCancelled ? "キャンセル" : summary.StopReason is null ? "完了" : "中止")}: 処理済み {summary.ProcessedCount} / 全 {summary.TotalCount} 枚（成功 {summary.SuccessCount} / スキップ {summary.SkippedCount} / エラー {summary.ErrorCount}{(summary.WarningCount > 0 ? $" / 警告 {summary.WarningCount}" : string.Empty)}）、経過 {summary.Elapsed:c}{FormatTiles(summary.Tiles)}");
 
     private static string FormatTiles(TileFetchStatistics? tiles) => tiles is null ? string.Empty
         : $" / タイル: ネットワーク取得 {tiles.NetworkCount} 件 / キャッシュ {tiles.CacheCount} 件、平均 {tiles.AverageRate:F2} / 最大 {tiles.MaximumRate} リクエスト/秒";
@@ -1107,6 +1121,7 @@ public sealed class MainViewModel : ObservableObject
         {
             InputFolderPath = this.InputFolderPath,
             IncludeSubfolders = this.IncludeSubfolders,
+            AllowIncompleteVectorMaps = this.AllowIncompleteVectorMaps,
             Width = this.Width,
             Height = this.Height,
             Zoom = this.Zoom,

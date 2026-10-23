@@ -112,17 +112,17 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource: null, cancellationToken);
 
     /// <inheritdoc />
-    public async Task RenderToCanvasAsync(
-        SKCanvas canvas,
-        GeoCoordinate center,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        TileSource? tileSource,
+    public Task RenderToCanvasAsync(SKCanvas canvas, GeoCoordinate center, int zoom, int width, int height,
+        TileFetchSession? session, TileSource? tileSource, CancellationToken cancellationToken = default)
+        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource, new VectorMapRenderContext(false), cancellationToken);
+
+    /// <inheritdoc />
+    public async Task RenderToCanvasAsync(SKCanvas canvas, GeoCoordinate center, int zoom, int width, int height,
+        TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(renderContext);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentOutOfRangeException.ThrowIfNegative(zoom);
@@ -181,9 +181,25 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                     firstFetchY = ty;
                 }
 
-                byte[]? tileData = await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
+                renderContext.RequestedTileCount++;
+                byte[]? tileData;
+                try
+                {
+                    tileData = await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
+                }
+                catch (TileFetchException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(cancellationToken);
+                }
+                catch (TileFetchException exception) when (renderContext.AllowIncompleteMaps == true
+                    && (exception.IsTransient || exception.IsCacheOnlyMiss) && !cancellationToken.IsCancellationRequested)
+                {
+                    renderContext.UnavailableTileCount++;
+                    continue;
+                }
                 if (tileData is null || tileData.Length == 0)
                 {
+                    renderContext.AbsentTileCount++;
                     continue;
                 }
 
@@ -223,7 +239,8 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
         // 描画できるタイルが 1 枚もない場合は配信範囲外として扱う。白紙の地図を成功として返すと、
         // 国外への切替（404 のみが契機）が働かず、一括生成でも異常に気付けない。
-        if (attemptedTiles > 0 && loadedTiles.Count == 0)
+        if (unreadableTiles > 0 || (attemptedTiles > 0 && loadedTiles.Count == 0
+            && !(renderContext.AllowIncompleteMaps == true && renderContext.UnavailableTileCount > 0)))
         {
             Uri requestUri = tileSource?.BuildTileUri(tileZoom, firstFetchX, firstFetchY)
                 ?? new Uri(string.Create(CultureInfo.InvariantCulture, $"vector-tile:{activeSource.SourceId}/{tileZoom}/{firstFetchX}/{firstFetchY}"), UriKind.Absolute);
@@ -245,6 +262,8 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                 HttpStatusCode.NotFound,
                 null);
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         // 5. SkiaSharp によるキャンバス描画
         // 背景クリア

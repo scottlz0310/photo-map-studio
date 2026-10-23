@@ -47,6 +47,8 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         SKCanvas canvas = surface.Canvas;
         canvas.Clear(SKColors.Transparent);
 
+        IncompleteMapWarning? warning = null;
+
         if (request.TileSource.IsVector)
         {
             if (this.vectorMapRenderer is null)
@@ -54,6 +56,7 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
                 throw new InvalidOperationException("ベクタータイルの描画エンジンが設定されていません。");
             }
 
+            var context = new VectorMapRenderContext(request.AllowIncompleteVectorMaps);
             await this.vectorMapRenderer.RenderToCanvasAsync(
                 canvas,
                 request.Center,
@@ -62,7 +65,11 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
                 request.Height,
                 request.TileSession,
                 request.TileSource,
-                cancellationToken).ConfigureAwait(false);
+                context, cancellationToken).ConfigureAwait(false);
+            if (context.AllowIncompleteMaps && context.MissingTileCount > 0)
+            {
+                warning = new(context.MissingTileCount, context.RequestedTileCount, request.TileSession?.IsCacheOnly == true);
+            }
         }
         else
         {
@@ -72,12 +79,27 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         }
 
         DrawPin(canvas, request);
+        if (warning is not null) { DrawIncompleteWarning(canvas, request, warning); }
         DrawAttribution(canvas, request);
 
         using SKImage image = surface.Snapshot();
         using SKData encoded = image.Encode(SKEncodedImageFormat.Png, 100)
             ?? throw new MapCompositionException("PNG へのエンコードに失敗しました。");
-        return new MapCompositionResult(encoded.ToArray(), request.TileSource, UsedFallback: false);
+        return new MapCompositionResult(encoded.ToArray(), request.TileSource, UsedFallback: false) { Warning = warning };
+    }
+
+    private static void DrawIncompleteWarning(SKCanvas canvas, MapCompositionRequest request, IncompleteMapWarning warning)
+    {
+        using SKTypeface face = VectorMapFontHelper.CreateJapaneseTypeface();
+        using var font = new SKFont(face, 14f);
+        string text = warning.Message;
+        float width = font.MeasureText(text);
+        if (width > request.Width - 8) { font.Size *= Math.Max(1, request.Width - 8) / width; }
+        float height = font.Size + 12;
+        using var background = new SKPaint { Color = new SKColor(0xFF, 0xE0, 0x82) };
+        using var ink = new SKPaint { Color = new SKColor(0x5D, 0x36, 0x00), IsAntialias = true };
+        canvas.DrawRect(0, 0, request.Width, height, background);
+        canvas.DrawText(text, 4, font.Size + 4, SKTextAlign.Left, font, ink);
     }
 
     private async Task DrawTilesAsync(

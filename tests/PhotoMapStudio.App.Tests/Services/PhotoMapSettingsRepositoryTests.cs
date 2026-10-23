@@ -8,6 +8,17 @@ namespace PhotoMapStudio.App.Tests.Services;
 public class PhotoMapSettingsRepositoryTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void 縮退生成の明示的な設定を保存して復元する(bool allow)
+    {
+        var repository = new PhotoMapSettingsRepository(new InMemorySettingsValueStore());
+        Assert.False(repository.Load().AllowIncompleteVectorMaps);
+        repository.Save(new PhotoMapSettings { AllowIncompleteVectorMaps = allow });
+        Assert.Equal(allow, repository.Load().AllowIncompleteVectorMaps);
+    }
+
+    [Theory]
     [InlineData(false, "", "_map")]
     [InlineData(true, "map_", "_z16")]
     [InlineData(true, "", "")]

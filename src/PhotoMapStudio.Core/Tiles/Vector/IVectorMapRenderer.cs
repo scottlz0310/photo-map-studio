@@ -68,6 +68,12 @@ public interface IVectorMapRenderer
         TileSource? tileSource,
         CancellationToken cancellationToken = default);
 
+    /// <summary>画像単位の縮退設定と欠落集計を指定して描画する。</summary>
+    Task RenderToCanvasAsync(SKCanvas canvas, GeoCoordinate center, int zoom, int width, int height,
+        TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
+        CancellationToken cancellationToken = default)
+        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource, cancellationToken);
+
     /// <summary>
     /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する。
     /// </summary>

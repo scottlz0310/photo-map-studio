@@ -22,4 +22,7 @@ public enum BatchGenerationStatus
 
     /// <summary>キャンセルにより中断した。</summary>
     Cancelled,
+
+    /// <summary>画像を生成したが、地図データに欠落がある。</summary>
+    Warning,
 }

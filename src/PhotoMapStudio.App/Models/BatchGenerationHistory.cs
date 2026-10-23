@@ -7,4 +7,8 @@ namespace PhotoMapStudio.App.Models;
 public sealed record BatchGenerationHistory(
     int SchemaVersion, Guid Id, DateTimeOffset StartedAtUtc, DateTimeOffset FinishedAtUtc,
     string InputFolderPath, int SuccessCount, int SkippedCount, int ErrorCount, int TotalCount,
-    bool IsCancelled, bool IsStopped, TimeSpan Elapsed, IReadOnlyList<BatchGenerationIssue> Issues);
+    bool IsCancelled, bool IsStopped, TimeSpan Elapsed, IReadOnlyList<BatchGenerationIssue> Issues)
+{
+    /// <summary>成功分のうち欠落警告を含む画像数。</summary>
+    public int WarningCount => this.Issues.Count(issue => issue.Status == BatchGenerationStatus.Warning);
+}

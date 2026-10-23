@@ -28,6 +28,7 @@ namespace PhotoMapStudio.App.ViewModels;
 public sealed class MainViewModel : ObservableObject
 {
     private const string InvalidImageSizeMessage = "画像サイズ(幅・高さ)は正の整数を指定してください。";
+    private const string OpenFreeMapUsageMessage = "OpenFreeMap の利用規約では、まとまった取得は 1 回あたり 3,000 タイルまたは 50 MB 以内・並列 4 以内とされています。取得は 1 接続ずつ順に行い、100枚超は開始前に確認します。";
     private const string InvalidZoomMessage = "ズームレベルは 1 〜 19 の範囲で指定してください。";
     private const string LoopbackTileUsageMessage = "この PC 上の配信元です。一括取得も高速な間隔（8並列・5ミリ秒）で行い、100枚超の確認は省略します。";
 
@@ -208,6 +209,7 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>配信元に応じた一括生成の案内。</summary>
     public string TileUsageMessage => this.SelectedTileSource == TileSourceChoices.OpenStreetMap
         ? "OSM公式サーバーはプレビュー用です。一括生成は、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。"
+        : this.SelectedTileSource == TileSourceChoices.OpenFreeMap ? OpenFreeMapUsageMessage
         : this.IsCustomTileSource ? this.CustomTileUsageMessage
         : this.IsCustomVectorSource ? this.CustomVectorUsageMessage : string.Empty;
 
@@ -217,7 +219,7 @@ public sealed class MainViewModel : ObservableObject
                 ? "この PC 上の PMTiles ファイルを使用します（通信しません）。"
                 : TileSource.IsLoopbackUrlTemplate(spec.UrlTemplate)
                     ? LoopbackTileUsageMessage
-                    : "配信元の一括取得・画像保存の許可を確認してください。取得は間隔を空けて行い、100枚超は開始前に確認します。認証情報を URL へ埋め込まないでください。"
+                    : "配信元の一括取得・画像保存の許可を確認してください。未取得のタイルは 1 接続ずつ 125 ミリ秒以上の間隔で取得し、100枚超は開始前に確認します。認証情報を URL へ埋め込まないでください。"
             : string.Empty;
 
     private string CustomTileUsageMessage => TileSource.IsLoopbackUrlTemplate(this.CustomTileUrlTemplate)
@@ -228,7 +230,7 @@ public sealed class MainViewModel : ObservableObject
     public bool HasTileUsageMessage => !string.IsNullOrEmpty(this.TileUsageMessage);
 
     /// <summary>画面側で大量実行の許可を確認する。</summary>
-    public Func<int, CancellationToken, Task<bool>>? ConfirmLargeBatchAsync { get; set; }
+    public Func<LargeBatchPrompt, CancellationToken, Task<bool>>? ConfirmLargeBatchAsync { get; set; }
 
     /// <summary>列挙中は件数が確定しない。</summary>
     public bool ProgressIsIndeterminate => this.IsGenerating ? this.isEnumerating : this.Preview?.LoadProgress?.IsEnumerating == true;

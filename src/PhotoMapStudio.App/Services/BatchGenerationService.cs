@@ -154,17 +154,15 @@ public sealed class BatchGenerationService : IBatchGenerationService
                 }
             }
 
-            bool isGsi = string.Equals(settings.TileSource.BuildTileUri(0, 0, 0).Host, "cyberjapandata.gsi.go.jp", StringComparison.OrdinalIgnoreCase);
-            // ループバックは他者の配信元ではないため、一括取得の許可を確認する相手がいない。
-            if (!isGsi && !settings.TileSource.IsLoopback && total > 100)
+            if (LargeBatchPrompt.IsRequired(settings.TileSource, total))
             {
                 if (settings.ConfirmLargeBatchAsync is null)
                 {
-                    throw new BatchGenerationException("100枚超のカスタム一括生成には、配信元の一括取得・画像保存の許可を確認してから開始してください。");
+                    throw new BatchGenerationException("他者の配信元での 100 枚超の一括生成には、配信元の一括取得・画像保存の許可を確認してから開始してください。");
                 }
 
                 bool confirmed;
-                try { confirmed = await settings.ConfirmLargeBatchAsync(total, cancellationToken).ConfigureAwait(false); }
+                try { confirmed = await settings.ConfirmLargeBatchAsync(LargeBatchPrompt.Create(settings.TileSource, total), cancellationToken).ConfigureAwait(false); }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return Summary(cancelled: true); }
                 if (!confirmed)
                 {

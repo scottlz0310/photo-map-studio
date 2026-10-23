@@ -4,7 +4,7 @@
 
 `PhotoGeoExplorer` / `tacho-graph-studio` と同じトーンで配布する 3 点ツールスイートの 1 つとして開発しています。
 
-> **開発状況**: 初版リリースに向けて実装中です。本リポジトリは [auto-map-generator](https://github.com/scottlz0310/auto-map-generator)（tkinter 実装）の後継であり、仕様と処理アルゴリズムのみを引き継いだ全面リライトです。移行の経緯は [auto-map-generator#10](https://github.com/scottlz0310/auto-map-generator/issues/10) を参照してください。
+> **経緯**: 本リポジトリは [auto-map-generator](https://github.com/scottlz0310/auto-map-generator)（tkinter 実装）の後継であり、仕様と処理アルゴリズムのみを引き継いだ全面リライトです。移行の経緯は [auto-map-generator#10](https://github.com/scottlz0310/auto-map-generator/issues/10) を参照してください。
 
 ## 機能
 
@@ -19,7 +19,7 @@
 - エラー時のローカル診断ログ（最大2MiB、写真・GPS・パス・URLを含めず、外部送信なし）
 - 一括生成の実行履歴を端末内へ自動保存（直近30回）。スキップ・エラーの相対パスと理由を過去の実行から確認できる
 
-詳しい使い方はアプリの「ヘルプ」ボタンまたは `F1` で開けます。
+使い方は [ユーザーガイド](docs/user-guide.md)、またはアプリの「ヘルプ」ボタン（`F1`）で確認できます。インストールと更新の手順も、ユーザーガイドにあります。
 
 対応する入力形式: JPEG / TIFF / HEIC
 
@@ -91,7 +91,7 @@ dotnet test tests/PhotoMapStudio.App.Tests
 
 Windows App SDK（WinUI 3）によるデスクトップアプリケーションです。ドメインロジック（EXIF 読み取り、Web メルカトル座標変換、タイルキャッシュ、画像合成）は `PhotoMapStudio.Core`（.NET Standard / .NET 10 クラスライブラリ）に分離されており、UI レイヤーに依存しません。
 
-詳細なアーキテクチャ設計仕様は [docs/vector-map-architecture.md](docs/vector-map-architecture.md) を参照してください。
+設計・仕様・検証の記録は [docs/development](docs/development/README.md) にあります。ベクタータイル直接描画の設計仕様は [vector-map-architecture.md](docs/development/vector-map-architecture.md) を参照してください。
 
 ```
 PhotoMapStudio/
@@ -101,11 +101,11 @@ PhotoMapStudio/
 ├── tests/
 │   ├── PhotoMapStudio.App.Tests/
 │   └── PhotoMapStudio.Core.Tests/
-└── docs/                       # 設計仕様書
+└── docs/                       # ユーザーガイド・プライバシーポリシー（設計・検証の記録は development/）
 ```
 
 ## ライセンス
 
 本プロジェクトは [MIT License](LICENSE) の下で公開されています。
 
-利用している地図タイルの著作権および利用条件については、アプリ内のヘルプおよび各配信元の利用規約を確認してください。
+利用している地図タイルの著作権および利用条件については、[ユーザーガイド](docs/user-guide.md#タイルソースと利用条件)、アプリ内のヘルプ、各配信元の利用規約を確認してください。プライバシーについては [プライバシーポリシー](docs/privacy-policy.html) を参照してください。

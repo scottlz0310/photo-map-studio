@@ -18,7 +18,7 @@
 ## Issue #49: オンデマンド描画とキャッシュによるベクタータイル（OSM）地図対応 (Epic)
 
 - [x] 所有者承認のもと、Epic Issue #49 を起票
-- [x] M0: ベクタータイル直接描画アーキテクチャ設計・ドキュメント策定（docs/vector-map-architecture.md、handoff 参照更新、OSM・地理院2本立て方針確立）
+- [x] M0: ベクタータイル直接描画アーキテクチャ設計・ドキュメント策定（docs/development/vector-map-architecture.md、handoff 参照更新、OSM・地理院2本立て方針確立）
 - [x] M1: ベクタータイル取得・キャッシュ層の抽象化（IVectorTileSource、VectorTileCacheKey、CachedVectorTileSource、OpenFreeMapTileSource、単体テスト）
 - [x] M2: Core 内蔵ベクタータイル描画エンジン（VectorTileDecoder、OpenMapTilesStyle、LabelCollisionGrid、VectorMapRenderer、Core 単体テスト）
 - [x] M3: UI 連携・設定・出典表示（WinUI 3 設定UI、ODbL 出典焼き込み、ヘルプ・ドキュメント更新）
@@ -87,7 +87,7 @@
 - [x] XAMLヘルプ・README・移植仕様書・CHANGELOG
 - [x] 初回独立レビューの2件修正（ダイアログ競合、長い出力名の一時保存）と回帰テスト
 - [x] ローカルの自動テスト・format・ビルド・x64／ARM64 MSIX生成
-- [x] ローカル実写真の段階検証（109枚を元にした複製を含む。結果は `docs/issue-34-validation.md`）
+- [x] ローカル実写真の段階検証（109枚を元にした複製を含む。結果は `docs/development/issue-34-validation.md`）
 - [x] Dropbox同期写真の探索除外と実画面の表示不具合の修正・回帰テスト
 - [x] エラー時のローカル診断ログ・容量制限・個人情報の除外・保存失敗の通知と回帰テスト
 - [x] PRのCI最終結果（HEAD `86a3363` のbuild・x64／ARM64 package・codecov/patchが成功）

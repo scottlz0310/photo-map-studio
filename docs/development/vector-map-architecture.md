@@ -70,11 +70,16 @@ flowchart TD
 - **`GetTileAsync(int z, int x, int y, CancellationToken ct)`**:
   指定されたタイル座標のバイナリ（MVT / PBF）を返します。
 - **キャッシュ責務**:
-  一度取得したタイルはローカルディスク（`LocalState/vector-cache/` 等）にキャッシュし、同一セッションおよび次回以降の一括生成でネットワークリクエストを発生させません。
+  一度取得したタイルはローカルディスク（`LocalState/tile-cache/`）にキャッシュし、同一セッションおよび次回以降の一括生成でネットワークリクエストを発生させません。
+  - キャッシュ鍵は、配信元の識別子（SHA-256 の先頭 8 桁）とズーム・座標（`{hash8}_{z}_{x}_{y}.pbf`）です。配信元が異なるタイルは混ざりません。OpenFreeMap は配信の版（URL に含まれる）を識別子に含めるため、版の更新で以前のキャッシュは使われなくなります。解決した版は `ITileCache` に保存し、オフラインでは前回の版を使います。
+  - 保持期間は既定 30 日、容量上限は既定 1 GB（設定画面で変更可）です。上限を超えると、LRU（最終使用日時の古い順）で削除します。この PC 上の PMTiles ファイルはキャッシュしません。
+- **メタデータの確定**:
+  `PrepareAsync` で、タイル座標の計算前に最大ズームなどの取得元のメタデータ（PMTiles はヘッダー）を確定します。確定できないとき（オフラインなど）は例外にせず、取得の失敗は後続のタイル取得で報告します。
 - **取得方式と実装クラス**:
   - `OpenFreeMapTileSource`: OpenFreeMap パブリックエンドポイント（最新 PBF）から取得。固有 User-Agent と並列数制限（最大 4 並列以下）を厳守。提供 maxzoom は 14（過拡大で z15 以上を描画）。
   - `GsiVectorTileSource`: 国土地理院の最適化ベクトルタイル現行仕様に準拠。従来の個別 XYZ PBF（2023年10月で更新停止）ではなく、現行配信である単一 PMTiles（`https://cyberjapandata.gsi.go.jp/xyz/optimal_bvmap-v1/optimal_bvmap-v1.pmtiles`）に対する **HTTP Range 取得** を採用。対応ズームは z4〜16（過拡大で z17〜18 を描画）。
   - `PmtilesVectorTileSource`: PMTiles v3 リーダー実装。国土地理院のリモート PMTiles の HTTP Range 読み取り基盤として共通利用するほか、ユーザー指定のローカル `.pmtiles` ファイルおよび任意のリモート PMTiles URL（BYO）の読み取りを担当。
+  - **ユーザー指定の取得元（BYO）**: `VectorSourceSpec` が入力を検証し（http/https のみ、認証情報とフラグメントの拒否、PMTiles は `.pmtiles`、ローカルは絶対パスと存在確認）、`CustomVectorSourceFactory` が取得元と描画スタイルを解決します。種別は PMTiles ファイル／PMTiles URL（HTTP Range）／XYZ URL テンプレートで、XYZ は配信する最大ズームを指定します（PMTiles はヘッダーから分かるため無視）。他者の配信元（HTTP）はキャッシュを通し、125 ミリ秒以上の間隔で 1 接続ずつ要求します。ファイルとループバックは待たず、ファイルは通信せずキャッシュもしません。PMTiles／MVT として読めない内容は、OSM 代替に隠さず理由つきで失敗させます。
 
 ### 3.2 スタイル・スキーマ解釈層 (`IVectorMapStyle`)
 
@@ -83,7 +88,7 @@ flowchart TD
 - **`OpenMapTilesStyle` (OSM系)**:
   - レイヤー: `transportation`, `transportation_name`, `place`, `poi`, `water`, `landcover`, `building` 等。
   - 道路階層判定: `class`（`motorway`, `trunk`, `primary`, `secondary`, `tertiary`, `minor`, `service`, `path` 等）に基づく色分け・線幅。
-  - 経路番号の盾: `ref`, `route_1_network`, `route_1_ref` による国道（青三角）・都道府県道（白地五角形）・高速（緑角丸）の優先配置。
+  - 経路番号の盾: 高速（緑の角丸）・国道（青の逆三角）・都道府県道（白の五角形）。`network` が日本の経路網（`jp-expressway`・`jp-national`・`jp-prefectural`）ならそれを使い、持たない場合（OpenFreeMap の日本の道路は `road` が多い）は `class` から推定します（`motorway` は高速、`trunk`・`primary` は国道、`secondary`・`tertiary` は都道府県道）。経路番号を盾として優先配置します。道路が過拡大で画面外へ延びる場合も、可視区間の中点に置きます。
   - ラベル: `name:ja` 優先、次いで `name`。道路沿いの傾き配置および施設アイコン。
 - **`GsiVectorStyle` (国土地理院系)**:
   - レイヤー: `RdEdg`（道路縁）, `RdCL`（道路中心線）, `BldA`（建物）, `WA`（水域）, `Anno`（注記・地名）, 等高線。
@@ -126,8 +131,10 @@ repo 外の使い捨て検証（C# / .NET 10 / SkiaSharp）により、成立性
 
 | マイルストーン | 主要内容 | 成果物 |
 |---|---|---|
-| **M0** (本PR) | アーキテクチャ設計・方針確定・ドキュメント整備 | `docs/vector-map-architecture.md`, handoff 参照更新 |
+| **M0** | アーキテクチャ設計・方針確定・ドキュメント整備 | `docs/development/vector-map-architecture.md`, handoff 参照更新 |
 | **M1** | ベクタータイル取得境界・キャッシュ層の抽象化 | `IVectorTileSource`, `VectorTileCache`, モック単体テスト |
 | **M2** | Core 内蔵ベクター直描画エンジン（OSM / OpenMapTiles） | `VectorMapRenderer`, `OpenMapTilesStyle`, Core 単体テスト |
 | **M3** | UI 連携・設定画面・出典焼き込み・既存パイプライン統合 | WinUI 3 設定UI, プリセット追加, ヘルプ・README更新 |
 | **M4** | 国土地理院ベクター対応（最適化PMTiles Range取得） & BYO フォールバック | `GsiVectorStyle`, `optimal_bvmap-v1` PMTiles Range取得, ユーザー指定 PMTiles 対応, レート制御 |
+
+M0〜M4 は実装済みです。ユーザー指定の取得元（BYO）、経路番号の盾、キャッシュの容量上限と LRU を含みます。使い方は [ユーザーガイド](../user-guide.md) を参照してください。

@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- 国外の写真に「地理院タイル（最適化ベクトル）」を選ぶと、白紙の地図がエラーなく成功として出力される不具合を修正。描画できるタイルが 1 枚もない場合は配信範囲外として HTTP 404 の `TileFetchException` を送出する。プレビューは代替ソースへ切り替わり、一括生成は「タイルなし」としてスキップする（[#60](https://github.com/scottlz0310/photo-map-studio/issues/60)）
 - ベクター地図スタイル（国土地理院 最適化ベクトルおよび OpenFreeMap）において、Windows 標準の日本語フォント（Yu Gothic UI / 日本語対応 Typeface）を自動解決する VectorMapFontHelper を導入し、地名・施設名・等高線注記の漢字・ひらがなが豆腐（□）として描画される不具合を修正（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 ## [0.2.3] - 2026-10-18

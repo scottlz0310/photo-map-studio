@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
+using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.App.ViewModels;
 using PhotoMapStudio.App.Views;
@@ -107,7 +108,7 @@ internal sealed partial class MainWindow : Window
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "UIディスパッチャの例外を呼び出し側のTaskへ伝播させるため。")]
-    private Task<bool> ConfirmLargeBatchAsync(int count, CancellationToken cancellationToken)
+    private Task<bool> ConfirmLargeBatchAsync(LargeBatchPrompt prompt, CancellationToken cancellationToken)
     {
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!this.DispatcherQueue.TryEnqueue(async () =>
@@ -115,15 +116,15 @@ internal sealed partial class MainWindow : Window
             var dialog = new ContentDialog
             {
                 XamlRoot = this.RootLayout.XamlRoot,
-                Title = $"カスタム配信元で{count}枚を一括生成",
+                Title = prompt.Title,
                 Content = new InfoBar
                 {
                     IsOpen = true,
                     IsClosable = false,
                     Severity = InfoBarSeverity.Warning,
-                    Message = "配信元が一括取得・画像保存を許可していることを確認してください。未取得のタイルは1秒間隔で取得します。"
+                    Message = prompt.Message,
                 },
-                PrimaryButtonText = "許可を確認して開始",
+                PrimaryButtonText = prompt.ConfirmButtonText,
                 CloseButtonText = "キャンセル",
                 DefaultButton = ContentDialogButton.Close,
             };

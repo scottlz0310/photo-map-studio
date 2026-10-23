@@ -164,23 +164,33 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
 
+        // 共有のペイントは書き換えず、描画ごとに線幅を設定した複製を使う（並行して描画しても線幅が混ざらない）
+
         // 1. 等高線 (Cntr)
-        this.contourPaint.StrokeWidth = 0.8f / tileScale;
-        RenderLayerLines(canvas, tile.GetLayer("Cntr"), this.contourPaint);
+        using (SKPaint contour = StrokeOf(this.contourPaint, 0.8f / tileScale))
+        {
+            RenderLayerLines(canvas, tile.GetLayer("Cntr"), contour);
+        }
 
         // 2. 水涯線・河川中心線・海岸線 (WL / RvrCL / Cstline)
-        this.riverPaint.StrokeWidth = 1.0f / tileScale;
-        RenderLayerLines(canvas, tile.GetLayer("WL"), this.riverPaint);
-        RenderLayerLines(canvas, tile.GetLayer("RvrCL"), this.riverPaint);
-        RenderLayerLines(canvas, tile.GetLayer("Cstline"), this.riverPaint);
+        using (SKPaint river = StrokeOf(this.riverPaint, 1.0f / tileScale))
+        {
+            RenderLayerLines(canvas, tile.GetLayer("WL"), river);
+            RenderLayerLines(canvas, tile.GetLayer("RvrCL"), river);
+            RenderLayerLines(canvas, tile.GetLayer("Cstline"), river);
+        }
 
         // 3. 行政境界線 (AdmBdry)
-        this.admBdryPaint.StrokeWidth = 1.0f / tileScale;
-        RenderLayerLines(canvas, tile.GetLayer("AdmBdry"), this.admBdryPaint);
+        using (SKPaint admBdry = StrokeOf(this.admBdryPaint, 1.0f / tileScale))
+        {
+            RenderLayerLines(canvas, tile.GetLayer("AdmBdry"), admBdry);
+        }
 
         // 4. 鉄道 (RailCL)
-        this.railwayPaint.StrokeWidth = 1.2f / tileScale;
-        RenderLayerLines(canvas, tile.GetLayer("RailCL"), this.railwayPaint);
+        using (SKPaint railway = StrokeOf(this.railwayPaint, 1.2f / tileScale))
+        {
+            RenderLayerLines(canvas, tile.GetLayer("RailCL"), railway);
+        }
 
         // 5. 道路 (RdCL: 道路中心線 / RdEdg: 道路縁)
         VectorTileLayer? roadLayer = tile.GetLayer("RdCL");
@@ -192,8 +202,8 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         VectorTileLayer? roadEdgeLayer = tile.GetLayer("RdEdg");
         if (roadEdgeLayer is not null && zoom >= 15)
         {
-            this.minorCasing.StrokeWidth = 0.8f / tileScale;
-            RenderLayerLines(canvas, roadEdgeLayer, this.minorCasing);
+            using SKPaint roadEdge = StrokeOf(this.minorCasing, 0.8f / tileScale);
+            RenderLayerLines(canvas, roadEdgeLayer, roadEdge);
         }
     }
 
@@ -259,34 +269,66 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 
     private void RenderRoads(SKCanvas canvas, VectorTileLayer roadLayer, float tileScale)
     {
-        // 道路は casing (外枠) を先にすべて描き、その上に fill (中塗り) を描く
-        for (int i = 0; i < roadLayer.Features.Count; i++)
+        // 種別・線幅ごとの複製ペイントをこの描画の間だけ保持する（共有のペイントは書き換えない）
+        var strokes = new Dictionary<(GsiRoadKind Kind, float Width, bool Casing), SKPaint>();
+        try
         {
-            VectorTileFeature feature = roadLayer.Features[i];
-            if (feature.GeometryType != VectorGeometryType.LineString)
+            // 道路は casing (外枠) を先にすべて描き、その上に fill (中塗り) を描く
+            for (int i = 0; i < roadLayer.Features.Count; i++)
             {
-                continue;
+                VectorTileFeature feature = roadLayer.Features[i];
+                if (feature.GeometryType != VectorGeometryType.LineString)
+                {
+                    continue;
+                }
+
+                var (kind, width) = GetRoadCategory(feature);
+                RenderFeatureLine(canvas, feature, this.GetRoadStroke(strokes, kind, width + 1.6f, tileScale, casing: true));
             }
 
-            var (kind, width) = GetRoadCategory(feature);
-            SKPaint casing = this.GetCasingPaint(kind);
-            casing.StrokeWidth = (width + 1.6f) / tileScale;
-            RenderFeatureLine(canvas, feature, casing);
-        }
-
-        for (int i = 0; i < roadLayer.Features.Count; i++)
-        {
-            VectorTileFeature feature = roadLayer.Features[i];
-            if (feature.GeometryType != VectorGeometryType.LineString)
+            for (int i = 0; i < roadLayer.Features.Count; i++)
             {
-                continue;
-            }
+                VectorTileFeature feature = roadLayer.Features[i];
+                if (feature.GeometryType != VectorGeometryType.LineString)
+                {
+                    continue;
+                }
 
-            var (kind, width) = GetRoadCategory(feature);
-            SKPaint fill = this.GetFillPaint(kind);
-            fill.StrokeWidth = width / tileScale;
-            RenderFeatureLine(canvas, feature, fill);
+                var (kind, width) = GetRoadCategory(feature);
+                RenderFeatureLine(canvas, feature, this.GetRoadStroke(strokes, kind, width, tileScale, casing: false));
+            }
         }
+        finally
+        {
+            foreach (SKPaint paint in strokes.Values)
+            {
+                paint.Dispose();
+            }
+        }
+    }
+
+    private SKPaint GetRoadStroke(
+        Dictionary<(GsiRoadKind Kind, float Width, bool Casing), SKPaint> strokes,
+        GsiRoadKind kind,
+        float width,
+        float tileScale,
+        bool casing)
+    {
+        var key = (kind, width, casing);
+        if (!strokes.TryGetValue(key, out SKPaint? paint))
+        {
+            paint = StrokeOf(casing ? this.GetCasingPaint(kind) : this.GetFillPaint(kind), width / tileScale);
+            strokes.Add(key, paint);
+        }
+
+        return paint;
+    }
+
+    private static SKPaint StrokeOf(SKPaint template, float strokeWidth)
+    {
+        SKPaint paint = template.Clone();
+        paint.StrokeWidth = strokeWidth;
+        return paint;
     }
 
     /// <summary>

@@ -13,6 +13,16 @@ public sealed class HttpPmtilesByteSourceTests
             => Task.FromResult(handler(request));
     }
 
+    /// <summary>HttpClient のタイムアウトと同じく、呼び出し元のトークンとは無関係に取り消しを送出するハンドラー。</summary>
+    private sealed class TimeoutHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TaskCanceledException("タイムアウトを模擬");
+        }
+    }
+
     [Fact]
     public async Task 正常な206応答で要求バイト列を取得できる()
     {
@@ -31,6 +41,57 @@ public sealed class HttpPmtilesByteSourceTests
 
         byte[] actual = await source.ReadRangeAsync(10, 4, session: null, CancellationToken.None);
         Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task 要求にUserAgentを付与する()
+    {
+        string? userAgent = null;
+        using var handler = new StubHttpMessageHandler(req =>
+        {
+            userAgent = req.Headers.UserAgent.ToString();
+            return new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent([0x01]),
+            };
+        });
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        await source.ReadRangeAsync(0, 1, session: null, CancellationToken.None);
+
+        Assert.False(string.IsNullOrWhiteSpace(userAgent));
+        Assert.Equal(UserAgentProvider.Value, userAgent);
+    }
+
+    [Fact]
+    public async Task 呼び出し元のキャンセルではないタイムアウトはTileFetchExceptionへ変換する()
+    {
+        using var handler = new TimeoutHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+        var session = new TileFetchSession(TimeProvider.System);
+
+        TileFetchException ex = await Assert.ThrowsAsync<TileFetchException>(
+            () => source.ReadRangeAsync(0, 10, session, CancellationToken.None));
+
+        Assert.Contains("タイムアウト", ex.Message, StringComparison.Ordinal);
+        Assert.Null(ex.StatusCode);
+        Assert.IsAssignableFrom<OperationCanceledException>(ex.InnerException);
+    }
+
+    [Fact]
+    public async Task 呼び出し元のキャンセルはOperationCanceledExceptionのまま伝播する()
+    {
+        using var handler = new TimeoutHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => source.ReadRangeAsync(0, 10, session: null, cancellation.Token));
     }
 
     [Fact]

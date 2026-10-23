@@ -3,6 +3,7 @@ using System.Net;
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.Core.Tests.Maps;
 
@@ -93,6 +94,30 @@ public class FallbackMapImageComposerTests
 
         Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
         Assert.Equal([TileSources.GsiPale], inner.UsedSources);
+    }
+
+    [Fact]
+    public async Task ローカルのPMTilesは収録範囲外でも外部の代替ソースへ切り替えない()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"pms-fallback-{Guid.NewGuid():N}.pmtiles");
+        await File.WriteAllBytesAsync(path, [0]);
+        try
+        {
+            TileSource local = TileSources.CustomVector(VectorSourceSpec.Create(path, VectorStyleSchema.OpenMapTiles), "© 検証");
+            var inner = new RecordingComposer(NotFound());
+            var composer = new FallbackMapImageComposer(inner, TileSources.WorldwideFallback);
+
+            // 既定（AllowWorldwideFallback = true）のプレビューでも、撮影地点の座標を外部へ送らない
+            TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+                () => composer.ComposeAsync(CreateRequest() with { TileSource = local }, CancellationToken.None));
+
+            Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+            Assert.Equal([local], inner.UsedSources);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

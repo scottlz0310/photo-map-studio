@@ -33,8 +33,8 @@ public sealed class FilePmtilesByteSource : IPmtilesByteSource
             return Array.Empty<byte>();
         }
 
+        // この PC 上のファイルの読み取りはネットワーク要求でもキャッシュ命中でもないため、統計に数えない
         session?.ThrowIfStopped();
-        session?.RecordRequest();
 
         byte[] buffer = new byte[length];
         int totalRead = 0;
@@ -56,7 +56,6 @@ public sealed class FilePmtilesByteSource : IPmtilesByteSource
             totalRead += read;
         }
 
-        session?.RecordSuccess(cached: true);
         return buffer;
     }
 

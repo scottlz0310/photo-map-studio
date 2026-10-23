@@ -44,6 +44,27 @@ public sealed class PmtilesInvalidInputTests
     }
 
     [Fact]
+    public async Task ローカルファイルの読み取りはネットワーク要求にもキャッシュ命中にも数えない()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"pms-stats-{Guid.NewGuid():N}.pmtiles");
+        await File.WriteAllBytesAsync(path, new byte[256]);
+        try
+        {
+            using var bytes = new FilePmtilesByteSource(path);
+            var session = new TileFetchSession(TimeProvider.System);
+
+            byte[] read = await bytes.ReadRangeAsync(0, 127, session, CancellationToken.None);
+
+            Assert.Equal(127, read.Length);
+            Assert.Equal(new TileFetchStatistics(0, 0, 0, 0), session.Snapshot());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task 準備ではPMTilesとして読めなくても例外にしない()
     {
         using var bytes = new FixedBytesSource(new byte[4096]);

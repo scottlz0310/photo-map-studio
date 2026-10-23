@@ -329,6 +329,39 @@ public sealed class FileSystemTileCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task 整理が書き込みより先に完了しても前回の一時ファイルを回収する()
+    {
+        // アプリは起動時に設定容量で整理を呼ぶため、整理が初回の書き込みより先に走る
+        Directory.CreateDirectory(this.root);
+        string orphan = Path.Combine(this.root, "tile.pbf.0123456789abcdef.tmp");
+        await File.WriteAllBytesAsync(orphan, new byte[400]).ConfigureAwait(true);
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100_000);
+
+        await cache.PruneAsync(1000);
+        await cache.WriteAsync("a.pbf", new byte[100], CancellationToken.None);
+
+        Assert.False(File.Exists(orphan));
+        Assert.Empty(Directory.EnumerateFiles(this.root, "*.tmp"));
+        Assert.Equal(100, cache.GetCurrentSizeBytes());
+        Assert.Equal(100, DiskSize());
+    }
+
+    [Fact]
+    public async Task 消去が書き込みより先に完了しても前回の一時ファイルは残らない()
+    {
+        Directory.CreateDirectory(this.root);
+        string orphan = Path.Combine(this.root, "tile.pbf.0123456789abcdef.tmp");
+        await File.WriteAllBytesAsync(orphan, new byte[400]).ConfigureAwait(true);
+        using var cache = new FileSystemTileCache(this.root, maxSizeBytes: 100_000);
+
+        Assert.True(await cache.ClearAsync());
+        await cache.WriteAsync("a.pbf", new byte[100], CancellationToken.None);
+
+        Assert.Empty(Directory.EnumerateFiles(this.root, "*.tmp"));
+        Assert.Equal(100, cache.GetCurrentSizeBytes());
+    }
+
+    [Fact]
     public async Task 整理で消せないファイルがあっても残りを整理しエラーを1回だけ通知する()
     {
         if (!OperatingSystem.IsWindows())

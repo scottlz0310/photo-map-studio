@@ -25,6 +25,9 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
     // 書き込み・整理・消去は gate の中で更新する。外部からの変更は次の整理（全列挙）で補正される。
     private long trackedSizeBytes = -1;
 
+    // 前回の異常終了で残った .tmp を、最初の操作（書き込み・整理・消去のどれか）で一度だけ回収する。gate の中で更新する
+    private bool temporaryFilesReclaimed;
+
     /// <summary>
     /// キャッシュ容量上限（バイト数）。0 以下の場合は無制限。
     /// </summary>
@@ -167,7 +170,7 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
         }
 
         // 未確定（まだ書き込み・整理をしていない）ときだけ列挙する
-        return Directory.Exists(this.rootPath) ? this.ScanSizeBytes(reclaimTemporaryFiles: false) : 0;
+        return Directory.Exists(this.rootPath) ? this.ScanSizeBytes() : 0;
     }
 
     /// <inheritdoc />
@@ -214,6 +217,7 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
     {
         bool allSuccess = true;
         bool reported = false;
+        this.ReclaimTemporaryFilesOnce();
         try
         {
             var dir = new DirectoryInfo(this.rootPath);
@@ -265,19 +269,67 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
     /// <summary>合計サイズが未確定なら一度だけ走査して確定する。gate の中で呼ぶ。</summary>
     private void EnsureTrackedSize()
     {
-        if (Interlocked.Read(ref this.trackedSizeBytes) >= 0 || !Directory.Exists(this.rootPath))
+        if (!Directory.Exists(this.rootPath))
         {
             return;
         }
 
-        // gate の中で最初に呼ばれるため、この時点で残っている .tmp は前回の異常終了の残骸
-        Interlocked.Exchange(ref this.trackedSizeBytes, this.ScanSizeBytes(reclaimTemporaryFiles: true));
+        this.ReclaimTemporaryFilesOnce();
+
+        if (Interlocked.Read(ref this.trackedSizeBytes) < 0)
+        {
+            Interlocked.Exchange(ref this.trackedSizeBytes, this.ScanSizeBytes());
+        }
     }
 
-    private long ScanSizeBytes(bool reclaimTemporaryFiles)
+    /// <summary>
+    /// 前回の異常終了で残った .tmp を、最初の操作で一度だけ回収する。gate の中で呼ぶ。
+    /// 合計サイズの確定とは独立して行う（整理が書き込みより先に走っても回収が漏れないようにする）。
+    /// </summary>
+    private void ReclaimTemporaryFilesOnce()
+    {
+        if (this.temporaryFilesReclaimed || !Directory.Exists(this.rootPath))
+        {
+            return;
+        }
+
+        bool reported = false;
+        try
+        {
+            // gate の中で最初に呼ばれるため、この時点で残っている .tmp は前回の異常終了の残骸
+            foreach (FileInfo file in new DirectoryInfo(this.rootPath).EnumerateFiles("*.tmp"))
+            {
+                // 検索パターンは 3 文字の拡張子で始まる別の拡張子にも一致し得るため、完全一致で絞る
+                if (!file.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    file.Delete();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    if (!reported)
+                    {
+                        reported = true;
+                        this.errorObserver?.Invoke(ex);
+                    }
+                }
+            }
+
+            this.temporaryFilesReclaimed = true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            this.errorObserver?.Invoke(ex);
+        }
+    }
+
+    private long ScanSizeBytes()
     {
         long total = 0;
-        bool reported = false;
         try
         {
             foreach (FileInfo file in new DirectoryInfo(this.rootPath).EnumerateFiles())
@@ -285,21 +337,6 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
                 if (!file.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase))
                 {
                     total += file.Length;
-                }
-                else if (reclaimTemporaryFiles)
-                {
-                    try
-                    {
-                        file.Delete();
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        if (!reported)
-                        {
-                            reported = true;
-                            this.errorObserver?.Invoke(ex);
-                        }
-                    }
                 }
             }
         }
@@ -330,6 +367,8 @@ public sealed class FileSystemTileCache : ITileCache, IDisposable
             Interlocked.Exchange(ref this.trackedSizeBytes, 0);
             return;
         }
+
+        this.ReclaimTemporaryFilesOnce();
 
         try
         {

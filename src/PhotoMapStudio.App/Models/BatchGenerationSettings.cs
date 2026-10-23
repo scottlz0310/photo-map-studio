@@ -54,8 +54,8 @@ public sealed record BatchGenerationSettings
     /// <summary>ピン画像のパス（カスタム画像時等）。</summary>
     public string PinImagePath { get; init; } = string.Empty;
 
-    /// <summary>100枚超のカスタム一括生成を、列挙後に利用者へ確認する。</summary>
-    public Func<int, CancellationToken, Task<bool>>? ConfirmLargeBatchAsync { get; init; }
+    /// <summary>他者の配信元での 100 枚超の一括生成を、列挙後に利用者へ確認する。</summary>
+    public Func<LargeBatchPrompt, CancellationToken, Task<bool>>? ConfirmLargeBatchAsync { get; init; }
 
     /// <summary>使用するタイルソース。</summary>
     public TileSource TileSource { get; init; } = TileSources.Default;

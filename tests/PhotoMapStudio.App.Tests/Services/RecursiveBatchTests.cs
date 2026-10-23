@@ -127,7 +127,7 @@ public class RecursiveBatchTests
             OutputFolderPath = "maps",
             IncludeSubfolders = true,
             TileSource = new("カスタム", "https://example.com/{z}/{x}/{y}.png", 0, 19, "出典", TileRateLimit.Conservative),
-            ConfirmLargeBatchAsync = (actual, _) => { Assert.Equal(count, actual); confirmations++; return Task.FromResult(approved); },
+            ConfirmLargeBatchAsync = (prompt, _) => { Assert.Equal(count, prompt.Count); confirmations++; return Task.FromResult(approved); },
         }, null, CancellationToken.None);
         Assert.Equal(count > 100 ? 1 : 0, confirmations);
         Assert.Equal(count > 100 && !approved ? 0 : count, composer.Count);

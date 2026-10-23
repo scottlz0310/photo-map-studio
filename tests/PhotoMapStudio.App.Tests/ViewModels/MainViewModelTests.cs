@@ -215,6 +215,19 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void OpenFreeMapの案内は利用規約の取得条件を示す()
+    {
+        var viewModel = new MainViewModel(new InMemorySettingsRepository())
+        {
+            SelectedTileSource = TileSourceChoices.OpenFreeMap,
+        };
+
+        Assert.True(viewModel.HasTileUsageMessage);
+        Assert.Contains("3,000 タイル", viewModel.TileUsageMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("カスタム", viewModel.TileUsageMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void カスタムベクターの案内は取得元に応じて変わる()
     {
         string file = Path.Combine(Path.GetTempPath(), $"pms-vm-{Guid.NewGuid():N}.pmtiles");

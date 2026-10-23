@@ -31,3 +31,8 @@
 - 設定ONでは、Prepareの一時的なTileFetchExceptionをセッションへ記録する。新しくメタデータ初期化に成功した場合は連続失敗を解除する。初期化済みのPrepareやキャッシュ命中で失敗数を解除しない。
 - 実際のPmtilesVectorTileSource / HttpPmtilesByteSource / CachedVectorTileSource / composerと常時503の疑似HTTPで15画像を生成するテストを追加。修正前は全キャッシュありで停止せず、キャッシュなしでは13要求となり2ケースとも失敗した。
 - 修正後は両ケースともHTTP要求10回で停止し15画像の生成が完了する。全キャッシュありは画像警告なし・キャッシュ命中60件、キャッシュなしは全画像に欠落警告。公開インターネットへの通信は行わない。
+
+## マージ済みPR91の取り込み
+
+- 所有者がPR91をマージしたため、mainの1d5c876を通常mergeした。競合はtasks.mdへの同時追記のみで、両タスクを保持して解消。製品コードの競合や追加の仕様変更はない。
+- 統合後にrestore・format・Release/x64 build（警告0／エラー0）・coverage付きCore559件／App251件が全成功。HEADが変わるため、統合後HEADを再レビュー対象にする。

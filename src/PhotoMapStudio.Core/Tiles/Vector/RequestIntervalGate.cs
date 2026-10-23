@@ -37,11 +37,11 @@ internal sealed class RequestIntervalGate : IDisposable
         await this.gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            DateTimeOffset now = this.timeProvider.GetUtcNow();
-            TimeSpan wait = this.nextAllowed - now;
-            if (wait > TimeSpan.Zero)
+            TimeSpan wait;
+            while ((wait = this.nextAllowed - this.timeProvider.GetUtcNow()) > TimeSpan.Zero)
             {
-                await Task.Delay(wait, this.timeProvider, cancellationToken).ConfigureAwait(false);
+                // タイマーの通知だけを期限到達とみなさず、残時間は1ms単位で切り上げて再度待つ。
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(wait.TotalMilliseconds)), this.timeProvider, cancellationToken).ConfigureAwait(false);
             }
         }
         catch

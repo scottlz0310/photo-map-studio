@@ -111,10 +111,11 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
             await this.intervalGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                TimeSpan elapsed = timeProvider.GetUtcNow() - this.lastRequestedAt;
-                if (elapsed < minimumInterval)
+                TimeSpan remaining;
+                while ((remaining = minimumInterval - (timeProvider.GetUtcNow() - this.lastRequestedAt)) > TimeSpan.Zero)
                 {
-                    await Task.Delay(minimumInterval - elapsed, timeProvider, cancellationToken).ConfigureAwait(false);
+                    // タイマーの早い通知を許容し、1ms未満の残時間でも空回りせず期限を再確認する。
+                    await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(remaining.TotalMilliseconds)), timeProvider, cancellationToken).ConfigureAwait(false);
                 }
 
                 this.lastRequestedAt = timeProvider.GetUtcNow();

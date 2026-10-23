@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using PhotoMapStudio.Core.Tests.TestSupport;
 using PhotoMapStudio.Core.Tiles;
 
 namespace PhotoMapStudio.Core.Tests.Tiles;
@@ -40,27 +41,57 @@ public class ThrottledTileClientTests
         Assert.Equal(2, inner.MaxObservedConcurrency);
     }
 
-    [Fact]
-    public async Task 最小間隔を空けて発行する()
+    [Theory]
+    [InlineData(100)]
+    [InlineData(101)]
+    [InlineData(1000)]
+    public async Task タイマーが早く通知しても最小間隔を空けて発行する(int milliseconds)
     {
+        var clock = new EarlyTimerTimeProvider();
+        TimeSpan interval = TimeSpan.FromMilliseconds(milliseconds);
         var source = new TileSource(
             "テスト",
             "https://tile.example.com/{z}/{x}/{y}.png",
             0,
             19,
             "出典",
-            new TileRateLimit(1, TimeSpan.FromMilliseconds(100)));
+            new TileRateLimit(1, interval));
         var inner = new ConcurrencyTrackingClient(TimeSpan.Zero);
-        using var client = new ThrottledTileClient(inner);
+        using var client = new ThrottledTileClient(inner, clock);
 
-        long start = Stopwatch.GetTimestamp();
-        for (int i = 0; i < 3; i++)
-        {
-            await client.GetTileAsync(source, 15, i, 0, CancellationToken.None);
-        }
+        await client.GetTileAsync(source, 15, 0, 0, CancellationToken.None);
+        Task<byte[]> pending = client.GetTileAsync(source, 15, 1, 0, CancellationToken.None);
+        Assert.Equal(interval, await clock.NextDelayAsync());
+        Assert.False(pending.IsCompleted);
+        clock.Advance(interval / 2);
+        Task<TimeSpan> remaining = clock.NextDelayAsync();
+        await Task.WhenAny(pending, remaining).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(pending.IsCompleted);
+        Assert.Equal(TimeSpan.FromMilliseconds(Math.Ceiling(interval.TotalMilliseconds / 2)), await remaining.ConfigureAwait(true));
+        clock.Advance(interval / 2);
+        await pending.WaitAsync(TimeSpan.FromSeconds(5));
+    }
 
-        // 1 回目は待たないため、待機は 2 回分
-        Assert.True(Stopwatch.GetElapsedTime(start) >= TimeSpan.FromMilliseconds(200));
+    [Fact]
+    public async Task 残時間待機のキャンセル後も次の要求を発行できる()
+    {
+        var clock = new EarlyTimerTimeProvider();
+        var interval = TimeSpan.FromMilliseconds(100);
+        var source = new TileSource("テスト", "https://example.test/{z}/{x}/{y}.png", 0, 19, "出典", new TileRateLimit(1, interval));
+        using var client = new ThrottledTileClient(new ConcurrencyTrackingClient(TimeSpan.Zero), clock);
+        await client.GetTileAsync(source, 15, 0, 0, CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+        Task<byte[]> pending = client.GetTileAsync(source, 15, 1, 0, cancellation.Token);
+        await clock.NextDelayAsync();
+        clock.Advance(interval / 2);
+        await clock.NextDelayAsync();
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Task<byte[]> next = client.GetTileAsync(source, 15, 2, 0, CancellationToken.None);
+        await clock.NextDelayAsync();
+        Assert.False(next.IsCompleted);
+        clock.Advance(interval);
+        await next.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]

@@ -19,6 +19,9 @@ namespace PhotoMapStudio.App.Models;
     Justification = "設定リポジトリの公開契約としてテストと将来の UI 構成から参照する。")]
 public sealed record PhotoMapSettings
 {
+    /// <summary>通信失敗時に欠落を明示したベクター地図を生成する。既定は無効。</summary>
+    public bool AllowIncompleteVectorMaps { get; init; }
+
     /// <summary>既定の出力幅。</summary>
     public const int DefaultWidth = MapCompositionRequest.DefaultWidth;
 

@@ -49,7 +49,7 @@
             <TextBlock Text="{Binding GenerationElapsedText}" />
             <TextBlock Text="{Binding Preview.StatusMessage}" TextWrapping="Wrap" />
             <Button Content="プレビューの読み込みをキャンセル" Command="{Binding Preview.CancelCommand}" />
-            <TextBlock FontWeight="SemiBold" Text="スキップ・エラーの実行履歴" />
+            <TextBlock FontWeight="SemiBold" Text="警告・スキップ・エラーの実行履歴" />
             <TextBlock Text="{Binding BatchHistoryMessage}" TextWrapping="Wrap" />
             <ComboBox
                 HorizontalAlignment="Stretch"

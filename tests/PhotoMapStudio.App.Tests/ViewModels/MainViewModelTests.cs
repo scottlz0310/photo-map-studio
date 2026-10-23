@@ -9,6 +9,19 @@ namespace PhotoMapStudio.App.Tests.ViewModels;
 
 public class MainViewModelTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void 縮退生成の設定を読み込み変更して保存する(bool allow)
+    {
+        var repository = new InMemorySettingsRepository { Settings = new PhotoMapSettings { AllowIncompleteVectorMaps = allow } };
+        var viewModel = new MainViewModel(repository);
+        Assert.Equal(allow, viewModel.AllowIncompleteVectorMaps);
+        viewModel.AllowIncompleteVectorMaps = !allow;
+        Assert.True(viewModel.TrySaveSettings());
+        Assert.Equal(!allow, repository.Settings.AllowIncompleteVectorMaps);
+    }
+
     [Fact]
     public void 既定値を読み込む()
     {

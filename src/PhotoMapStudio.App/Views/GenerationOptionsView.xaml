@@ -50,6 +50,11 @@
         <InfoBar IsOpen="{Binding HasTileUsageMessage}" IsClosable="False"
             Severity="Warning" Message="{Binding TileUsageMessage}" />
 
+        <CheckBox IsChecked="{Binding AllowIncompleteVectorMaps, Mode=TwoWay}"
+            Content="通信失敗時も、欠落警告付きのベクター地図を生成する" />
+        <TextBlock Text="有効にすると、取得できない部分を背景色にして画像へ警告を記載します。連続10件の通信失敗後は、通信を止めてキャッシュのみで生成を続けます。"
+            TextWrapping="Wrap" />
+
         <StackPanel Spacing="8" Visibility="{Binding IsCustomTileSource, Converter={StaticResource BooleanToVisibilityConverter}}">
             <TextBox
                 Header="カスタム URL テンプレート"

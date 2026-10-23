@@ -13,6 +13,7 @@ public sealed class TileFetchSession(TimeProvider timeProvider)
     private int networkCount;
     private int cacheCount;
     private int consecutiveFailures;
+    private int consecutiveTransientFailures;
     private int maximumRate;
     private TileFetchException? stoppedBy;
 
@@ -21,6 +22,22 @@ public sealed class TileFetchSession(TimeProvider timeProvider)
 
     /// <summary>連続失敗の閾値に到達したかどうか。</summary>
     public bool IsStopped { get { lock (this.synchronization) { return this.stoppedBy is not null; } } }
+
+    /// <summary>通信停止後も、警告付きのベクター地図をキャッシュのみで生成する。</summary>
+    public bool AllowIncompleteVectorMaps { get; init; }
+
+    /// <summary>連続する一時的な通信障害により、以後の通信を停止している。</summary>
+    public bool IsCacheOnly
+    {
+        get
+        {
+            lock (this.synchronization)
+            {
+                return this.AllowIncompleteVectorMaps && this.stoppedBy is not null
+                    && this.consecutiveTransientFailures >= FailureLimit;
+            }
+        }
+    }
 
     /// <summary>ネットワーク要求を記録する。</summary>
     public void RecordRequest()
@@ -53,6 +70,7 @@ public sealed class TileFetchSession(TimeProvider timeProvider)
             else
             {
                 this.consecutiveFailures = 0;
+                this.consecutiveTransientFailures = 0;
             }
         }
         this.Progress?.Report(this.Snapshot());
@@ -64,6 +82,7 @@ public sealed class TileFetchSession(TimeProvider timeProvider)
         ArgumentNullException.ThrowIfNull(exception);
         lock (this.synchronization)
         {
+            this.consecutiveTransientFailures = exception.IsTransient ? this.consecutiveTransientFailures + 1 : 0;
             if (exception.StatusCode != HttpStatusCode.NotFound && ++this.consecutiveFailures >= FailureLimit)
             {
                 this.stoppedBy = exception;

@@ -69,8 +69,9 @@ public sealed class BatchGenerationService : IBatchGenerationService
         }
 
         long started = this.timeProvider.GetTimestamp();
-        var session = new TileFetchSession(this.timeProvider);
+        var session = new TileFetchSession(this.timeProvider) { AllowIncompleteVectorMaps = settings.AllowIncompleteVectorMaps && settings.TileSource.IsVector };
         int successCount = 0;
+        int warningCount = 0;
         int skippedCount = 0;
         int errorCount = 0;
         int total = 0;
@@ -91,6 +92,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
             {
                 IsActivity = activity,
                 SuccessCount = successCount,
+                WarningCount = warningCount,
                 SkippedCount = skippedCount,
                 ErrorCount = errorCount,
                 Elapsed = this.timeProvider.GetElapsedTime(started),
@@ -249,6 +251,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
                             PinAnchor = settings.PinAnchor,
                             PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinKind, settings.PinImagePath),
                             AllowWorldwideFallback = false,
+                            AllowIncompleteVectorMaps = settings.AllowIncompleteVectorMaps,
                             TileSession = session,
                         },
                         cancellationToken).ConfigureAwait(false);
@@ -263,7 +266,18 @@ public sealed class BatchGenerationService : IBatchGenerationService
                     string message = string.Create(
                         CultureInfo.InvariantCulture,
                         $"位置情報 ({coordinate.Value.Latitude:F5}, {coordinate.Value.Longitude:F5}) -> {outputFileName} を作成しました。");
-                    Notify(displayIndex, fileName, BatchGenerationStatus.Success, message);
+                    if (composition.Warning is { } warning)
+                    {
+                        warningCount++;
+                        issues.Add(new(displayIndex, fileName, BatchIssueTarget.Photo, BatchGenerationStatus.Warning, BatchIssueReason.IncompleteMap)
+                        {
+                            MissingTileCount = warning.MissingTileCount,
+                            RequestedTileCount = warning.RequestedTileCount,
+                            NetworkSuspended = warning.NetworkSuspended,
+                        });
+                        Notify(displayIndex, fileName, BatchGenerationStatus.Warning, warning.Message + " / " + outputFileName);
+                    }
+                    else { Notify(displayIndex, fileName, BatchGenerationStatus.Success, message); }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -290,7 +304,7 @@ public sealed class BatchGenerationService : IBatchGenerationService
                         exception));
                     this.errorDiagnostics?.Record(stage, displayIndex, exception);
                     Notify(displayIndex, fileName, BatchGenerationStatus.Error, $"生成エラー: {exception.Message}");
-                    if (session.IsStopped)
+                    if (session.IsStopped && !session.IsCacheOnly)
                     {
                         return Summary(cancelled: false, exception.Message);
                     }

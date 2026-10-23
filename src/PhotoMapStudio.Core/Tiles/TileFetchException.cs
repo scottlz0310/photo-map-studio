@@ -47,4 +47,13 @@ public sealed class TileFetchException : Exception
 
     /// <summary>応答の HTTP ステータス。</summary>
     public HttpStatusCode? StatusCode { get; }
+
+    internal bool IsCacheOnlyMiss { get; init; }
+
+    /// <summary>通信断・タイムアウト・一時的なHTTP障害として縮退の対象になるか。</summary>
+    public bool IsTransient => this.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
+        || (int?)this.StatusCode is >= 500 and <= 599
+        || (this.StatusCode is null && (this.InnerException is TimeoutException or OperationCanceledException
+            || this.InnerException is HttpRequestException http
+                && http.HttpRequestError is HttpRequestError.Unknown or HttpRequestError.NameResolutionError or HttpRequestError.ConnectionError or HttpRequestError.ResponseEnded));
 }

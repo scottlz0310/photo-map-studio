@@ -19,6 +19,9 @@ namespace PhotoMapStudio.App.Models;
     Justification = "XAML と App.Tests から差し替え可能なプレビュー契約として公開する。")]
 public sealed record PreviewGenerationSettings
 {
+    /// <summary>通信失敗時に欠落を明示したベクター地図を生成する。既定は無効。</summary>
+    public bool AllowIncompleteVectorMaps { get; init; }
+
     /// <summary>写真を列挙する入力フォルダ。</summary>
     public string InputFolderPath { get; init; } = string.Empty;
 

@@ -13,6 +13,27 @@ namespace PhotoMapStudio.App.Tests.Services;
 
 public class BatchIssueHistoryTests
 {
+    [Fact]
+    public async Task 警告用の追加項目がない旧形式の履歴も読み取れる()
+    {
+        using var tree = new PhotoTree();
+        var summary = new BatchGenerationSummary(0, 1, 1, false)
+        { Issues = [new(1, "写真.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.MissingGps)] };
+        var store = new BatchGenerationHistoryStore(tree.Root);
+        await store.SaveAsync(History(summary, tree.Root));
+        string path = Assert.Single(Directory.GetFiles(tree.Root, "batch-*.json"));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        json.Remove("WarningCount");
+        var issue = json["Issues"]![0]!.AsObject();
+        issue.Remove("MissingTileCount");
+        issue.Remove("RequestedTileCount");
+        issue.Remove("NetworkSuspended");
+        await File.WriteAllTextAsync(path, json.ToJsonString());
+        BatchGenerationHistory loaded = Assert.Single(await store.LoadAsync());
+        Assert.Equal(0, loaded.WarningCount);
+        Assert.Equal(summary.Issues[0], Assert.Single(loaded.Issues));
+    }
+
     [Theory]
     [InlineData("gpsなし", BatchIssueReason.MissingGps, BatchGenerationStatus.Skip, null)]
     [InlineData("gps読取", BatchIssueReason.GpsReadFailed, BatchGenerationStatus.Error, null)]

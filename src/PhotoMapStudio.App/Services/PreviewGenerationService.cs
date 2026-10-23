@@ -175,13 +175,14 @@ public sealed class PreviewGenerationService : IPreviewGenerationService
                     PinAnchor = settings.PinAnchor,
                     PinImagePath = PhotoMapAssetPaths.ResolvePinImagePath(settings.PinKind, settings.PinImagePath),
                     AllowWorldwideFallback = true,
+                    AllowIncompleteVectorMaps = settings.AllowIncompleteVectorMaps,
                 },
                 cancellationToken).ConfigureAwait(false);
 
             string message = string.Create(
                 System.Globalization.CultureInfo.InvariantCulture,
                 $"緯度: {coordinate.Value.Latitude:F5}, 経度: {coordinate.Value.Longitude:F5}");
-            return new PreviewGenerationResult(composition.Png, coordinate, message, Succeeded: true);
+            return new PreviewGenerationResult(composition.Png, coordinate, composition.Warning?.Message ?? message, Succeeded: true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

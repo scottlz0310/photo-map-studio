@@ -26,6 +26,8 @@ public sealed record BatchGenerationProgress(
     public int SkippedCount { get; init; }
     /// <summary>現在までのエラー数。</summary>
     public int ErrorCount { get; init; }
+    /// <summary>成功分のうち欠落警告を含む画像数。</summary>
+    public int WarningCount { get; init; }
     /// <summary>開始からの経過時間。</summary>
     public TimeSpan Elapsed { get; init; }
     /// <summary>一括取得の統計。</summary>
@@ -35,6 +37,7 @@ public sealed record BatchGenerationProgress(
     public string StatusText => this.Status switch
     {
         BatchGenerationStatus.Success => "SUCCESS",
+        BatchGenerationStatus.Warning => "WARNING",
         BatchGenerationStatus.Skip => "SKIP",
         BatchGenerationStatus.Error => "ERROR",
         BatchGenerationStatus.Cancelled => "CANCELLED",

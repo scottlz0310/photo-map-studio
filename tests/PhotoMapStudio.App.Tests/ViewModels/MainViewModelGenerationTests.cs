@@ -60,6 +60,99 @@ public class MainViewModelGenerationTests
         Assert.Contains("キャンセル", viewModel.GenerationProgressMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task 一括生成の完了後にタイルキャッシュ使用量の表示を実体へ合わせる()
+    {
+        using var input = new TemporaryDirectory();
+        using var output = new TemporaryDirectory(createDirectory: false);
+        var cache = new GrowingTileCache { Size = 1024L * 1024L };
+        var service = new CacheGrowingBatchGenerationService(cache, 5L * 1024L * 1024L);
+        var viewModel = new MainViewModel(
+            new InMemorySettingsRepository(),
+            batchGenerationService: service,
+            tileCache: cache)
+        {
+            InputFolderPath = input.Path,
+            OutputFolderPath = output.Path,
+        };
+        Assert.Contains("1.0 MB /", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+
+        await viewModel.GenerateCommand.ExecuteAsync(null);
+
+        Assert.Contains("6.0 MB /", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task プレビュー生成の完了後にタイルキャッシュ使用量の表示を実体へ合わせる()
+    {
+        using var input = new TemporaryDirectory();
+        var cache = new GrowingTileCache { Size = 1024L * 1024L };
+        using var preview = new PreviewViewModel(new CacheGrowingPreviewGenerationService(cache, 3L * 1024L * 1024L));
+        var viewModel = new MainViewModel(new InMemorySettingsRepository(), preview, tileCache: cache);
+        await preview.WaitForIdleAsync();
+
+        // 画面の使用量が、ここまでのプレビュー生成で増えた実体と一致する
+        double expectedMb = cache.Size / (1024.0 * 1024.0);
+        Assert.True(expectedMb > 1.0);
+        Assert.Contains($"使用量: {expectedMb:F1} MB /", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+
+        long sizeBefore = cache.Size;
+        viewModel.InputFolderPath = input.Path;
+        await preview.WaitForIdleAsync();
+
+        Assert.True(cache.Size > sizeBefore);
+        Assert.Contains($"使用量: {cache.Size / (1024.0 * 1024.0):F1} MB /", viewModel.TileCacheUsageText, StringComparison.Ordinal);
+    }
+
+    private sealed class GrowingTileCache : PhotoMapStudio.Core.Tiles.ITileCache
+    {
+        public long Size { get; set; }
+
+        public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
+
+        public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public long GetCurrentSizeBytes() => this.Size;
+    }
+
+    private sealed class CacheGrowingBatchGenerationService(GrowingTileCache cache, long growth) : IBatchGenerationService
+    {
+        public Task<BatchGenerationSummary> GenerateAsync(
+            BatchGenerationSettings settings,
+            IProgress<BatchGenerationProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            cache.Size += growth;
+            return Task.FromResult(new BatchGenerationSummary(1, 0, 1, IsCancelled: false));
+        }
+    }
+
+    private sealed class CacheGrowingPreviewGenerationService(GrowingTileCache cache, long growth) : IPreviewGenerationService
+    {
+        public async IAsyncEnumerable<PreviewPhoto> LoadPhotosAsync(
+            string folderPath,
+            bool includeSubfolders,
+            IProgress<PreviewLoadProgress>? progress,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask.ConfigureAwait(false);
+            yield return new PreviewPhoto("photo.jpg");
+        }
+
+        public Task<PreviewGenerationResult> GenerateAsync(
+            PreviewPhoto? photo,
+            PreviewGenerationSettings settings,
+            CancellationToken cancellationToken)
+        {
+            cache.Size += growth;
+            return Task.FromResult(new PreviewGenerationResult(
+                new byte[] { 1 },
+                new PhotoMapStudio.Core.Geo.GeoCoordinate(35.0, 139.0),
+                "プレビュー",
+                Succeeded: true));
+        }
+    }
+
     private sealed class InMemorySettingsRepository : IPhotoMapSettingsRepository
     {
         public PhotoMapSettings Load() => new();

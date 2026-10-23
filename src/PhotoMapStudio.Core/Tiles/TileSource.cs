@@ -82,6 +82,9 @@ public sealed record TileSource
     /// <summary>Core 内蔵エンジンによる直接ベクター描画を行うかどうか。</summary>
     public bool IsVector { get; init; }
 
+    /// <summary>利用者が指定したベクタータイルの取得元（BYO）。プリセットでは <see langword="null"/>。</summary>
+    public Vector.VectorSourceSpec? VectorSource { get; init; }
+
     /// <summary>公式 OSM のタイル配信元かどうか。</summary>
     public bool IsOfficialOpenStreetMap
     {

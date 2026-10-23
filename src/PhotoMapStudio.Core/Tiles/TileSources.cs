@@ -102,4 +102,29 @@ public static class TileSources
             maxZoom,
             attribution,
             TileSource.IsLoopbackUrlTemplate(urlTemplate) ? TileRateLimit.Loopback : TileRateLimit.Conservative);
+
+    /// <summary>
+    /// 利用者が指定したベクタータイル（PMTiles または <c>{z}/{x}/{y}</c> の URL）からタイルソースを構築する（BYO）。
+    /// </summary>
+    /// <param name="source">利用者が指定した取得元。</param>
+    /// <param name="attribution">出典表示。</param>
+    /// <param name="minZoom">利用可能な最小ズーム。</param>
+    /// <param name="maxZoom">利用可能な最大ズーム。</param>
+    /// <returns>構築したタイルソース。取得元の種別に応じてレート制御が決まる。</returns>
+    public static TileSource CustomVector(Vector.VectorSourceSpec source, string attribution, int minZoom = 1, int maxZoom = 19)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return new(
+            "カスタム（ベクター）",
+            source.UrlTemplate,
+            minZoom,
+            maxZoom,
+            attribution,
+            source.RateLimit,
+            isVector: true)
+        {
+            VectorSource = source,
+        };
+    }
 }

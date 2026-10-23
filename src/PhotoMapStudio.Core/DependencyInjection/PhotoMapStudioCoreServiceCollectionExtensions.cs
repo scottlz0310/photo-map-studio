@@ -65,8 +65,16 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
                 provider.GetRequiredService<OpenFreeMapTileSource>(),
                 provider.GetRequiredService<ITileCache>()));
 
+        services.TryAddSingleton<CustomVectorSourceFactory>(provider => new CustomVectorSourceFactory(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName),
+            provider.GetRequiredService<ITileCache>(),
+            provider.GetRequiredService<OpenMapTilesStyle>(),
+            provider.GetRequiredService<GsiVectorStyle>(),
+            provider.GetRequiredService<TimeProvider>()));
+
         services.TryAddSingleton<IVectorMapRenderer>(provider =>
         {
+            var customSources = provider.GetRequiredService<CustomVectorSourceFactory>();
             var cache = provider.GetRequiredService<ITileCache>();
             var httpClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName);
 
@@ -83,6 +91,12 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
                 defaultStyle: ofmStyle,
                 resolver: source =>
                 {
+                    // 利用者が指定した取得元（BYO）
+                    if (source?.VectorSource is { } custom)
+                    {
+                        return customSources.Resolve(custom);
+                    }
+
                     if (source != null && (string.Equals(source.Name, TileSources.GsiVector.Name, StringComparison.Ordinal)
                         || source.UrlTemplate.Contains("optimal_bvmap", StringComparison.OrdinalIgnoreCase)))
                     {

@@ -311,13 +311,13 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
         }
     }
 
-    private static SKFont CreateAttributionFont(string text, int width)
-    {
-        // 日本語を含む出典表示があるため、文字を描画できる書体を選ぶ
-        SKTypeface typeface = SKFontManager.Default.MatchCharacter(text.Length > 0 ? text[0] : 'A')
-            ?? SKTypeface.Default;
+    // 出典表示は利用者が入力する（日本語と英数字が混在し得る）ため、先頭の 1 文字ではなく日本語に対応した書体を使う。
+    // 書体は読み取りだけで共有するため、プロセスの終了まで保持する
+    private static readonly Lazy<SKTypeface> AttributionTypeface = new(Tiles.Vector.VectorMapFontHelper.CreateJapaneseTypeface);
 
-        var font = new SKFont(typeface, Math.Clamp(width * 0.018f, 8f, 14f));
+    internal static SKFont CreateAttributionFont(string text, int width)
+    {
+        var font = new SKFont(AttributionTypeface.Value, Math.Clamp(width * 0.018f, 8f, 14f));
 
         // 1 行に収まるまでは縮小し、下限に達したら折り返しへ委ねる
         while (font.MeasureText(text) > width - (AttributionPadding * 2) && font.Size > MinimumFontSize)

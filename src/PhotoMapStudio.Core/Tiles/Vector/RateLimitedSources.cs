@@ -15,6 +15,12 @@ internal sealed class RateLimitedVectorTileSource(IVectorTileSource inner, Reque
     public Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
         => inner.GetSourceIdAsync(cancellationToken);
 
+    public async Task PrepareAsync(TileFetchSession? session, CancellationToken cancellationToken = default)
+    {
+        using IDisposable lease = await gate.EnterAsync(cancellationToken).ConfigureAwait(false);
+        await inner.PrepareAsync(session, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<byte[]?> GetTileAsync(int z, int x, int y, TileFetchSession? session, CancellationToken cancellationToken = default)
     {
         using IDisposable lease = await gate.EnterAsync(cancellationToken).ConfigureAwait(false);

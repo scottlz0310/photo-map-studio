@@ -89,7 +89,7 @@ public sealed record VectorSourceSpec
     public static VectorSourceSpec Create(string? location, VectorStyleSchema schema)
         => TryCreate(location, schema, out VectorSourceSpec? spec, out string error)
             ? spec!
-            : throw new ArgumentException(error, nameof(location));
+            : throw new ArgumentException(error);
 
     /// <summary>
     /// 利用者の入力から取得元を作る。入力が不正な場合は理由を返す。

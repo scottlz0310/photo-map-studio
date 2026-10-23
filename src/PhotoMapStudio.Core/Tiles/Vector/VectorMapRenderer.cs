@@ -131,7 +131,8 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             ? this.resolver(tileSource)
             : (this.defaultTileSource, this.defaultStyle);
 
-        // 1. タイル取得用ズームとスケール比の決定（過拡大対応）
+        // 1. タイル取得用ズームとスケール比の決定（過拡大対応）。最大ズームを確定してから求める
+        await activeSource.PrepareAsync(session, cancellationToken).ConfigureAwait(false);
         int tileZoom = Math.Min(zoom, activeSource.MaxZoom);
         double scaleRatio = Math.Pow(2.0, zoom - tileZoom);
         int maxTiles = 1 << tileZoom;
@@ -157,6 +158,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         // 4. タイルの非同期取得とデコード
         var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)>();
         int attemptedTiles = 0;
+        int unreadableTiles = 0;
         int firstFetchX = 0;
         int firstFetchY = 0;
 
@@ -185,7 +187,26 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                     continue;
                 }
 
-                VectorTile tile = VectorTileDecoder.Decode(tileData);
+                VectorTile tile;
+                bool readable;
+                try
+                {
+                    readable = VectorTileDecoder.TryDecode(tileData, out tile);
+                }
+                catch (Exception ex) when (ex is InvalidDataException or FormatException or IndexOutOfRangeException or ArgumentException or OverflowException)
+                {
+                    // 利用者が指定した配信元が、タイルではない内容（エラーページなど）を返した場合
+                    unreadableTiles++;
+                    continue;
+                }
+
+                // レイヤーの項目を 1 つも読めない場合は、ベクタータイルとして読めていない（デコーダーは不正な内容でも例外にしない）
+                if (!readable)
+                {
+                    unreadableTiles++;
+                    continue;
+                }
+
                 uint extent = 4096;
                 if (tile.Layers.Count > 0)
                 {
@@ -206,6 +227,18 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         {
             Uri requestUri = tileSource?.BuildTileUri(tileZoom, firstFetchX, firstFetchY)
                 ?? new Uri(string.Create(CultureInfo.InvariantCulture, $"vector-tile:{activeSource.SourceId}/{tileZoom}/{firstFetchX}/{firstFetchY}"), UriKind.Absolute);
+
+            // 内容を受け取れたのに読めなかった場合は、配信範囲外ではなく指定の誤りである。
+            // 404 にすると配信範囲外の切り替え（代替ソース）に隠れてしまうため、ステータスなしの失敗として報告する
+            if (unreadableTiles > 0)
+            {
+                throw new TileFetchException(
+                    "配信元の応答をベクタータイル（MVT / PBF）として読み取れません。URL・ファイルとレイヤー構成（スキーマ）の指定を確認してください。",
+                    requestUri,
+                    null,
+                    null);
+            }
+
             throw new TileFetchException(
                 string.Create(CultureInfo.InvariantCulture, $"この地点には描画できるベクタータイルがありません（配信範囲外の可能性があります）: ズーム {tileZoom}"),
                 requestUri,

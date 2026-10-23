@@ -10,6 +10,7 @@ using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.ViewModels;
 
@@ -58,6 +59,9 @@ public sealed class MainViewModel : ObservableObject
     private TileSourceChoice selectedTileSource;
     private string customTileUrlTemplate;
     private string customTileAttribution;
+    private string customVectorLocation;
+    private VectorSchemaChoice selectedVectorSchemaChoice;
+    private string customVectorAttribution;
     private double minimumZoom;
     private double maximumZoom;
     private string validationMessage = string.Empty;
@@ -120,6 +124,9 @@ public sealed class MainViewModel : ObservableObject
         this.pinImagePath = settings.PinImagePath;
         this.customTileUrlTemplate = settings.CustomTileUrlTemplate;
         this.customTileAttribution = settings.CustomTileAttribution;
+        this.customVectorLocation = settings.CustomVectorLocation;
+        this.selectedVectorSchemaChoice = VectorSchemaChoice.FromSchema(settings.CustomVectorSchema);
+        this.customVectorAttribution = settings.CustomVectorAttribution;
         this.selectedTileSource = PhotoMapStudio.App.Models.TileSourceChoices.FromKey(settings.TileSourceKey);
         this.minimumZoom = this.selectedTileSource.MinZoom;
         this.maximumZoom = this.selectedTileSource.MaxZoom;
@@ -136,6 +143,7 @@ public sealed class MainViewModel : ObservableObject
 
         this.TileSourceOptions = PhotoMapStudio.App.Models.TileSourceChoices.All;
         this.PinKindOptions = PinKindChoice.All;
+        this.VectorSchemaOptions = VectorSchemaChoice.All;
         this.PinAnchorOptions = PinAnchorChoice.All;
         this.SaveSettingsCommand = new RelayCommand(this.SaveSettings);
         this.GenerateCommand = new AsyncRelayCommand(this.GenerateAsync, this.CanGenerate);
@@ -198,7 +206,17 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>配信元に応じた一括生成の案内。</summary>
     public string TileUsageMessage => this.SelectedTileSource == TileSourceChoices.OpenStreetMap
         ? "OSM公式サーバーはプレビュー用です。一括生成は、一括取得・画像保存を許可するOSM系配信元をカスタム設定で指定してください。"
-        : this.IsCustomTileSource ? this.CustomTileUsageMessage : string.Empty;
+        : this.IsCustomTileSource ? this.CustomTileUsageMessage
+        : this.IsCustomVectorSource ? this.CustomVectorUsageMessage : string.Empty;
+
+    private string CustomVectorUsageMessage
+        => VectorSourceSpec.TryCreate(this.CustomVectorLocation, this.SelectedVectorSchemaChoice.Schema, out VectorSourceSpec? spec, out _)
+            ? spec.Kind == VectorSourceKind.PmtilesFile
+                ? "この PC 上の PMTiles ファイルを使用します（通信しません）。"
+                : TileSource.IsLoopbackUrlTemplate(spec.UrlTemplate)
+                    ? LoopbackTileUsageMessage
+                    : "配信元の一括取得・画像保存の許可を確認してください。取得は間隔を空けて行い、100枚超は開始前に確認します。認証情報を URL へ埋め込まないでください。"
+            : string.Empty;
 
     private string CustomTileUsageMessage => TileSource.IsLoopbackUrlTemplate(this.CustomTileUrlTemplate)
         ? LoopbackTileUsageMessage
@@ -419,6 +437,7 @@ public sealed class MainViewModel : ObservableObject
             this.MaximumZoom = value.MaxZoom;
             this.Zoom = Math.Clamp(this.Zoom, this.MinimumZoom, this.MaximumZoom);
             this.OnPropertyChanged(nameof(this.IsCustomTileSource));
+            this.OnPropertyChanged(nameof(this.IsCustomVectorSource));
             this.OnPropertyChanged(nameof(this.TileUsageMessage));
             this.OnPropertyChanged(nameof(this.HasTileUsageMessage));
             this.OnPropertyChanged(nameof(this.SelectedTileSourceAttribution));
@@ -457,6 +476,54 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>カスタム（ベクター）の場所（PMTiles の URL・ファイルパス、またはベクタータイルの URL テンプレート）。</summary>
+    public string CustomVectorLocation
+    {
+        get => this.customVectorLocation;
+        set
+        {
+            if (this.SetProperty(ref this.customVectorLocation, value ?? string.Empty))
+            {
+                this.ClearFeedback();
+                this.OnPropertyChanged(nameof(this.TileUsageMessage));
+                this.OnPropertyChanged(nameof(this.HasTileUsageMessage));
+                this.NotifyPreviewChanged();
+            }
+        }
+    }
+
+    /// <summary>カスタム（ベクター）のレイヤー構成の選択肢。</summary>
+    public IReadOnlyList<VectorSchemaChoice> VectorSchemaOptions { get; }
+
+    /// <summary>選択中のカスタム（ベクター）のレイヤー構成。</summary>
+    public VectorSchemaChoice SelectedVectorSchemaChoice
+    {
+        get => this.selectedVectorSchemaChoice;
+        set
+        {
+            if (this.SetProperty(ref this.selectedVectorSchemaChoice, value ?? VectorSchemaChoice.Default))
+            {
+                this.ClearFeedback();
+                this.NotifyPreviewChanged();
+            }
+        }
+    }
+
+    /// <summary>カスタム（ベクター）の出典表示。</summary>
+    public string CustomVectorAttribution
+    {
+        get => this.customVectorAttribution;
+        set
+        {
+            if (this.SetProperty(ref this.customVectorAttribution, value ?? string.Empty))
+            {
+                this.ClearFeedback();
+                this.OnPropertyChanged(nameof(this.SelectedTileSourceAttribution));
+                this.NotifyPreviewChanged();
+            }
+        }
+    }
+
     /// <summary>現在選択中のタイルソースで許可される最小ズーム。</summary>
     public double MinimumZoom
     {
@@ -474,11 +541,16 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>カスタム URL が選択されているかどうか。</summary>
     public bool IsCustomTileSource => this.SelectedTileSource.IsCustom;
 
+    /// <summary>カスタム（ベクター）が選択されているかどうか。</summary>
+    public bool IsCustomVectorSource => this.SelectedTileSource.IsCustomVector;
+
     /// <summary>現在選択中のタイルソースの出典表示。</summary>
     public string SelectedTileSourceAttribution
-        => this.SelectedTileSource.IsCustom
-            ? this.CustomTileAttribution
-            : this.SelectedTileSource.Source!.Attribution;
+        => this.SelectedTileSource.IsCustomVector
+            ? this.CustomVectorAttribution
+            : this.SelectedTileSource.IsCustom
+                ? this.CustomTileAttribution
+                : this.SelectedTileSource.Source!.Attribution;
 
     /// <summary>タイルソースの選択肢。</summary>
     public IReadOnlyList<TileSourceChoice> TileSourceOptions { get; }
@@ -667,7 +739,10 @@ public sealed class MainViewModel : ObservableObject
         {
             tileSource = this.SelectedTileSource.CreateSource(
                 this.CustomTileUrlTemplate,
-                this.CustomTileAttribution);
+                this.CustomTileAttribution,
+                this.CustomVectorLocation,
+                this.SelectedVectorSchemaChoice.Schema,
+                this.CustomVectorAttribution);
         }
         catch (ArgumentException exception)
         {
@@ -698,6 +773,9 @@ public sealed class MainViewModel : ObservableObject
             TileSourceKey = this.SelectedTileSource.Key,
             CustomTileUrlTemplate = this.CustomTileUrlTemplate.Trim(),
             CustomTileAttribution = this.CustomTileAttribution.Trim(),
+            CustomVectorLocation = this.CustomVectorLocation.Trim(),
+            CustomVectorSchema = this.SelectedVectorSchemaChoice.Schema,
+            CustomVectorAttribution = this.CustomVectorAttribution.Trim(),
         });
 
         this.StatusMessage = "設定を保存しました。";
@@ -906,7 +984,10 @@ public sealed class MainViewModel : ObservableObject
         {
             tileSource = this.SelectedTileSource.CreateSource(
                 this.CustomTileUrlTemplate,
-                this.CustomTileAttribution);
+                this.CustomTileAttribution,
+                this.CustomVectorLocation,
+                this.SelectedVectorSchemaChoice.Schema,
+                this.CustomVectorAttribution);
         }
         catch (ArgumentException exception)
         {
@@ -1015,6 +1096,9 @@ public sealed class MainViewModel : ObservableObject
             SelectedTileSource = this.SelectedTileSource,
             CustomTileUrlTemplate = this.CustomTileUrlTemplate,
             CustomTileAttribution = this.CustomTileAttribution,
+            CustomVectorLocation = this.CustomVectorLocation,
+            CustomVectorSchema = this.SelectedVectorSchemaChoice.Schema,
+            CustomVectorAttribution = this.CustomVectorAttribution,
         };
 
     private static bool TryGetPositiveInteger(double value, out int result)

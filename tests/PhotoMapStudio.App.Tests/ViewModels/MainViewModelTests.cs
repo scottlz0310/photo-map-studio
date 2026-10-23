@@ -3,6 +3,7 @@ using PhotoMapStudio.App.Services;
 using PhotoMapStudio.App.ViewModels;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Tests.ViewModels;
 
@@ -112,6 +113,100 @@ public class MainViewModelTests
         Assert.True(viewModel.TrySaveSettings());
         Assert.Equal(PinKind.RedPin, repository.Settings.PinKind);
         Assert.Equal(PinAnchor.BottomCenter, repository.Settings.PinAnchor);
+    }
+
+    [Fact]
+    public void カスタムベクターを選ぶと専用の入力欄だけを表示する()
+    {
+        var viewModel = new MainViewModel(new InMemorySettingsRepository());
+
+        viewModel.SelectedTileSource = TileSourceChoices.CustomVector;
+
+        Assert.True(viewModel.IsCustomVectorSource);
+        Assert.False(viewModel.IsCustomTileSource);
+
+        viewModel.SelectedTileSource = TileSourceChoices.Custom;
+
+        Assert.False(viewModel.IsCustomVectorSource);
+        Assert.True(viewModel.IsCustomTileSource);
+    }
+
+    [Fact]
+    public void カスタムベクターを検証して保存し再読込できる()
+    {
+        var repository = new InMemorySettingsRepository();
+        var viewModel = new MainViewModel(repository)
+        {
+            SelectedTileSource = TileSourceChoices.CustomVector,
+            CustomVectorLocation = " https://example.com/japan.pmtiles ",
+            SelectedVectorSchemaChoice = VectorSchemaChoice.FromSchema(VectorStyleSchema.GsiOptimalBvmap),
+            CustomVectorAttribution = " © 提供元 ",
+        };
+
+        Assert.True(viewModel.TrySaveSettings());
+        Assert.Equal("https://example.com/japan.pmtiles", repository.Settings.CustomVectorLocation);
+        Assert.Equal(VectorStyleSchema.GsiOptimalBvmap, repository.Settings.CustomVectorSchema);
+        Assert.Equal("© 提供元", repository.Settings.CustomVectorAttribution);
+
+        var reloaded = new MainViewModel(repository);
+
+        Assert.Equal(TileSourceChoices.CustomVector, reloaded.SelectedTileSource);
+        Assert.Equal("https://example.com/japan.pmtiles", reloaded.CustomVectorLocation);
+        Assert.Equal(VectorStyleSchema.GsiOptimalBvmap, reloaded.SelectedVectorSchemaChoice.Schema);
+        Assert.Equal("© 提供元", reloaded.SelectedTileSourceAttribution);
+    }
+
+    [Theory]
+    [InlineData("", "© 提供元", "指定してください")]
+    [InlineData("ftp://example.com/japan.pmtiles", "© 提供元", "http または https")]
+    [InlineData("https://user:pass@example.com/japan.pmtiles", "© 提供元", "認証情報")]
+    [InlineData("https://example.com/japan.pmtiles", "", "出典表示")]
+    public void 不正なカスタムベクターは保存せず理由を表示する(string location, string attribution, string expectedMessagePart)
+    {
+        var repository = new InMemorySettingsRepository();
+        var viewModel = new MainViewModel(repository)
+        {
+            SelectedTileSource = TileSourceChoices.CustomVector,
+            CustomVectorLocation = location,
+            CustomVectorAttribution = attribution,
+        };
+
+        Assert.False(viewModel.TrySaveSettings());
+        Assert.Contains("カスタムタイルソースを検証できません", viewModel.ValidationMessage, StringComparison.Ordinal);
+        Assert.Contains(expectedMessagePart, viewModel.ValidationMessage, StringComparison.Ordinal);
+        Assert.Equal(TileSourceChoices.GsiPaleKey, repository.Settings.TileSourceKey);
+    }
+
+    [Fact]
+    public void カスタムベクターの案内は取得元に応じて変わる()
+    {
+        string file = Path.Combine(Path.GetTempPath(), $"pms-vm-{Guid.NewGuid():N}.pmtiles");
+        File.WriteAllBytes(file, [0]);
+        try
+        {
+            var viewModel = new MainViewModel(new InMemorySettingsRepository())
+            {
+                SelectedTileSource = TileSourceChoices.CustomVector,
+            };
+
+            // 未入力・不正な間は案内を出さない（検証エラーは保存時に表示する）
+            Assert.Empty(viewModel.TileUsageMessage);
+
+            viewModel.CustomVectorLocation = "https://example.com/japan.pmtiles";
+            Assert.Contains("許可を確認", viewModel.TileUsageMessage, StringComparison.Ordinal);
+            Assert.Contains("認証情報", viewModel.TileUsageMessage, StringComparison.Ordinal);
+
+            viewModel.CustomVectorLocation = "http://localhost:8080/japan.pmtiles";
+            Assert.Contains("この PC 上の配信元", viewModel.TileUsageMessage, StringComparison.Ordinal);
+
+            viewModel.CustomVectorLocation = file;
+            Assert.Contains("通信しません", viewModel.TileUsageMessage, StringComparison.Ordinal);
+            Assert.True(viewModel.HasTileUsageMessage);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [Fact]

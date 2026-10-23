@@ -40,12 +40,51 @@ public sealed class PmtilesVectorTileSource : IVectorTileSource, IDisposable
     public int MaxZoom => this.header?.MaxZoom ?? this.fallbackMaxZoom;
 
     /// <inheritdoc/>
+    public async Task PrepareAsync(TileFetchSession? session = null, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(this.disposed, this);
+
+        try
+        {
+            await this.EnsureInitializedAsync(session, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TileFetchException or FormatException or NotSupportedException or InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            // ヘッダーを読めなくても、ここでは失敗にしない（最大ズームは既定値のまま）。
+            // 失敗は、後続のタイル取得が同じ読み込みをやり直して報告する。キャッシュ済みのタイルはそのまま使える。
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<byte[]?> GetTileAsync(
         int z,
         int x,
         int y,
         TileFetchSession? session = null,
         CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await this.GetTileCoreAsync(z, x, y, session, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is FormatException or NotSupportedException or InvalidDataException)
+        {
+            // 利用者が指定したファイル・URL が PMTiles として読めない場合。画面に理由を表示できるよう、取得の失敗として扱う
+            throw new TileFetchException($"PMTiles として読み取れません: {ex.Message}", ex);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // ファイルの終端に達した（PMTiles として短すぎる）、使用中、権限がないなど
+            throw new TileFetchException($"PMTiles ファイルを読み取れません: {ex.Message}", ex);
+        }
+    }
+
+    private async Task<byte[]?> GetTileCoreAsync(
+        int z,
+        int x,
+        int y,
+        TileFetchSession? session,
+        CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(this.disposed, this);
 

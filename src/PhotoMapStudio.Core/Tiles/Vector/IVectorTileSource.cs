@@ -16,6 +16,18 @@ public interface IVectorTileSource
     int MaxZoom { get; }
 
     /// <summary>
+    /// タイルを取得する前に、<see cref="MaxZoom"/> など取得元のメタデータを確定する。
+    /// アーカイブのヘッダーを読まないと最大ズームが分からない取得元（PMTiles）が、描画のズーム計算の前に呼ばれる。
+    /// </summary>
+    /// <remarks>
+    /// 確定できない場合（オフラインなど）は例外にせず、既定値のまま続ける。取得の失敗は、後続のタイル取得で改めて報告される。
+    /// </remarks>
+    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    /// <returns>確定の試行を表すタスク。</returns>
+    Task PrepareAsync(TileFetchSession? session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <summary>
     /// 実効的な識別子を非同期に解決・確定して取得する。
     /// 動的メタデータ（TileJSON等）を解決するソースではメタデータ取得後に確定した識別子を返す。
     /// </summary>

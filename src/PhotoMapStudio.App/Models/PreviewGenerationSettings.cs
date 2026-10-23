@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Models;
 
@@ -54,9 +55,21 @@ public sealed record PreviewGenerationSettings
     /// <summary>カスタムタイルの出典表示。</summary>
     public string CustomTileAttribution { get; init; } = PhotoMapSettings.DefaultCustomTileAttribution;
 
+    /// <summary>カスタム（ベクター）の場所。</summary>
+    public string CustomVectorLocation { get; init; } = string.Empty;
+
+    /// <summary>カスタム（ベクター）のレイヤー構成。</summary>
+    public VectorStyleSchema CustomVectorSchema { get; init; } = VectorStyleSchema.OpenMapTiles;
+
+    /// <summary>カスタム（ベクター）の出典表示。</summary>
+    public string CustomVectorAttribution { get; init; } = string.Empty;
+
     /// <summary>選択中の設定から実際のタイルソースを構築する。</summary>
     public TileSource CreateTileSource()
         => this.SelectedTileSource.CreateSource(
             this.CustomTileUrlTemplate,
-            this.CustomTileAttribution);
+            this.CustomTileAttribution,
+            this.CustomVectorLocation,
+            this.CustomVectorSchema,
+            this.CustomVectorAttribution);
 }

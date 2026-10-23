@@ -154,6 +154,9 @@ public sealed class CustomVectorSourceFactory : IDisposable
         public Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
             => this.cached.GetSourceIdAsync(cancellationToken);
 
+        public Task PrepareAsync(TileFetchSession? session, CancellationToken cancellationToken = default)
+            => this.cached.PrepareAsync(session, cancellationToken);
+
         public Task<byte[]?> GetTileAsync(int z, int x, int y, TileFetchSession? session, CancellationToken cancellationToken = default)
             => this.cached.GetTileAsync(z, x, y, session, cancellationToken);
 

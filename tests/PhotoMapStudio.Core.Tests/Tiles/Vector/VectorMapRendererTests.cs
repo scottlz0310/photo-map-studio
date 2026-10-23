@@ -216,6 +216,27 @@ public class VectorMapRendererTests
         Assert.Equal(512, bitmap.Width);
     }
 
+    [Theory]
+    [InlineData("<html><body>404 Not Found</body></html>")]
+    [InlineData("{\"error\": \"tile not found\"}")]
+    [InlineData("これはベクタータイルではありません")]
+    public async Task ベクタータイルとして読めない内容はTileFetchExceptionとして失敗する(string content)
+    {
+        // 利用者が指定した配信元が、タイルではない内容（エラーページなど）を 200 で返す場合
+        byte[] garbage = System.Text.Encoding.UTF8.GetBytes(content);
+        var mockSource = new MockVectorTileSource(14, (_, _, _) => garbage);
+        using var style = new OpenMapTilesStyle();
+        var renderer = new VectorMapRenderer(mockSource, style);
+
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+            () => renderer.RenderMapAsync(new GeoCoordinate(35.685, 139.752), 14, 256, 256, CancellationToken.None));
+
+        Assert.Contains("読み取れません", exception.Message, StringComparison.Ordinal);
+
+        // 配信範囲外の切り替え（404）に隠れないよう、ステータスなしの失敗にする
+        Assert.Null(exception.StatusCode);
+    }
+
     private static byte[] CreateWaterTile()
     {
         using var stream = new MemoryStream();

@@ -60,6 +60,7 @@ public sealed class MainViewModel : ObservableObject
     private string customTileUrlTemplate;
     private string customTileAttribution;
     private string customVectorLocation;
+    private double customVectorMaxZoom;
     private VectorSchemaChoice selectedVectorSchemaChoice;
     private string customVectorAttribution;
     private double minimumZoom;
@@ -125,6 +126,7 @@ public sealed class MainViewModel : ObservableObject
         this.customTileUrlTemplate = settings.CustomTileUrlTemplate;
         this.customTileAttribution = settings.CustomTileAttribution;
         this.customVectorLocation = settings.CustomVectorLocation;
+        this.customVectorMaxZoom = Math.Clamp(settings.CustomVectorMaxZoom, 0, VectorSourceSpec.MaxSupportedZoom);
         this.selectedVectorSchemaChoice = VectorSchemaChoice.FromSchema(settings.CustomVectorSchema);
         this.customVectorAttribution = settings.CustomVectorAttribution;
         this.selectedTileSource = PhotoMapStudio.App.Models.TileSourceChoices.FromKey(settings.TileSourceKey);
@@ -492,6 +494,20 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>カスタム（ベクター）の URL テンプレートが配信する最大ズーム。PMTiles はヘッダーから分かるため使わない。</summary>
+    public double CustomVectorMaxZoom
+    {
+        get => this.customVectorMaxZoom;
+        set
+        {
+            if (this.SetProperty(ref this.customVectorMaxZoom, value))
+            {
+                this.ClearFeedback();
+                this.NotifyPreviewChanged();
+            }
+        }
+    }
+
     /// <summary>カスタム（ベクター）のレイヤー構成の選択肢。</summary>
     public IReadOnlyList<VectorSchemaChoice> VectorSchemaOptions { get; }
 
@@ -742,7 +758,8 @@ public sealed class MainViewModel : ObservableObject
                 this.CustomTileAttribution,
                 this.CustomVectorLocation,
                 this.SelectedVectorSchemaChoice.Schema,
-                this.CustomVectorAttribution);
+                this.CustomVectorAttribution,
+                this.CustomVectorMaxZoomValue);
         }
         catch (ArgumentException exception)
         {
@@ -776,6 +793,7 @@ public sealed class MainViewModel : ObservableObject
             CustomVectorLocation = this.CustomVectorLocation.Trim(),
             CustomVectorSchema = this.SelectedVectorSchemaChoice.Schema,
             CustomVectorAttribution = this.CustomVectorAttribution.Trim(),
+            CustomVectorMaxZoom = Math.Clamp(this.CustomVectorMaxZoomValue, 0, VectorSourceSpec.MaxSupportedZoom),
         });
 
         this.StatusMessage = "設定を保存しました。";
@@ -987,7 +1005,8 @@ public sealed class MainViewModel : ObservableObject
                 this.CustomTileAttribution,
                 this.CustomVectorLocation,
                 this.SelectedVectorSchemaChoice.Schema,
-                this.CustomVectorAttribution);
+                this.CustomVectorAttribution,
+                this.CustomVectorMaxZoomValue);
         }
         catch (ArgumentException exception)
         {
@@ -1099,7 +1118,11 @@ public sealed class MainViewModel : ObservableObject
             CustomVectorLocation = this.CustomVectorLocation,
             CustomVectorSchema = this.SelectedVectorSchemaChoice.Schema,
             CustomVectorAttribution = this.CustomVectorAttribution,
+            CustomVectorMaxZoom = this.CustomVectorMaxZoomValue,
         };
+
+    // 整数でない入力は範囲外の -1 にして、検証側で「最大ズームが不正」と報告させる
+    private int CustomVectorMaxZoomValue => TryGetInteger(this.CustomVectorMaxZoom, out int value) ? value : -1;
 
     private static bool TryGetPositiveInteger(double value, out int result)
     {

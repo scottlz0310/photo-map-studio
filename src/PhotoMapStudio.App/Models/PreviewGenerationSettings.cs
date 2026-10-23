@@ -64,6 +64,9 @@ public sealed record PreviewGenerationSettings
     /// <summary>カスタム（ベクター）の出典表示。</summary>
     public string CustomVectorAttribution { get; init; } = string.Empty;
 
+    /// <summary>カスタム（ベクター）の URL テンプレートが配信する最大ズーム。</summary>
+    public int CustomVectorMaxZoom { get; init; } = VectorSourceSpec.DefaultXyzMaxZoom;
+
     /// <summary>選択中の設定から実際のタイルソースを構築する。</summary>
     public TileSource CreateTileSource()
         => this.SelectedTileSource.CreateSource(
@@ -71,5 +74,6 @@ public sealed record PreviewGenerationSettings
             this.CustomTileAttribution,
             this.CustomVectorLocation,
             this.CustomVectorSchema,
-            this.CustomVectorAttribution);
+            this.CustomVectorAttribution,
+            this.CustomVectorMaxZoom);
 }

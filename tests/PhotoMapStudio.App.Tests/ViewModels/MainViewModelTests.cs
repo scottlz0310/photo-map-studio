@@ -156,6 +156,43 @@ public class MainViewModelTests
         Assert.Equal("© 提供元", reloaded.SelectedTileSourceAttribution);
     }
 
+    [Fact]
+    public void URLテンプレートの最大ズームを保存して再読込できる()
+    {
+        var repository = new InMemorySettingsRepository();
+        var viewModel = new MainViewModel(repository)
+        {
+            SelectedTileSource = TileSourceChoices.CustomVector,
+            CustomVectorLocation = "https://example.com/{z}/{x}/{y}.pbf",
+            CustomVectorAttribution = "© 提供元",
+            CustomVectorMaxZoom = 16,
+        };
+
+        Assert.True(viewModel.TrySaveSettings());
+        Assert.Equal(16, repository.Settings.CustomVectorMaxZoom);
+        Assert.Equal(16, new MainViewModel(repository).CustomVectorMaxZoom);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(20)]
+    [InlineData(14.5)]
+    [InlineData(double.NaN)]
+    public void URLテンプレートの最大ズームが不正なら保存せず理由を表示する(double maxZoom)
+    {
+        var repository = new InMemorySettingsRepository();
+        var viewModel = new MainViewModel(repository)
+        {
+            SelectedTileSource = TileSourceChoices.CustomVector,
+            CustomVectorLocation = "https://example.com/{z}/{x}/{y}.pbf",
+            CustomVectorAttribution = "© 提供元",
+            CustomVectorMaxZoom = maxZoom,
+        };
+
+        Assert.False(viewModel.TrySaveSettings());
+        Assert.Contains("最大ズーム", viewModel.ValidationMessage, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("", "© 提供元", "指定してください")]
     [InlineData("ftp://example.com/japan.pmtiles", "© 提供元", "http または https")]

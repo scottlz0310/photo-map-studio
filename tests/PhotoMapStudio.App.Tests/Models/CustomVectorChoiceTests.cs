@@ -29,7 +29,8 @@ public sealed class CustomVectorChoiceTests
             "未使用",
             " https://example.com/japan.pmtiles ",
             VectorStyleSchema.GsiOptimalBvmap,
-            " © 提供元 ");
+            " © 提供元 ",
+            VectorSourceSpec.DefaultXyzMaxZoom);
 
         Assert.True(source.IsVector);
         Assert.Equal("© 提供元", source.Attribution);
@@ -47,7 +48,7 @@ public sealed class CustomVectorChoiceTests
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
             () => TileSourceChoices.CustomVector.CreateSource(
-                "https://unused.example.com/{z}/{x}/{y}.png", "未使用", location, VectorStyleSchema.OpenMapTiles, attribution));
+                "https://unused.example.com/{z}/{x}/{y}.png", "未使用", location, VectorStyleSchema.OpenMapTiles, attribution, VectorSourceSpec.DefaultXyzMaxZoom));
 
         Assert.Contains(expectedMessagePart, exception.Message, StringComparison.Ordinal);
 
@@ -58,12 +59,35 @@ public sealed class CustomVectorChoiceTests
     [Fact]
     public void ベクター以外の選択肢はベクター用の指定を使わない()
     {
-        TileSource preset = TileSourceChoices.OpenFreeMap.CreateSource("https://x/{z}/{x}/{y}", "出典", string.Empty, VectorStyleSchema.OpenMapTiles, string.Empty);
-        TileSource custom = TileSourceChoices.Custom.CreateSource("https://tiles.example.com/{z}/{x}/{y}.png", "出典", string.Empty, VectorStyleSchema.OpenMapTiles, string.Empty);
+        TileSource preset = TileSourceChoices.OpenFreeMap.CreateSource("https://x/{z}/{x}/{y}", "出典", string.Empty, VectorStyleSchema.OpenMapTiles, string.Empty, VectorSourceSpec.DefaultXyzMaxZoom);
+        TileSource custom = TileSourceChoices.Custom.CreateSource("https://tiles.example.com/{z}/{x}/{y}.png", "出典", string.Empty, VectorStyleSchema.OpenMapTiles, string.Empty, VectorSourceSpec.DefaultXyzMaxZoom);
 
         Assert.Same(TileSources.OpenFreeMap, preset);
         Assert.False(custom.IsVector);
         Assert.Null(custom.VectorSource);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/{z}/{x}/{y}.pbf", 16, 16)]
+    [InlineData("https://example.com/japan.pmtiles", 16, VectorSourceSpec.DefaultXyzMaxZoom)]
+    public void URLテンプレートの最大ズームを指定のタイルソースへ反映する(string location, int maxZoom, int expected)
+    {
+        TileSource source = TileSourceChoices.CustomVector.CreateSource(
+            "https://unused.example.com/{z}/{x}/{y}.png", "未使用", location, VectorStyleSchema.OpenMapTiles, "© 提供元", maxZoom);
+
+        Assert.Equal(expected, source.VectorSource!.MaxZoom);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(20)]
+    public void URLテンプレートの最大ズームが範囲外なら理由つきで拒否する(int maxZoom)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => TileSourceChoices.CustomVector.CreateSource(
+                "https://unused.example.com/{z}/{x}/{y}.png", "未使用", "https://example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, "© 提供元", maxZoom));
+
+        Assert.Contains("最大ズーム", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -84,10 +108,12 @@ public sealed class CustomVectorChoiceTests
             CustomVectorLocation = "https://example.com/{z}/{x}/{y}.pbf",
             CustomVectorSchema = VectorStyleSchema.OpenMapTiles,
             CustomVectorAttribution = "© 提供元",
+            CustomVectorMaxZoom = 16,
         };
 
         TileSource source = settings.CreateTileSource();
 
         Assert.Equal(VectorSourceKind.XyzTemplate, source.VectorSource!.Kind);
+        Assert.Equal(16, source.VectorSource.MaxZoom);
     }
 }

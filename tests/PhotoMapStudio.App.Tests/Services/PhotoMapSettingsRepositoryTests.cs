@@ -29,6 +29,7 @@ public class PhotoMapSettingsRepositoryTests
             CustomVectorLocation = "https://example.com/japan.pmtiles",
             CustomVectorSchema = VectorStyleSchema.GsiOptimalBvmap,
             CustomVectorAttribution = "© 提供元",
+            CustomVectorMaxZoom = 16,
         };
 
         repository.Save(settings);
@@ -47,6 +48,7 @@ public class PhotoMapSettingsRepositoryTests
         Assert.Empty(settings.CustomVectorLocation);
         Assert.Empty(settings.CustomVectorAttribution);
         Assert.Equal(VectorStyleSchema.OpenMapTiles, settings.CustomVectorSchema);
+        Assert.Equal(VectorSourceSpec.DefaultXyzMaxZoom, settings.CustomVectorMaxZoom);
     }
 
     [Fact]

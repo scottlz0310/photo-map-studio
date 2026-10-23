@@ -30,6 +30,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
     private const string CustomVectorLocationKey = "custom-vector-location";
     private const string CustomVectorSchemaKey = "custom-vector-schema";
     private const string CustomVectorAttributionKey = "custom-vector-attribution";
+    private const string CustomVectorMaxZoomKey = "custom-vector-max-zoom";
 
     private readonly ISettingsValueStore store;
 
@@ -72,6 +73,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
             CustomVectorLocation = ReadString(CustomVectorLocationKey, string.Empty),
             CustomVectorSchema = ReadEnum(CustomVectorSchemaKey, VectorStyleSchema.OpenMapTiles),
             CustomVectorAttribution = ReadString(CustomVectorAttributionKey, string.Empty),
+            CustomVectorMaxZoom = ReadInt(CustomVectorMaxZoomKey, VectorSourceSpec.DefaultXyzMaxZoom),
         };
     }
 
@@ -97,6 +99,7 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
         this.store.Write(CustomVectorLocationKey, settings.CustomVectorLocation);
         this.store.Write(CustomVectorSchemaKey, settings.CustomVectorSchema.ToString());
         this.store.Write(CustomVectorAttributionKey, settings.CustomVectorAttribution);
+        this.store.Write(CustomVectorMaxZoomKey, settings.CustomVectorMaxZoom);
 
         if (string.IsNullOrWhiteSpace(settings.PinImagePath))
         {

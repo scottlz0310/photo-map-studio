@@ -88,6 +88,9 @@ public sealed record PhotoMapSettings
     /// <summary>カスタム（ベクター）の出典表示。</summary>
     public string CustomVectorAttribution { get; init; } = string.Empty;
 
+    /// <summary>カスタム（ベクター）の URL テンプレートが配信する最大ズーム。</summary>
+    public int CustomVectorMaxZoom { get; init; } = VectorSourceSpec.DefaultXyzMaxZoom;
+
     /// <summary>カスタムタイルの出典表示。</summary>
     public string CustomTileAttribution { get; init; } = DefaultCustomTileAttribution;
 }

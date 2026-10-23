@@ -237,6 +237,50 @@ public class VectorMapRendererTests
         Assert.Null(exception.StatusCode);
     }
 
+    [Fact]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "ハンドラーの所有権は HttpClient に移り、HttpClient の破棄時に破棄される。")]
+    public async Task カスタムXYZは指定した最大ズームのタイルを要求して描画する()
+    {
+        // z16 のタイルだけを配信し、z14 は配信しない取得元
+        var requestedZooms = new List<string>();
+        using var client = new HttpClient(new StubHttpHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            requestedZooms.Add(path.Split('/')[1]);
+            return path.StartsWith("/16/", StringComparison.Ordinal)
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(CreateWaterTile()) }
+                : new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        }));
+        using var style = new OpenMapTilesStyle();
+        using var gsiStyle = new GsiVectorStyle();
+        using var factory = new CustomVectorSourceFactory(client, new NullTileCache(), style, gsiStyle);
+        var center = new GeoCoordinate(35.685, 139.752);
+        var renderer = new VectorMapRenderer(
+            defaultTileSource: new MockVectorTileSource(14, (_, _, _) => null),
+            defaultStyle: style,
+            resolver: source => factory.Resolve(source!.VectorSource!));
+
+        TileSource atZoom16 = TileSources.CustomVector(
+            VectorSourceSpec.Create("http://127.0.0.1:9/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, xyzMaxZoom: 16), "© 検証");
+        TileSource atZoom14 = TileSources.CustomVector(
+            VectorSourceSpec.Create("http://127.0.0.1:9/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles), "© 検証");
+
+        // 最大ズーム 16 を指定すれば、ズーム 16 のタイルを要求して描画できる
+        using SKBitmap bitmap = await renderer.RenderMapAsync(center, 16, 256, 256, session: null, tileSource: atZoom16, CancellationToken.None);
+        Assert.Equal(new SKColor(0xA5, 0xD6, 0xE7), bitmap.GetPixel(128, 128));
+        Assert.Contains("16", requestedZooms);
+
+        // 既定（14）のままでは z14 のタイルしか要求できず、この取得元では描画できるタイルがない
+        requestedZooms.Clear();
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+            () => renderer.RenderMapAsync(center, 16, 256, 256, session: null, tileSource: atZoom14, CancellationToken.None));
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.All(requestedZooms, zoom => Assert.Equal("14", zoom));
+    }
+
     private static byte[] CreateWaterTile()
     {
         using var stream = new MemoryStream();
@@ -313,6 +357,19 @@ public class VectorMapRendererTests
     private static uint EncodeZigzag32(int n)
     {
         return (uint)((n << 1) ^ (n >> 31));
+    }
+
+    private sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(respond(request));
+    }
+
+    private sealed class NullTileCache : ITileCache
+    {
+        public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
+
+        public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class MockVectorTileSource(int maxZoom, Func<int, int, int, byte[]?> fetchHandler) : IVectorTileSource

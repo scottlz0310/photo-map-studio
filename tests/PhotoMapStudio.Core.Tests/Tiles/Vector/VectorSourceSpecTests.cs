@@ -12,6 +12,49 @@ public sealed class VectorSourceSpecTests : IDisposable
     public void Dispose() => Directory.Delete(this.directory, recursive: true);
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(14)]
+    [InlineData(16)]
+    [InlineData(19)]
+    public void URLテンプレートは指定した最大ズームを保持する(int maxZoom)
+    {
+        VectorSourceSpec spec = VectorSourceSpec.Create("https://tiles.example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, maxZoom);
+
+        Assert.Equal(maxZoom, spec.MaxZoom);
+    }
+
+    [Fact]
+    public void URLテンプレートの最大ズームは省略すると既定値になる()
+    {
+        VectorSourceSpec spec = VectorSourceSpec.Create("https://tiles.example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles);
+
+        Assert.Equal(VectorSourceSpec.DefaultXyzMaxZoom, spec.MaxZoom);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(20)]
+    public void URLテンプレートの最大ズームが範囲外なら拒否する(int maxZoom)
+    {
+        bool created = VectorSourceSpec.TryCreate(
+            "https://tiles.example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, out _, out string error, maxZoom);
+
+        Assert.False(created);
+        Assert.Contains("最大ズーム", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PMTilesは最大ズームの指定を無視し同じ指定は等価になる()
+    {
+        VectorSourceSpec a = VectorSourceSpec.Create("https://example.com/japan.pmtiles", VectorStyleSchema.OpenMapTiles, 5);
+        VectorSourceSpec b = VectorSourceSpec.Create("https://example.com/japan.pmtiles", VectorStyleSchema.OpenMapTiles, 17);
+
+        // ヘッダーから分かるため、関係のない指定で取得元を分けない
+        Assert.Equal(a, b);
+        Assert.Equal(VectorSourceSpec.DefaultXyzMaxZoom, a.MaxZoom);
+    }
+
+    [Theory]
     [InlineData("https://tiles.example.com/{z}/{x}/{y}.pbf", VectorSourceKind.XyzTemplate)]
     [InlineData("http://localhost:8080/{z}/{x}/{y}.mvt", VectorSourceKind.XyzTemplate)]
     [InlineData("  https://tiles.example.com/{z}/{x}/{y}.pbf  ", VectorSourceKind.XyzTemplate)]

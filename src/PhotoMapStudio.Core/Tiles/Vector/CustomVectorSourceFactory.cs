@@ -129,7 +129,7 @@ public sealed class CustomVectorSourceFactory : IDisposable
             default:
                 {
                     var gate = new RequestIntervalGate(spec.RateLimit, this.timeProvider);
-                    var xyz = new OpenFreeMapTileSource(this.httpClient, urlTemplate: spec.Location);
+                    var xyz = new OpenFreeMapTileSource(this.httpClient, urlTemplate: spec.Location, maxZoom: spec.MaxZoom);
                     return new OwnedCachedVectorTileSource(new RateLimitedVectorTileSource(xyz, gate), this.cache);
                 }
         }

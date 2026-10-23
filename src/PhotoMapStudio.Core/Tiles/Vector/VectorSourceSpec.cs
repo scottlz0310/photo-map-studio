@@ -41,13 +41,20 @@ public enum VectorStyleSchema
     Justification = "URL テンプレートは {z}/{x}/{y} を含む置換前の文字列であり、Uri では表現できない。")]
 public sealed record VectorSourceSpec
 {
+    /// <summary>URL テンプレートの最大ズームの既定値（OpenMapTiles 系の一般的な配信上限）。</summary>
+    public const int DefaultXyzMaxZoom = 14;
+
+    /// <summary>URL テンプレートの最大ズームに指定できる上限（アプリが扱う最大ズーム）。</summary>
+    public const int MaxSupportedZoom = 19;
+
     private const string PmtilesExtension = ".pmtiles";
 
-    private VectorSourceSpec(string location, VectorSourceKind kind, VectorStyleSchema schema)
+    private VectorSourceSpec(string location, VectorSourceKind kind, VectorStyleSchema schema, int maxZoom)
     {
         this.Location = location;
         this.Kind = kind;
         this.Schema = schema;
+        this.MaxZoom = maxZoom;
     }
 
     /// <summary>URL テンプレート、PMTiles の URL、または PMTiles のファイルパス。</summary>
@@ -58,6 +65,12 @@ public sealed record VectorSourceSpec
 
     /// <summary>レイヤー構成（描画スタイルの選択に使う）。</summary>
     public VectorStyleSchema Schema { get; }
+
+    /// <summary>
+    /// 取得元が配信する最大ズーム。URL テンプレートにはメタデータがないため利用者の指定による。
+    /// PMTiles はヘッダーから分かるため使わず、常に <see cref="DefaultXyzMaxZoom"/> とする。
+    /// </summary>
+    public int MaxZoom { get; }
 
     /// <summary>
     /// 取得元のレート制御方針。この PC 内（ファイル・ループバック）は通信しない、または他者に負荷を掛けない。
@@ -84,10 +97,11 @@ public sealed record VectorSourceSpec
     /// </summary>
     /// <param name="location">URL テンプレート、PMTiles の URL、または PMTiles のファイルパス。</param>
     /// <param name="schema">レイヤー構成。</param>
+    /// <param name="xyzMaxZoom">URL テンプレートが配信する最大ズーム。PMTiles では無視する。</param>
     /// <returns>作成した取得元。</returns>
     /// <exception cref="ArgumentException">入力が不正な場合。</exception>
-    public static VectorSourceSpec Create(string? location, VectorStyleSchema schema)
-        => TryCreate(location, schema, out VectorSourceSpec? spec, out string error)
+    public static VectorSourceSpec Create(string? location, VectorStyleSchema schema, int xyzMaxZoom = DefaultXyzMaxZoom)
+        => TryCreate(location, schema, out VectorSourceSpec? spec, out string error, xyzMaxZoom)
             ? spec!
             : throw new ArgumentException(error);
 
@@ -98,12 +112,14 @@ public sealed record VectorSourceSpec
     /// <param name="schema">レイヤー構成。</param>
     /// <param name="spec">作成した取得元。</param>
     /// <param name="error">不正な場合の理由。</param>
+    /// <param name="xyzMaxZoom">URL テンプレートが配信する最大ズーム。PMTiles では無視する。</param>
     /// <returns>作成できた場合は <see langword="true"/>。</returns>
     public static bool TryCreate(
         string? location,
         VectorStyleSchema schema,
         [NotNullWhen(true)] out VectorSourceSpec? spec,
-        out string error)
+        out string error,
+        int xyzMaxZoom = DefaultXyzMaxZoom)
     {
         spec = null;
         string trimmed = location?.Trim() ?? string.Empty;
@@ -134,7 +150,13 @@ public sealed record VectorSourceSpec
                 return false;
             }
 
-            spec = new VectorSourceSpec(trimmed, VectorSourceKind.XyzTemplate, schema);
+            if (xyzMaxZoom is < 0 or > MaxSupportedZoom)
+            {
+                error = $"最大ズームは 0 〜 {MaxSupportedZoom} の整数で指定してください。";
+                return false;
+            }
+
+            spec = new VectorSourceSpec(trimmed, VectorSourceKind.XyzTemplate, schema, xyzMaxZoom);
             return true;
         }
 
@@ -151,7 +173,7 @@ public sealed record VectorSourceSpec
                 return false;
             }
 
-            spec = new VectorSourceSpec(trimmed, VectorSourceKind.PmtilesUrl, schema);
+            spec = new VectorSourceSpec(trimmed, VectorSourceKind.PmtilesUrl, schema, DefaultXyzMaxZoom);
             return true;
         }
 
@@ -173,7 +195,7 @@ public sealed record VectorSourceSpec
             return false;
         }
 
-        spec = new VectorSourceSpec(trimmed, VectorSourceKind.PmtilesFile, schema);
+        spec = new VectorSourceSpec(trimmed, VectorSourceKind.PmtilesFile, schema, DefaultXyzMaxZoom);
         error = string.Empty;
         return true;
     }

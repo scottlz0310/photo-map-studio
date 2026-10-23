@@ -74,6 +74,7 @@ public sealed record TileSourceChoice
     /// <param name="vectorLocation">ベクタータイルの場所（PMTiles の URL・ファイルパス、または URL テンプレート）。</param>
     /// <param name="vectorSchema">ベクタータイルのレイヤー構成。</param>
     /// <param name="vectorAttribution">ベクタータイルの出典表示。</param>
+    /// <param name="vectorMaxZoom">URL テンプレートのベクタータイルが配信する最大ズーム（PMTiles では無視する）。</param>
     /// <returns>使用するタイルソース。</returns>
     /// <exception cref="ArgumentException">指定が不正な場合。</exception>
     public TileSource CreateSource(
@@ -81,14 +82,15 @@ public sealed record TileSourceChoice
         string attribution,
         string vectorLocation,
         VectorStyleSchema vectorSchema,
-        string vectorAttribution)
+        string vectorAttribution,
+        int vectorMaxZoom)
     {
         if (!this.IsCustomVector)
         {
             return this.CreateSource(urlTemplate, attribution);
         }
 
-        VectorSourceSpec spec = VectorSourceSpec.Create(vectorLocation, vectorSchema);
+        VectorSourceSpec spec = VectorSourceSpec.Create(vectorLocation, vectorSchema, vectorMaxZoom);
         if (string.IsNullOrWhiteSpace(vectorAttribution))
         {
             throw new ArgumentException("出典表示を入力してください。地図データの出典は生成画像に焼き込みます。");

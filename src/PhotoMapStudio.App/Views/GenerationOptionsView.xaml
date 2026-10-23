@@ -71,6 +71,12 @@
                 DisplayMemberPath="DisplayName"
                 ItemsSource="{Binding VectorSchemaOptions}"
                 SelectedItem="{Binding SelectedVectorSchemaChoice, Mode=TwoWay}" />
+            <NumberBox
+                Header="URL テンプレートの最大ズーム（PMTiles は自動）"
+                Minimum="0"
+                Maximum="19"
+                SpinButtonPlacementMode="Compact"
+                Value="{Binding CustomVectorMaxZoom, Mode=TwoWay}" />
             <TextBox
                 Header="出典表示（必須）"
                 PlaceholderText="地図データの出典（生成画像に焼き込みます）"

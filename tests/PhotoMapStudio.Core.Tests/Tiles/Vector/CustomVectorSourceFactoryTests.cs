@@ -43,6 +43,29 @@ public sealed class CustomVectorSourceFactoryTests : IDisposable
         Assert.Same(this.gsiStyle, gsi);
     }
 
+    [Theory]
+    [InlineData(14)]
+    [InlineData(16)]
+    public void URLテンプレートの取得元は指定した最大ズームを持つ(int maxZoom)
+    {
+        using CustomVectorSourceFactory factory = this.CreateFactory(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        var (source, _) = factory.Resolve(VectorSourceSpec.Create("https://example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, maxZoom));
+
+        Assert.Equal(maxZoom, source.MaxZoom);
+    }
+
+    [Fact]
+    public void 最大ズームが異なるURLテンプレートは別の取得元になる()
+    {
+        using CustomVectorSourceFactory factory = this.CreateFactory(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        var (z14, _) = factory.Resolve(VectorSourceSpec.Create("https://example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, 14));
+        var (z16, _) = factory.Resolve(VectorSourceSpec.Create("https://example.com/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, 16));
+
+        Assert.NotSame(z14, z16);
+    }
+
     [Fact]
     public void 同じ指定は取得元を共有し別の指定は別の取得元になる()
     {

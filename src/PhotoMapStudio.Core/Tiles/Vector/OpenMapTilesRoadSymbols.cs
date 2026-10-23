@@ -33,6 +33,8 @@ internal static class OpenMapTilesRoadSymbols
     private const float ShieldHeight = 14f;
     private const float ShieldMinWidth = 16f;
     private const float ShieldPadding = 4f;
+    private const float NameAscent = 9f;
+    private const float NameDescent = 3f;
 
     /// <summary>
     /// 道路種別と経路網から盾の種別を決める。
@@ -117,8 +119,15 @@ internal static class OpenMapTilesRoadSymbols
 
             RouteShieldKind kind = GetShieldKind(feature.GetString("class"), feature.GetString("network"));
             string? text = GetShieldText(feature.GetString("ref"));
-            if (kind == RouteShieldKind.None || text is null
-                || !TryGetMidpoint(feature, tileToCanvasMatrix, out SKPoint anchor, out float length)
+            if (kind == RouteShieldKind.None || text is null)
+            {
+                continue;
+            }
+
+            // 盾が画面からはみ出さない範囲の、見えている区間だけで配置点を選ぶ（過拡大でタイルが画面より大きい場合に備える）
+            float shieldWidth = Math.Max(ShieldMinWidth, shieldFont.MeasureText(text) + (ShieldPadding * 2f));
+            SKRect placeable = Inset(viewport, shieldWidth / 2f, ShieldHeight / 2f, shieldWidth / 2f, ShieldHeight / 2f);
+            if (!TryGetVisibleMidpoint(feature, tileToCanvasMatrix, placeable, out SKPoint anchor, out float length)
                 || length < ShieldMinWidth * 1.5f)
             {
                 continue;
@@ -176,31 +185,38 @@ internal static class OpenMapTilesRoadSymbols
 
             int rank = GetNameRank(feature.GetString("class"), zoom);
             string? name = feature.GetString("name:ja") ?? feature.GetString("name");
-            if (rank < 0 || string.IsNullOrWhiteSpace(name)
-                || !TryGetMidpoint(feature, tileToCanvasMatrix, out SKPoint anchor, out float length))
+            if (rank < 0 || string.IsNullOrWhiteSpace(name))
             {
                 continue;
             }
 
-            if (!candidates.TryGetValue(name, out var existing) || length > existing.Length)
+            // 道路より長い名前は、隣の道路に重なって読みにくいため置かない（画面内に見えている長さで判断する）
+            float textWidth = font.MeasureText(name);
+            if (!TryGetVisibleMidpoint(feature, tileToCanvasMatrix, viewport, out _, out float visibleLength)
+                || visibleLength < textWidth * 0.9f)
             {
-                candidates[name] = (anchor, length, rank);
+                continue;
+            }
+
+            // 配置点は、文字が画面からはみ出さない範囲の、見えている区間の中央にする
+            SKRect placeable = Inset(viewport, textWidth / 2f, NameAscent, textWidth / 2f, NameDescent);
+            if (!TryGetVisibleMidpoint(feature, tileToCanvasMatrix, placeable, out SKPoint anchor, out _))
+            {
+                continue;
+            }
+
+            if (!candidates.TryGetValue(name, out var existing) || visibleLength > existing.Length)
+            {
+                candidates[name] = (anchor, visibleLength, rank);
             }
         }
 
-        foreach (var (name, (anchor, length, _)) in candidates
+        foreach (var (name, (anchor, _, _)) in candidates
             .OrderByDescending(static c => c.Value.Rank)
             .ThenByDescending(static c => c.Value.Length))
         {
             float textWidth = font.MeasureText(name);
-
-            // 道路より長い名前は、隣の道路に重なって読みにくいため置かない
-            if (length < textWidth * 0.9f)
-            {
-                continue;
-            }
-
-            var bounds = new SKRect(anchor.X - (textWidth / 2f), anchor.Y - 9f, anchor.X + (textWidth / 2f), anchor.Y + 3f);
+            var bounds = new SKRect(anchor.X - (textWidth / 2f), anchor.Y - NameAscent, anchor.X + (textWidth / 2f), anchor.Y + NameDescent);
             if (collisionGrid.TryPlace(bounds, viewport))
             {
                 canvas.DrawText(name, bounds.Left, anchor.Y, SKTextAlign.Left, font, haloPaint);
@@ -222,14 +238,26 @@ internal static class OpenMapTilesRoadSymbols
         _ => -1,
     };
 
+    private static SKRect Inset(SKRect rect, float left, float top, float right, float bottom)
+        => new(rect.Left + left, rect.Top + top, rect.Right - right, rect.Bottom - bottom);
+
     /// <summary>
-    /// 地物のうち最も長い連続線を選び、その長さの中点（画面座標）と長さを求める。
+    /// 地物のうち、指定した矩形の内側に見えている最も長い連続区間を選び、その中点（画面座標）と長さを求める。
     /// </summary>
-    private static bool TryGetMidpoint(VectorTileFeature feature, SKMatrix tileToCanvasMatrix, out SKPoint midpoint, out float length)
+    /// <remarks>
+    /// 区間全体の中点を使うと、過拡大でタイルが画面より大きいとき（OpenFreeMap は最大ズーム 14 のタイルを拡大する）、
+    /// 画面を横切る道路でも中点が画面外になり、盾・道路名が消える。
+    /// </remarks>
+    private static bool TryGetVisibleMidpoint(VectorTileFeature feature, SKMatrix tileToCanvasMatrix, SKRect clip, out SKPoint midpoint, out float length)
     {
         midpoint = default;
         length = 0f;
-        SKPoint[]? best = null;
+        if (clip.Width <= 0f || clip.Height <= 0f)
+        {
+            return false;
+        }
+
+        List<SKPoint>? best = null;
         float bestLength = 0f;
 
         for (int p = 0; p < feature.GeometryParts.Count; p++)
@@ -240,21 +268,56 @@ internal static class OpenMapTilesRoadSymbols
                 continue;
             }
 
-            var points = new SKPoint[line.Count];
-            float total = 0f;
-            for (int i = 0; i < line.Count; i++)
+            List<SKPoint>? run = null;
+            float runLength = 0f;
+            bool endedAtVertex = false;
+            SKPoint previous = tileToCanvasMatrix.MapPoint(new SKPoint(line[0].X, line[0].Y));
+
+            for (int i = 1; i < line.Count; i++)
             {
-                points[i] = tileToCanvasMatrix.MapPoint(new SKPoint(line[i].X, line[i].Y));
-                if (i > 0)
+                SKPoint current = tileToCanvasMatrix.MapPoint(new SKPoint(line[i].X, line[i].Y));
+
+                if (!TryClipSegment(previous, current, clip, out float t0, out float t1))
                 {
-                    total += SKPoint.Distance(points[i - 1], points[i]);
+                    Close(ref run, ref runLength);
                 }
+                else
+                {
+                    SKPoint a = Lerp(previous, current, t0);
+                    SKPoint b = Lerp(previous, current, t1);
+
+                    // 前の線分が頂点まで見えていて、この線分も頂点から見えているときだけ同じ区間として続ける
+                    if (run is null || !endedAtVertex || t0 > 1e-4f)
+                    {
+                        Close(ref run, ref runLength);
+                        run = [a];
+                    }
+
+                    run.Add(b);
+                    runLength += SKPoint.Distance(a, b);
+                    endedAtVertex = t1 >= 1f - 1e-4f;
+
+                    if (!endedAtVertex)
+                    {
+                        Close(ref run, ref runLength);
+                    }
+                }
+
+                previous = current;
             }
 
-            if (total > bestLength)
+            Close(ref run, ref runLength);
+
+            void Close(ref List<SKPoint>? currentRun, ref float currentLength)
             {
-                bestLength = total;
-                best = points;
+                if (currentRun is not null && currentLength > bestLength)
+                {
+                    best = currentRun;
+                    bestLength = currentLength;
+                }
+
+                currentRun = null;
+                currentLength = 0f;
             }
         }
 
@@ -265,15 +328,12 @@ internal static class OpenMapTilesRoadSymbols
 
         float half = bestLength / 2f;
         float walked = 0f;
-        for (int i = 1; i < best.Length; i++)
+        for (int i = 1; i < best.Count; i++)
         {
             float segment = SKPoint.Distance(best[i - 1], best[i]);
             if (walked + segment >= half && segment > 0f)
             {
-                float t = (half - walked) / segment;
-                midpoint = new SKPoint(
-                    best[i - 1].X + ((best[i].X - best[i - 1].X) * t),
-                    best[i - 1].Y + ((best[i].Y - best[i - 1].Y) * t));
+                midpoint = Lerp(best[i - 1], best[i], (half - walked) / segment);
                 length = bestLength;
                 return true;
             }
@@ -282,6 +342,56 @@ internal static class OpenMapTilesRoadSymbols
         }
 
         return false;
+    }
+
+    private static SKPoint Lerp(SKPoint from, SKPoint to, float t)
+        => new(from.X + ((to.X - from.X) * t), from.Y + ((to.Y - from.Y) * t));
+
+    /// <summary>
+    /// 線分のうち矩形の内側にある範囲を、線分上の位置（0〜1）で求める（Liang–Barsky 法）。
+    /// </summary>
+    private static bool TryClipSegment(SKPoint from, SKPoint to, SKRect rect, out float t0, out float t1)
+    {
+        t0 = 0f;
+        t1 = 1f;
+        float dx = to.X - from.X;
+        float dy = to.Y - from.Y;
+
+        return Clip(-dx, from.X - rect.Left, ref t0, ref t1)
+            && Clip(dx, rect.Right - from.X, ref t0, ref t1)
+            && Clip(-dy, from.Y - rect.Top, ref t0, ref t1)
+            && Clip(dy, rect.Bottom - from.Y, ref t0, ref t1)
+            && t1 > t0;
+
+        static bool Clip(float p, float q, ref float lower, ref float upper)
+        {
+            if (Math.Abs(p) < 1e-9f)
+            {
+                return q >= 0f;
+            }
+
+            float r = q / p;
+            if (p < 0f)
+            {
+                if (r > upper)
+                {
+                    return false;
+                }
+
+                lower = Math.Max(lower, r);
+            }
+            else
+            {
+                if (r < lower)
+                {
+                    return false;
+                }
+
+                upper = Math.Min(upper, r);
+            }
+
+            return true;
+        }
     }
 
     private static void DrawShield(SKCanvas canvas, RouteShieldKind kind, string text, SKRect bounds, SKFont font)

@@ -132,6 +132,72 @@ public sealed class OpenMapTilesRoadSymbolsTests
         Assert.Equal(0, CountDark(bitmap));
     }
 
+    // 過拡大（OpenFreeMap は最大ズーム 14 のタイルを拡大する）では、1 つのタイルが画面より大きくなる。
+    // 画面幅 512、倍率 2、平行移動 (-1024, -3970): 道路 (0,2048)→(4096,2048) は画面を横切るが、区間全体の中点は画面外。
+    private static readonly SKMatrix OverzoomMatrix = SKMatrix.CreateScaleTranslation(2f, 2f, -1024f, -3970f);
+
+    [Fact]
+    public void 過拡大で区間全体の中点が画面外でも画面内に見える道路に盾を描く()
+    {
+        using SKBitmap bitmap = Render(
+            zoom: 19, Layer(Line("trunk", "1", name: null, y: 2048)), symbols: true, OverzoomMatrix, width: 512, height: 256);
+
+        Assert.True(CountNear(bitmap, NationalBlue) >= 20, "画面を横切る道路の盾が描画されていない");
+    }
+
+    [Fact]
+    public void 過拡大で区間全体の中点が画面外でも画面内に見える道路に道路名を描く()
+    {
+        using SKBitmap bitmap = Render(
+            zoom: 19, Layer(Line("tertiary", reference: null, name: "桜田通り", y: 2048)), symbols: false, OverzoomMatrix, width: 512, height: 256);
+
+        Assert.True(CountDark(bitmap) >= 8, "画面を横切る道路の道路名が描画されていない");
+    }
+
+    [Fact]
+    public void 同じ路線の長い区間の中点が画面外でも可視の区間がある場合は描く()
+    {
+        // 長い区間（中点が画面外）と、同じ ref・name の可視の短い区間。長い区間の見えている部分でも、短い区間でも描かれる
+        VectorTileLayer layer = Layer(
+            Line("tertiary", "299", name: "桜田通り", y: 2048, x0: 0, x1: 4096),
+            Line("tertiary", "299", name: "桜田通り", y: 2048, x0: 600, x1: 700));
+
+        using SKBitmap symbols = Render(zoom: 19, layer, symbols: true, OverzoomMatrix, width: 512, height: 256);
+        using SKBitmap labels = Render(zoom: 19, layer, symbols: false, OverzoomMatrix, width: 512, height: 256);
+
+        Assert.True(CountNear(symbols, PrefecturalOutline) >= 10, "盾が描画されていない");
+        Assert.True(CountDark(labels) >= 8, "道路名が描画されていない");
+    }
+
+    [Fact]
+    public void 画面内に見えない道路には盾も道路名も描かない()
+    {
+        // タイルの上端の道路は、同じ変換で画面の上に外れる
+        VectorTileLayer layer = Layer(Line("trunk", "1", name: "桜田通り", y: 0));
+
+        using SKBitmap symbols = Render(zoom: 19, layer, symbols: true, OverzoomMatrix, width: 512, height: 256);
+        using SKBitmap labels = Render(zoom: 19, layer, symbols: false, OverzoomMatrix, width: 512, height: 256);
+
+        Assert.Equal(0, CountNear(symbols, NationalBlue));
+        Assert.Equal(0, CountDark(labels));
+    }
+
+    [Fact]
+    public void 折れ線が画面の端をまたぐ場合は見えている区間の中央に盾を描く()
+    {
+        // 画面内 → 画面外 → 画面内と出入りする折れ線。見えている区間のうち長い方の中央に描く
+        var feature = new VectorTileFeature
+        {
+            GeometryType = VectorGeometryType.LineString,
+            Properties = new Dictionary<string, object> { ["class"] = "trunk", ["ref"] = "1" },
+            GeometryParts = [[new VectorPoint(0, 2000), new VectorPoint(4096, 2000), new VectorPoint(4096, -8000), new VectorPoint(0, -8000)]],
+        };
+
+        using SKBitmap bitmap = Render(zoom: 14, Layer(feature), symbols: true);
+
+        Assert.True(CountNear(bitmap, NationalBlue) >= 20);
+    }
+
     private static SKBitmap RenderSymbols(int zoom, params VectorTileFeature[] features)
         => RenderSymbols(zoom, Layer(features));
 
@@ -141,16 +207,16 @@ public sealed class OpenMapTilesRoadSymbolsTests
     private static SKBitmap RenderLabels(int zoom, params VectorTileFeature[] features)
         => Render(zoom, Layer(features), symbols: false);
 
-    private static SKBitmap Render(int zoom, VectorTileLayer layer, bool symbols)
+    private static SKBitmap Render(int zoom, VectorTileLayer layer, bool symbols, SKMatrix? tileToCanvas = null, int width = 256, int height = 256)
     {
         using var style = new OpenMapTilesStyle();
-        var bitmap = new SKBitmap(256, 256, SKColorType.Rgba8888, SKAlphaType.Premul);
+        var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.White);
         var tile = new VectorTile { Layers = [layer] };
-        SKMatrix matrix = SKMatrix.CreateScale(256f / 4096f, 256f / 4096f);
+        SKMatrix matrix = tileToCanvas ?? SKMatrix.CreateScale(256f / 4096f, 256f / 4096f);
         var grid = new LabelCollisionGrid();
-        var viewport = new SKRect(0, 0, 256, 256);
+        var viewport = new SKRect(0, 0, width, height);
 
         if (symbols)
         {

@@ -8,6 +8,8 @@
 
 ### Added
 
+- OpenFreeMap の経路番号の盾（高速道路・国道・都道府県道）と道路名注記を追加。道路種別の判定には配信データの network / class を使用する（[#64](https://github.com/scottlz0310/photo-map-studio/issues/64)）
+- カスタムベクター配信元としてローカル／HTTP PMTiles と MVT URL テンプレートを指定可能にし、スキーマ・最大ズーム・出典を設定・保存できるようにした（[#65](https://github.com/scottlz0310/photo-map-studio/issues/65)）
 - タイルキャッシュ容量上限（既定 1GB / 1024MB）と LRU 自動整理・消去機能を追加。ITileCache / FileSystemTileCache に容量上限指定（MaxSizeBytes）、アクセス日時に基づく LRU クリーンアップ（書き込み時および PruneAsync）、現在のキャッシュ容量取得（GetCurrentSizeBytes）、一括消去（ClearAsync）を実装。設定画面（GenerationOptionsView）から上限容量（MB）の変更、使用量表示、およびキャッシュ消去を実行可能にした（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 - ピン形状選択（緑・赤・青の同梱ピン、二重円ターゲット、十字ターゲット、カスタム画像）およびアンカー基準点（下端中央／中央）指定機能を追加。Core 側でのプロシージャル描画（同心円・白フチ付き十字クロスヘア）およびアンカー追従幾何計算、App 側での PinKindChoice / PinAnchorChoice 選択 UI、設定永続化（pin-kind / pin-anchor）、同梱アセットの出力ディレクトリ展開（NFR-DIST-02準拠）を実装（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
@@ -21,7 +23,21 @@
 - Core 内蔵ベクタータイル直接描画エンジン（VectorTileDecoder、VectorTileModel、IVectorMapStyle、OpenMapTilesStyle、LabelCollisionGrid、VectorMapRenderer）を追加。外部依存を持たないゼロアロケーション指向の MVT/PBF デコーダー、OpenMapTiles スキーマ対応の面・線・注記スタイル、および SkiaSharp による過拡大対応・AABB 衝突判定付き直接ラスタライズ機構を実装（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 
+### Changed
+
+- タイルキャッシュの容量をメモリ上で追跡し、書き込みごとの全ファイル列挙を削減。容量変更時の整理を非同期化し、残存する一時ファイルの回収と I/O 失敗の診断記録を追加（[#69](https://github.com/scottlz0310/photo-map-studio/issues/69)）
+- F1 ヘルプにピン形状・アンカー・キャッシュ上限・BYO を反映し、100 枚超の確認を配信元ごとの名称・取得条件に合わせた（[#63](https://github.com/scottlz0310/photo-map-studio/issues/63)）
+- プライバシーポリシーに OpenFreeMap、PMTiles の Range 取得、カスタム配信元、ベクターキャッシュと LRU 整理を反映（[#62](https://github.com/scottlz0310/photo-map-studio/issues/62)）
+- `docs/` を利用者向けマニュアル中心に整理し、設計・仕様・検証記録を `docs/development/` に移動（[#70](https://github.com/scottlz0310/photo-map-studio/issues/70)）
+- release-automate による Prepare Release と、draft 作成・署名資産添付・再取得検証・正式公開の段階的なリリースフローを導入（[#77](https://github.com/scottlz0310/photo-map-studio/issues/77)）
+
 ### Fixed
+
+- 国外など地理院ベクトルの描画対象タイルがない場所を 404 と判定し、プレビューでは OSM へ切り替え、一括生成では白紙画像を保存せずスキップする（[#60](https://github.com/scottlz0310/photo-map-studio/issues/60)）
+- プレビュー・一括生成の完了やキャンセル後にキャッシュ使用量表示を更新する（[#61](https://github.com/scottlz0310/photo-map-studio/issues/61)）
+- OpenFreeMap の URL 解決失敗がプロセス終了まで固定される問題を修正。直近の解決先を保存し、確定した配信バージョンとキャッシュキーを取得まで一致させる。配信バージョンごとのキャッシュ分離は維持する（[#66](https://github.com/scottlz0310/photo-map-studio/issues/66)）
+- PMTiles の HTTP Range 取得に User-Agent を付与し、HTTP タイムアウトを取得失敗として通知する（[#67](https://github.com/scottlz0310/photo-map-studio/issues/67)）
+- 旧設定の `pin-image-path` に画像が指定されている場合、ピン形状を `CustomImage` へ自動移行し、指定済みの画像を引き続き使用する
 
 - シングルトンのベクタースタイル（`OpenMapTilesStyle` / `GsiVectorStyle`）が、描画のたびに共有の `SKPaint` の線幅を書き換えていたため、プレビューと一括生成が同時に描画すると線幅が混ざる競合が起き得る不具合を修正。共有ペイントは書き換えず、描画ごとに線幅を設定した複製を使う（[#68](https://github.com/scottlz0310/photo-map-studio/issues/68)）
 - ベクター地図スタイル（国土地理院 最適化ベクトルおよび OpenFreeMap）において、Windows 標準の日本語フォント（Yu Gothic UI / 日本語対応 Typeface）を自動解決する VectorMapFontHelper を導入し、地名・施設名・等高線注記の漢字・ひらがなが豆腐（□）として描画される不具合を修正（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）

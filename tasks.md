@@ -3,17 +3,21 @@
 ## v0.3.0 リリース前の修正（監査 2026-10-23）
 
 - [x] #60 国外 × 地理院ベクトルで白紙地図が成功扱いになる不具合の修正（レンダラーが描画できるタイルなしを 404 として送出、切替・スキップの回帰テスト）
-- [ ] #61 キャッシュ使用量表示の更新
-- [ ] #67 PMTiles の User-Agent・タイムアウトの例外化
-- [ ] #66 OpenFreeMap の URL 解決失敗の固定化・キャッシュ鍵（#57 と整合）
-- [ ] #68 スタイルの共有 SKPaint
-- [ ] #69 FileSystemTileCache の改善
-- [ ] #64 経路番号の盾・道路名注記
-- [ ] #65 BYO（PMTiles / ベクタータイル URL）
-- [ ] #63 ヘルプ・確認ダイアログの文言
-- [ ] #62 プライバシーポリシーの更新
-- [ ] #70 docs/ の再編（利用者向けマニュアル中心）
-- [ ] #71 リリース準備（版数 0.3.0.0・CHANGELOG 確定・Epic 記録）
+- [x] #61 キャッシュ使用量表示の更新
+- [x] #67 PMTiles の User-Agent・タイムアウトの例外化
+- [x] #66 OpenFreeMap の URL 解決失敗の固定化・キャッシュ鍵（#57 と整合）
+- [x] #68 スタイルの共有 SKPaint
+- [x] #69 FileSystemTileCache の改善
+- [x] #64 経路番号の盾・道路名注記
+- [x] #65 BYO（PMTiles / ベクタータイル URL）
+- [x] #63 ヘルプ・確認ダイアログの文言
+- [x] #62 プライバシーポリシーの更新
+- [x] #70 docs/ の再編（利用者向けマニュアル中心）
+- [x] #71 リリース準備の変更作成（版数 0.3.0.0・CHANGELOG の未記載項目・Epic 記録・最終実機確認）
+- [x] #77 release-automate による段階公開の導入（PR #84）
+- [ ] #71 準備 PR の独立レビュー・所有者許可後のマージ
+- [ ] 所有者許可後に Prepare Release を起動し、版・日付確定 PR のレビュー・マージと配布資産の検証・公開を行う
+- 最終実機確認と未実施項目: [v0.3.0-validation.md](docs/development/v0.3.0-validation.md)。CHANGELOG の版・日付確定は Prepare Release が担当する。
 
 ## Issue #49: オンデマンド描画とキャッシュによるベクタータイル（OSM）地図対応 (Epic)
 
@@ -22,18 +26,19 @@
 - [x] M1: ベクタータイル取得・キャッシュ層の抽象化（IVectorTileSource、VectorTileCacheKey、CachedVectorTileSource、OpenFreeMapTileSource、単体テスト）
 - [x] M2: Core 内蔵ベクタータイル描画エンジン（VectorTileDecoder、OpenMapTilesStyle、LabelCollisionGrid、VectorMapRenderer、Core 単体テスト）
 - [x] M3: UI 連携・設定・出典表示（WinUI 3 設定UI、ODbL 出典焼き込み、ヘルプ・ドキュメント更新）
-- [x] M4: 国土地理院ベクター対応・最適化PMTiles Range取得 & BYOフォールバック（GsiVectorStyle、optimal_bvmap-v1 PMTiles Range取得、PmtilesVectorTileSource、レート制御、設定UI連携・非保証事項案内）
+- [x] M4: 国土地理院ベクター・PMTiles Range 取得・BYO 対応（PR #53・#54・#80。ローカル／HTTP PMTiles と MVT URL の設定・保存。オフライン耐性は #57 で継続）
 - [x] ベクター地図の日本語フォント自動解決と文字化け（豆腐）修正（VectorMapFontHelper、GsiVectorStyle、OpenMapTilesStyle、単体テスト）
 - [x] ピン機能の強化とアンカー基準点指定（同梱ピン緑/赤/青、二重円ターゲット、十字ターゲット、カスタム画像、アンカーBottomCenter/Center、Core・App・単体テスト）
 - [x] （改善案②）ベクタータイルキャッシュ容量制限（1GB既定）とLRU自動クリーンアップ（ITileCache、FileSystemTileCache LRU自動整理、設定UI・消去コマンド、単体テスト）
-- [ ] （将来・任意）M5: 拡張機能（カスタム PMTiles / スタイル指定、直接ベクター合成描画）
+- [x] 経路番号の盾・道路名注記（PR #79。道路名の折れ線追従は #56 で継続）
+- [ ] （将来・任意）M5: カスタムスタイル指定（直接ベクター合成描画とカスタム PMTiles は実装済み）
 
 ## リリース v0.2.3
 
 - [x] 所有者が v0.2.3 のリリースを指示
 - [x] Package.appxmanifest のバージョンを 0.2.3.0 に更新、CHANGELOG を確定
-- [ ] リリース準備 PR の CI と独立レビュー、マージ
-- [ ] v0.2.3 のタグ・GitHub Release 公開、両アーキテクチャの配布資産を検証
+- [x] リリース準備 PR #47 の CI と独立レビュー、所有者許可によるマージ
+- [x] v0.2.3 のタグ・GitHub Release 公開、x64／ARM64 の配布資産 6 件と Install スクリプトの -Test を検証（2026-10-18）
 
 ## Issue #21 の代替対応: バックグラウンド更新
 

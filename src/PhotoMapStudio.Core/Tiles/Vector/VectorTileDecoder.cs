@@ -17,7 +17,28 @@ public static class VectorTileDecoder
     /// <param name="data">ベクタータイルのバイナリデータ。</param>
     /// <returns>デコードされたベクタータイル。データが空または無効な場合は空のレイヤー一覧を持つタイル。</returns>
     public static VectorTile Decode(ReadOnlySpan<byte> data)
+        => DecodeCore(data, out _);
+
+    /// <summary>
+    /// MVT / PBF バイナリをデコードし、ベクタータイルとして読めたかどうかを返す。
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Decode"/> は不正な内容（HTML のエラーページなど）でも例外にせず空のタイルを返すため、
+    /// 利用者が指定した配信元の誤りを検出するために使う。レイヤーの項目を 1 つも読めなかった場合は <see langword="false"/>。
+    /// レイヤーの項目があれば、中身が空でも <see langword="true"/>（地物のない正当なタイル）。
+    /// </remarks>
+    /// <param name="data">ベクタータイルのバイナリデータ。</param>
+    /// <param name="tile">デコードされたベクタータイル。</param>
+    /// <returns>ベクタータイルとして読めた場合は <see langword="true"/>。</returns>
+    public static bool TryDecode(ReadOnlySpan<byte> data, out VectorTile tile)
     {
+        tile = DecodeCore(data, out int layerFieldCount);
+        return layerFieldCount > 0;
+    }
+
+    private static VectorTile DecodeCore(ReadOnlySpan<byte> data, out int layerFieldCount)
+    {
+        layerFieldCount = 0;
         if (data.IsEmpty)
         {
             return new VectorTile();
@@ -42,6 +63,7 @@ public static class VectorTileDecoder
             {
                 if (reader.TryReadBytes(out ReadOnlySpan<byte> layerBytes))
                 {
+                    layerFieldCount++;
                     VectorTileLayer? layer = DecodeLayer(layerBytes);
                     if (layer is not null)
                     {

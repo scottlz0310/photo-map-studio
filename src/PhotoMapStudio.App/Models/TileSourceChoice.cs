@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Models;
 
@@ -22,8 +23,9 @@ public sealed record TileSourceChoice
     /// </summary>
     /// <param name="key">永続化に使用する安定したキー。</param>
     /// <param name="displayName">UI に表示する名前。</param>
-    /// <param name="source">プリセットのタイルソース。カスタム URL の場合は <see langword="null"/>。</param>
-    public TileSourceChoice(string key, string displayName, TileSource? source)
+    /// <param name="source">プリセットのタイルソース。カスタムの場合は <see langword="null"/>。</param>
+    /// <param name="isCustomVector">利用者が指定するベクタータイル（PMTiles または URL）の選択肢かどうか。</param>
+    public TileSourceChoice(string key, string displayName, TileSource? source, bool isCustomVector = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -31,6 +33,7 @@ public sealed record TileSourceChoice
         this.Key = key;
         this.DisplayName = displayName;
         this.Source = source;
+        this.IsCustomVector = isCustomVector && source is null;
     }
 
     /// <summary>永続化に使用するキー。</summary>
@@ -42,8 +45,11 @@ public sealed record TileSourceChoice
     /// <summary>プリセットのタイルソース。</summary>
     public TileSource? Source { get; }
 
-    /// <summary>カスタム URL の選択肢かどうか。</summary>
-    public bool IsCustom => this.Source is null;
+    /// <summary>カスタム URL（ラスタータイル）の選択肢かどうか。</summary>
+    public bool IsCustom => this.Source is null && !this.IsCustomVector;
+
+    /// <summary>利用者が指定するベクタータイル（PMTiles または URL）の選択肢かどうか。</summary>
+    public bool IsCustomVector { get; }
 
     /// <summary>選択可能な最小ズーム。</summary>
     public int MinZoom => this.Source?.MinZoom ?? 1;
@@ -59,6 +65,39 @@ public sealed record TileSourceChoice
     /// <returns>使用するタイルソース。</returns>
     public TileSource CreateSource(string urlTemplate, string attribution)
         => this.Source ?? TileSources.Custom(urlTemplate, attribution);
+
+    /// <summary>
+    /// 選択肢から実際のタイルソースを構築する（利用者が指定するベクタータイルを含む）。
+    /// </summary>
+    /// <param name="urlTemplate">カスタム URL テンプレート。</param>
+    /// <param name="attribution">カスタム出典表示。</param>
+    /// <param name="vectorLocation">ベクタータイルの場所（PMTiles の URL・ファイルパス、または URL テンプレート）。</param>
+    /// <param name="vectorSchema">ベクタータイルのレイヤー構成。</param>
+    /// <param name="vectorAttribution">ベクタータイルの出典表示。</param>
+    /// <param name="vectorMaxZoom">URL テンプレートのベクタータイルが配信する最大ズーム（PMTiles では無視する）。</param>
+    /// <returns>使用するタイルソース。</returns>
+    /// <exception cref="ArgumentException">指定が不正な場合。</exception>
+    public TileSource CreateSource(
+        string urlTemplate,
+        string attribution,
+        string vectorLocation,
+        VectorStyleSchema vectorSchema,
+        string vectorAttribution,
+        int vectorMaxZoom)
+    {
+        if (!this.IsCustomVector)
+        {
+            return this.CreateSource(urlTemplate, attribution);
+        }
+
+        VectorSourceSpec spec = VectorSourceSpec.Create(vectorLocation, vectorSchema, vectorMaxZoom);
+        if (string.IsNullOrWhiteSpace(vectorAttribution))
+        {
+            throw new ArgumentException("出典表示を入力してください。地図データの出典は生成画像に焼き込みます。");
+        }
+
+        return TileSources.CustomVector(spec, vectorAttribution.Trim());
+    }
 }
 
 /// <summary>
@@ -88,6 +127,9 @@ public static class TileSourceChoices
     /// <summary>カスタム URL のキー。</summary>
     public const string CustomKey = "custom";
 
+    /// <summary>カスタム（ベクター）のキー。</summary>
+    public const string CustomVectorKey = "custom-vector";
+
     /// <summary>地理院タイル（淡色）。</summary>
     public static TileSourceChoice GsiPale { get; } = new(GsiPaleKey, TileSources.GsiPale.Name, TileSources.GsiPale);
 
@@ -106,8 +148,11 @@ public static class TileSourceChoices
     /// <summary>カスタム URL。</summary>
     public static TileSourceChoice Custom { get; } = new(CustomKey, "カスタム URL", null);
 
+    /// <summary>カスタム（ベクター）。PMTiles または <c>{z}/{x}/{y}</c> のベクタータイル URL を利用者が指定する。</summary>
+    public static TileSourceChoice CustomVector { get; } = new(CustomVectorKey, "カスタム（ベクター）", null, isCustomVector: true);
+
     /// <summary>表示順に並べた選択肢。</summary>
-    public static IReadOnlyList<TileSourceChoice> All { get; } = [GsiPale, GsiStandard, GsiVector, OpenFreeMap, OpenStreetMap, Custom];
+    public static IReadOnlyList<TileSourceChoice> All { get; } = [GsiPale, GsiStandard, GsiVector, OpenFreeMap, OpenStreetMap, Custom, CustomVector];
 
     /// <summary>
     /// 永続化されたキーから選択肢を取得する。未知のキーは既定値へ戻す。

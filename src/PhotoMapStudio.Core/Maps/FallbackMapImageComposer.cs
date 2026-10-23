@@ -1,6 +1,7 @@
 using System.Net;
 
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.Core.Maps;
 
@@ -13,6 +14,8 @@ namespace PhotoMapStudio.Core.Maps;
 /// 切り替え先が OpenStreetMap の場合、一括生成で使うと Tile Usage Policy の bulk downloading に
 /// 該当するため、一括生成では <see cref="MapCompositionRequest.AllowWorldwideFallback"/> を
 /// <see langword="false"/> にして切り替えを止める。
+/// この PC 上の PMTiles ファイルは「通信しない」取得元として使われるため、収録範囲外でも
+/// 撮影地点のタイル座標を外部へ送らないよう、一括生成かどうかによらず切り替えない。
 /// </remarks>
 public sealed class FallbackMapImageComposer : IMapImageComposer
 {
@@ -56,6 +59,7 @@ public sealed class FallbackMapImageComposer : IMapImageComposer
     // 404 は「そのタイルが配信されていない」ことを表す。認証エラーや障害では切り替えない
     private bool CanFallback(TileFetchException exception, MapCompositionRequest request)
         => request.AllowWorldwideFallback
+            && request.TileSource.VectorSource?.Kind != VectorSourceKind.PmtilesFile
             && exception.StatusCode == HttpStatusCode.NotFound
             && request.TileSource != this.fallbackSource
             && this.fallbackSource.SupportsZoom(request.Zoom);

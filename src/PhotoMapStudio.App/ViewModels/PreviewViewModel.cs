@@ -204,8 +204,10 @@ public sealed class PreviewViewModel : ObservableObject, IDisposable
 
     private void UpdateAttribution(PreviewGenerationSettings current)
     {
-        PhotoMapStudio.Core.Tiles.TileSource? source = current.SelectedTileSource.IsCustom ? null : current.SelectedTileSource.Source;
-        string value = current.SelectedTileSource.IsCustom ? current.CustomTileAttribution.Trim() : source?.Attribution ?? string.Empty;
+        PhotoMapStudio.Core.Tiles.TileSource? source = current.SelectedTileSource.Source;
+        string value = current.SelectedTileSource.IsCustomVector
+            ? current.CustomVectorAttribution.Trim()
+            : current.SelectedTileSource.IsCustom ? current.CustomTileAttribution.Trim() : source?.Attribution ?? string.Empty;
         this.Attribution = string.IsNullOrWhiteSpace(value) ? "出典未設定" : value;
         this.AttributionUri = source?.AttributionUri;
     }

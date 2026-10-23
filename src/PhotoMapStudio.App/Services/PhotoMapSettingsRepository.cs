@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.Core.Maps;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Services;
 
@@ -26,6 +27,10 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
     private const string TileSourceKey = "tile-source-key";
     private const string CustomTileUrlTemplateKey = "custom-tile-url-template";
     private const string CustomTileAttributionKey = "custom-tile-attribution";
+    private const string CustomVectorLocationKey = "custom-vector-location";
+    private const string CustomVectorSchemaKey = "custom-vector-schema";
+    private const string CustomVectorAttributionKey = "custom-vector-attribution";
+    private const string CustomVectorMaxZoomKey = "custom-vector-max-zoom";
 
     private readonly ISettingsValueStore store;
 
@@ -65,6 +70,10 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
             TileSourceKey = ReadString(TileSourceKey, TileSourceChoices.GsiPaleKey),
             CustomTileUrlTemplate = ReadString(CustomTileUrlTemplateKey, PhotoMapSettings.DefaultCustomTileUrlTemplate),
             CustomTileAttribution = ReadString(CustomTileAttributionKey, PhotoMapSettings.DefaultCustomTileAttribution),
+            CustomVectorLocation = ReadString(CustomVectorLocationKey, string.Empty),
+            CustomVectorSchema = ReadEnum(CustomVectorSchemaKey, VectorStyleSchema.OpenMapTiles),
+            CustomVectorAttribution = ReadString(CustomVectorAttributionKey, string.Empty),
+            CustomVectorMaxZoom = ReadInt(CustomVectorMaxZoomKey, VectorSourceSpec.DefaultXyzMaxZoom),
         };
     }
 
@@ -87,6 +96,10 @@ internal sealed class PhotoMapSettingsRepository : IPhotoMapSettingsRepository
         this.store.Write(TileSourceKey, settings.TileSourceKey);
         this.store.Write(CustomTileUrlTemplateKey, settings.CustomTileUrlTemplate);
         this.store.Write(CustomTileAttributionKey, settings.CustomTileAttribution);
+        this.store.Write(CustomVectorLocationKey, settings.CustomVectorLocation);
+        this.store.Write(CustomVectorSchemaKey, settings.CustomVectorSchema.ToString());
+        this.store.Write(CustomVectorAttributionKey, settings.CustomVectorAttribution);
+        this.store.Write(CustomVectorMaxZoomKey, settings.CustomVectorMaxZoom);
 
         if (string.IsNullOrWhiteSpace(settings.PinImagePath))
         {

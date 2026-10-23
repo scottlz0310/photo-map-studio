@@ -1,6 +1,7 @@
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.Core.Maps;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Tests.Services;
 
@@ -16,6 +17,38 @@ public class PhotoMapSettingsRepositoryTests
         var settings = new PhotoMapSettings { IncludeSubfolders = recursive, OutputFilePrefix = prefix, OutputFilePostfix = postfix };
         repository.Save(settings);
         Assert.Equal(settings, repository.Load());
+    }
+
+    [Fact]
+    public void カスタムベクターの指定を保存して復元する()
+    {
+        var repository = new PhotoMapSettingsRepository(new InMemorySettingsValueStore());
+        var settings = new PhotoMapSettings
+        {
+            TileSourceKey = TileSourceChoices.CustomVectorKey,
+            CustomVectorLocation = "https://example.com/japan.pmtiles",
+            CustomVectorSchema = VectorStyleSchema.GsiOptimalBvmap,
+            CustomVectorAttribution = "© 提供元",
+            CustomVectorMaxZoom = 16,
+        };
+
+        repository.Save(settings);
+
+        Assert.Equal(settings, repository.Load());
+    }
+
+    [Fact]
+    public void カスタムベクターの保存値がない場合や不正な場合は既定値を復元する()
+    {
+        var store = new InMemorySettingsValueStore();
+        store.Write("custom-vector-schema", "存在しないスキーマ");
+
+        PhotoMapSettings settings = new PhotoMapSettingsRepository(store).Load();
+
+        Assert.Empty(settings.CustomVectorLocation);
+        Assert.Empty(settings.CustomVectorAttribution);
+        Assert.Equal(VectorStyleSchema.OpenMapTiles, settings.CustomVectorSchema);
+        Assert.Equal(VectorSourceSpec.DefaultXyzMaxZoom, settings.CustomVectorMaxZoom);
     }
 
     [Fact]

@@ -26,6 +26,10 @@ public sealed class CachedVectorTileSource : IVectorTileSource
     public int MaxZoom => this.inner.MaxZoom;
 
     /// <inheritdoc />
+    public Task PrepareAsync(TileFetchSession? session, CancellationToken cancellationToken = default)
+        => this.inner.PrepareAsync(session, cancellationToken);
+
+    /// <inheritdoc />
     public Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
         => this.inner.GetSourceIdAsync(cancellationToken);
 

@@ -14,6 +14,44 @@ public class VectorTileDecoderTests
     }
 
     [Fact]
+    public void TryDecodeはレイヤーの項目があれば中身が空でも読めたとする()
+    {
+        // 0x1A = フィールド 3（レイヤー）、長さ 0。地物のない正当なタイル
+        bool readable = VectorTileDecoder.TryDecode([0x1A, 0x00], out VectorTile tile);
+
+        Assert.True(readable);
+        Assert.Empty(tile.Layers);
+    }
+
+    [Fact]
+    public void TryDecodeは通常のタイルを読める()
+    {
+        bool readable = VectorTileDecoder.TryDecode(CreateSampleWaterPolygonTile(), out VectorTile tile);
+
+        Assert.True(readable);
+        Assert.NotEmpty(tile.Layers);
+    }
+
+    [Theory]
+    [InlineData("<html><body>404 Not Found</body></html>")]
+    [InlineData("{\"error\": \"tile not found\"}")]
+    [InlineData("plain text")]
+    public void TryDecodeはタイルではない内容を読めないとする(string content)
+    {
+        bool readable = VectorTileDecoder.TryDecode(System.Text.Encoding.UTF8.GetBytes(content), out VectorTile tile);
+
+        Assert.False(readable);
+        Assert.Empty(tile.Layers);
+    }
+
+    [Fact]
+    public void TryDecodeは空のバイト列を読めないとする()
+    {
+        Assert.False(VectorTileDecoder.TryDecode([], out VectorTile tile));
+        Assert.Empty(tile.Layers);
+    }
+
+    [Fact]
     public void MVTポリゴン地物とプロパティを正しくデコードできる()
     {
         byte[] pbf = CreateSampleWaterPolygonTile();

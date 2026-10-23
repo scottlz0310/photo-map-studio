@@ -61,6 +61,28 @@
                 Text="{Binding CustomTileAttribution, Mode=TwoWay}" />
         </StackPanel>
 
+        <StackPanel Spacing="8" Visibility="{Binding IsCustomVectorSource, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBox
+                Header="ベクタータイルの場所"
+                PlaceholderText="PMTiles の URL・ファイルパス、または https://example.com/{z}/{x}/{y}.pbf"
+                Text="{Binding CustomVectorLocation, Mode=TwoWay}" />
+            <ComboBox
+                Header="レイヤー構成（スキーマ）"
+                DisplayMemberPath="DisplayName"
+                ItemsSource="{Binding VectorSchemaOptions}"
+                SelectedItem="{Binding SelectedVectorSchemaChoice, Mode=TwoWay}" />
+            <NumberBox
+                Header="URL テンプレートの最大ズーム（PMTiles は自動）"
+                Minimum="0"
+                Maximum="19"
+                SpinButtonPlacementMode="Compact"
+                Value="{Binding CustomVectorMaxZoom, Mode=TwoWay}" />
+            <TextBox
+                Header="出典表示（必須）"
+                PlaceholderText="地図データの出典（生成画像に焼き込みます）"
+                Text="{Binding CustomVectorAttribution, Mode=TwoWay}" />
+        </StackPanel>
+
         <ComboBox
             Header="ピン形状"
             DisplayMemberPath="DisplayName"

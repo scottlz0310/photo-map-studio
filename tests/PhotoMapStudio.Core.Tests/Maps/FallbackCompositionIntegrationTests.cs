@@ -91,6 +91,35 @@ public class FallbackCompositionIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
     }
 
+    [Fact]
+    public async Task ローカルのPMTilesに該当タイルがなくても外部のタイル配信元へ一度も要求しない()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"pms-offline-{Guid.NewGuid():N}.pmtiles");
+        await File.WriteAllBytesAsync(path, [0]);
+        try
+        {
+            var client = new RangeAwareTileClient();
+            using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
+            FallbackMapImageComposer composer = CreateVectorComposer(client, style);
+            TileSource local = TileSources.CustomVector(
+                PhotoMapStudio.Core.Tiles.Vector.VectorSourceSpec.Create(path, PhotoMapStudio.Core.Tiles.Vector.VectorStyleSchema.OpenMapTiles),
+                "© 検証");
+
+            // プレビュー相当（切り替え有効）。撮影地点にタイルがなくても、OSM などへ取得に行かない
+            TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+                () => composer.ComposeAsync(
+                    new MapCompositionRequest { Center = Paris, Width = 400, Height = 300, TileSource = local, Zoom = 15 },
+                    CancellationToken.None));
+
+            Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+            Assert.Empty(client.RequestedTemplates);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static FallbackMapImageComposer CreateVectorComposer(
         ITileClient client,
         PhotoMapStudio.Core.Tiles.Vector.IVectorMapStyle style)

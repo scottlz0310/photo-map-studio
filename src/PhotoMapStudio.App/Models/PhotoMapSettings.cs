@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Core.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Models;
 
@@ -77,6 +78,18 @@ public sealed record PhotoMapSettings
 
     /// <summary>カスタムタイル URL テンプレート。</summary>
     public string CustomTileUrlTemplate { get; init; } = DefaultCustomTileUrlTemplate;
+
+    /// <summary>カスタム（ベクター）の場所（PMTiles の URL・ファイルパス、またはベクタータイルの URL テンプレート）。</summary>
+    public string CustomVectorLocation { get; init; } = string.Empty;
+
+    /// <summary>カスタム（ベクター）のレイヤー構成。</summary>
+    public VectorStyleSchema CustomVectorSchema { get; init; } = VectorStyleSchema.OpenMapTiles;
+
+    /// <summary>カスタム（ベクター）の出典表示。</summary>
+    public string CustomVectorAttribution { get; init; } = string.Empty;
+
+    /// <summary>カスタム（ベクター）の URL テンプレートが配信する最大ズーム。</summary>
+    public int CustomVectorMaxZoom { get; init; } = VectorSourceSpec.DefaultXyzMaxZoom;
 
     /// <summary>カスタムタイルの出典表示。</summary>
     public string CustomTileAttribution { get; init; } = DefaultCustomTileAttribution;

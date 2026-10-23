@@ -532,6 +532,21 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         return path;
     }
 
+    [Theory]
+    [InlineData("© 国土地理院（最適化ベクトルタイル）")]
+    [InlineData("Map data © OpenStreetMap contributors、提供: 検証用")]
+    [InlineData("国土地理院 © OpenStreetMap")]
+    public void 出典の書体は先頭がラテン文字でも日本語を描画できる(string attribution)
+    {
+        using SKFont font = SkiaMapImageComposer.CreateAttributionFont(attribution, 800);
+
+        // 豆腐（□）にならないよう、全ての文字のグリフを持つ書体であること
+        foreach (char c in attribution.Where(c => !char.IsWhiteSpace(c)))
+        {
+            Assert.NotEqual(0, font.GetGlyphs(c.ToString())[0]);
+        }
+    }
+
     private sealed class SolidTileProvider(SKColor color) : ITileProvider
     {
         private readonly byte[] tile = CreateSolidPng(WebMercator.TileSize, WebMercator.TileSize, color);

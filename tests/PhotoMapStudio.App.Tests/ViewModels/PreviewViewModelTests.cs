@@ -34,6 +34,25 @@ public class PreviewViewModelTests
         Assert.False(viewModel.IsGenerating);
     }
 
+    [Theory]
+    [InlineData(" © 提供元 ", "© 提供元")]
+    [InlineData("   ", "出典未設定")]
+    public void カスタムベクターの出典をプレビューの出典に表示する(string input, string expected)
+    {
+        var service = new ControlledPreviewGenerationService([]);
+        using var viewModel = new PreviewViewModel(service);
+
+        viewModel.UpdateSettings(
+            new PreviewGenerationSettings
+            {
+                SelectedTileSource = TileSourceChoices.CustomVector,
+                CustomVectorAttribution = input,
+                CustomTileAttribution = "ラスターの出典（使われない）",
+            });
+
+        Assert.Equal(expected, viewModel.Attribution);
+    }
+
     [Fact]
     public async Task キャンセル後は生成結果を反映しない()
     {

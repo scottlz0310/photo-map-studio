@@ -26,4 +26,6 @@ public enum ErrorDiagnosticStage
     BatchMap,
     /// <summary>一括生成の出力先準備・PNG保存。</summary>
     BatchOutput,
+    /// <summary>タイルキャッシュの読み書き・整理（キャッシュを無視して処理を続けた IO エラー）。</summary>
+    TileCache,
 }

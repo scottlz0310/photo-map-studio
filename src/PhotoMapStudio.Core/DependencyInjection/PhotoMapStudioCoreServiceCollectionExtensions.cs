@@ -38,7 +38,12 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
 
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.TryAddSingleton<TileTrafficController>();
-        services.TryAddSingleton<ITileCache>(_ => new FileSystemTileCache(tileCacheRootPath));
+        services.TryAddSingleton<ITileCache>(provider =>
+        {
+            // 通知先は任意（アプリが診断ログなどへ結線する）
+            TileCacheErrorHandler? onError = provider.GetService<TileCacheErrorHandler>();
+            return new FileSystemTileCache(tileCacheRootPath, errorObserver: onError is null ? null : new Action<Exception>(onError.Invoke));
+        });
         services.TryAddSingleton<ITileClient>(provider => new ThrottledTileClient(
             new HttpTileClient(provider.GetRequiredService<IHttpClientFactory>()),
             provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<TileTrafficController>()));

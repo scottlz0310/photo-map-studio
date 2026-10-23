@@ -52,6 +52,7 @@ public sealed class HttpPmtilesByteSource : IPmtilesByteSource
             session?.RecordRequest();
 
             using var request = new HttpRequestMessage(HttpMethod.Get, this.archiveUri);
+            request.Headers.UserAgent.ParseAdd(UserAgentProvider.Value);
             request.Headers.Range = new RangeHeaderValue(offset, offset + length - 1);
 
             using var response = await this.httpClient.SendAsync(
@@ -90,6 +91,15 @@ public sealed class HttpPmtilesByteSource : IPmtilesByteSource
             }
 
             return content;
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 呼び出し元のキャンセルではない取り消しは HttpClient のタイムアウト。失敗として記録できるよう変換する
+            throw new TileFetchException(
+                $"PMTiles Range 取得がタイムアウトしました (offset: {offset}, length: {length})。",
+                this.archiveUri,
+                null,
+                ex);
         }
         catch (OperationCanceledException)
         {

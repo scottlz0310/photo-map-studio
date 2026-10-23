@@ -23,7 +23,7 @@
 
 ### Fixed
 
-- 設定画面のタイルキャッシュ使用量が、プレビュー・一括生成の後も「0.0 MB」のまま更新されない不具合を修正。プレビュー生成の完了時と一括生成の終了時（完了・キャンセル・中止）に実体へ合わせる（[#61](https://github.com/scottlz0310/photo-map-studio/issues/61)）
+- シングルトンのベクタースタイル（`OpenMapTilesStyle` / `GsiVectorStyle`）が、描画のたびに共有の `SKPaint` の線幅を書き換えていたため、プレビューと一括生成が同時に描画すると線幅が混ざる競合が起き得る不具合を修正。共有ペイントは書き換えず、描画ごとに線幅を設定した複製を使う（[#68](https://github.com/scottlz0310/photo-map-studio/issues/68)）
 - ベクター地図スタイル（国土地理院 最適化ベクトルおよび OpenFreeMap）において、Windows 標準の日本語フォント（Yu Gothic UI / 日本語対応 Typeface）を自動解決する VectorMapFontHelper を導入し、地名・施設名・等高線注記の漢字・ひらがなが豆腐（□）として描画される不具合を修正（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 ## [0.2.3] - 2026-10-18

@@ -162,6 +162,41 @@ public class VectorMapRendererTests
             () => renderer.RenderMapAsync(new GeoCoordinate(35.0, 135.0), zoom, width, height, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task 描画できるタイルが1枚もない場合は配信範囲外として404のTileFetchExceptionをスローする(bool useEmptyBytes)
+    {
+        // パリ付近。地理院ベクトルは国外のタイルを配信しない（PMTiles に該当エントリがなく null）
+        var center = new GeoCoordinate(48.8584, 2.2945);
+        var mockSource = new MockVectorTileSource(14, (_, _, _) => useEmptyBytes ? [] : null);
+        using var style = new OpenMapTilesStyle();
+        var renderer = new VectorMapRenderer(mockSource, style);
+
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+            () => renderer.RenderMapAsync(center, 14, 256, 256, session: null, tileSource: TileSources.GsiVector, CancellationToken.None));
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.NotNull(exception.RequestUri);
+    }
+
+    [Fact]
+    public async Task 一部のタイルだけ存在する場合は存在するタイルで描画し例外にしない()
+    {
+        // 配信範囲の端で一部のタイルだけ欠ける場合は、描画できる範囲を描く
+        var center = new GeoCoordinate(35.685, 139.752);
+        byte[] waterTile = CreateWaterTile();
+        int calls = 0;
+        var mockSource = new MockVectorTileSource(14, (_, _, _) => calls++ == 0 ? waterTile : null);
+        using var style = new OpenMapTilesStyle();
+        var renderer = new VectorMapRenderer(mockSource, style);
+
+        using SKBitmap bitmap = await renderer.RenderMapAsync(center, 14, 512, 512, CancellationToken.None);
+
+        Assert.True(calls > 1);
+        Assert.Equal(512, bitmap.Width);
+    }
+
     private static byte[] CreateWaterTile()
     {
         using var stream = new MemoryStream();

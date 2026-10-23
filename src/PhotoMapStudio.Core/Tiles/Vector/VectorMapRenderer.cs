@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Net;
+
 using PhotoMapStudio.Core.Geo;
 
 using SkiaSharp;
@@ -71,17 +74,19 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
-        var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        SKBitmap? bitmap = new(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
         try
         {
             using var canvas = new SKCanvas(bitmap);
             await this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource, cancellationToken).ConfigureAwait(false);
-            return bitmap;
+
+            SKBitmap rendered = bitmap;
+            bitmap = null;
+            return rendered;
         }
-        catch
+        finally
         {
-            bitmap.Dispose();
-            throw;
+            bitmap?.Dispose();
         }
     }
 
@@ -151,6 +156,9 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
         // 4. タイルの非同期取得とデコード
         var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)>();
+        int attemptedTiles = 0;
+        int firstFetchX = 0;
+        int firstFetchY = 0;
 
         for (int ty = minTy; ty <= maxTy; ty++)
         {
@@ -164,6 +172,12 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             {
                 // X 座標は経度方向（左右）で世界一周 wrap する
                 int fetchX = ((tx % maxTiles) + maxTiles) % maxTiles;
+
+                if (attemptedTiles++ == 0)
+                {
+                    firstFetchX = fetchX;
+                    firstFetchY = ty;
+                }
 
                 byte[]? tileData = await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
                 if (tileData is null || tileData.Length == 0)
@@ -184,6 +198,19 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
                 loadedTiles.Add((tx, ty, tile, scale, dx, dy));
             }
+        }
+
+        // 描画できるタイルが 1 枚もない場合は配信範囲外として扱う。白紙の地図を成功として返すと、
+        // 国外への切替（404 のみが契機）が働かず、一括生成でも異常に気付けない。
+        if (attemptedTiles > 0 && loadedTiles.Count == 0)
+        {
+            Uri requestUri = tileSource?.BuildTileUri(tileZoom, firstFetchX, firstFetchY)
+                ?? new Uri(string.Create(CultureInfo.InvariantCulture, $"vector-tile:{activeSource.SourceId}/{tileZoom}/{firstFetchX}/{firstFetchY}"), UriKind.Absolute);
+            throw new TileFetchException(
+                string.Create(CultureInfo.InvariantCulture, $"この地点には描画できるベクタータイルがありません（配信範囲外の可能性があります）: ズーム {tileZoom}"),
+                requestUri,
+                HttpStatusCode.NotFound,
+                null);
         }
 
         // 5. SkiaSharp によるキャンバス描画

@@ -55,6 +55,51 @@ public class FallbackCompositionIntegrationTests
         Assert.DoesNotContain(TileSources.OpenStreetMap.UrlTemplate, client.RequestedTemplates);
     }
 
+    [Fact]
+    public async Task 日本国外の写真に地理院ベクトルを指定するとプレビューは代替ソースで生成される()
+    {
+        using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
+        FallbackMapImageComposer composer = CreateVectorComposer(new RangeAwareTileClient(), style);
+
+        MapCompositionResult result = await composer.ComposeAsync(
+            new MapCompositionRequest { Center = Paris, Width = 400, Height = 300, TileSource = TileSources.GsiVector, Zoom = 15 },
+            CancellationToken.None);
+
+        Assert.True(result.UsedFallback);
+        Assert.Equal(TileSources.OpenStreetMap, result.TileSource);
+    }
+
+    [Fact]
+    public async Task 日本国外の写真に地理院ベクトルを指定し切替を止めると白紙で成功にせず404で失敗する()
+    {
+        using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
+        FallbackMapImageComposer composer = CreateVectorComposer(new RangeAwareTileClient(), style);
+
+        TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
+            () => composer.ComposeAsync(
+                new MapCompositionRequest
+                {
+                    Center = Paris,
+                    Width = 400,
+                    Height = 300,
+                    TileSource = TileSources.GsiVector,
+                    Zoom = 15,
+                    AllowWorldwideFallback = false,
+                },
+                CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+    }
+
+    private static FallbackMapImageComposer CreateVectorComposer(
+        ITileClient client,
+        PhotoMapStudio.Core.Tiles.Vector.IVectorMapStyle style)
+        => new FallbackMapImageComposer(
+            new SkiaMapImageComposer(
+                new TileProvider(client, new InMemoryTileCache()),
+                new PhotoMapStudio.Core.Tiles.Vector.VectorMapRenderer(new EmptyVectorTileSource(), style)),
+            TileSources.WorldwideFallback);
+
     private static FallbackMapImageComposer CreateComposer(ITileClient client)
         => new FallbackMapImageComposer(
             new SkiaMapImageComposer(new TileProvider(client, new InMemoryTileCache())),
@@ -114,6 +159,17 @@ public class FallbackCompositionIntegrationTests
             using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
             return data.ToArray();
         }
+    }
+
+    /// <summary>配信範囲外を模擬し、どのタイルも持たない（PMTiles に該当エントリがない）ベクタータイルソース。</summary>
+    private sealed class EmptyVectorTileSource : PhotoMapStudio.Core.Tiles.Vector.IVectorTileSource
+    {
+        public string SourceId => "empty";
+
+        public int MaxZoom => 16;
+
+        public Task<byte[]?> GetTileAsync(int z, int x, int y, TileFetchSession? session, CancellationToken cancellationToken = default)
+            => Task.FromResult<byte[]?>(null);
     }
 
     private sealed class InMemoryTileCache : ITileCache

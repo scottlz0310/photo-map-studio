@@ -39,6 +39,27 @@ public interface IVectorTileSource
         => this.GetTileAsync(z, x, y, session: null, cancellationToken);
 
     /// <summary>
+    /// <see cref="GetSourceIdAsync"/> が返した識別子の版のまま、指定されたタイルを取得する。
+    /// 識別子の確定とタイル取得の間に配信の版が切り替わっても、取得結果が識別子（キャッシュ鍵）と別の版にならないようにする。
+    /// </summary>
+    /// <param name="z">ズームレベル。</param>
+    /// <param name="x">X タイル座標。</param>
+    /// <param name="y">Y タイル座標。</param>
+    /// <param name="resolvedSourceId"><see cref="GetSourceIdAsync"/> が返した識別子。</param>
+    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    /// <returns>ベクタータイルのバイト列。存在しない場合は <see langword="null"/>。</returns>
+    /// <remarks>識別子が版に依存しないソースは、既定の実装（識別子を使わない取得）のままでよい。</remarks>
+    Task<byte[]?> GetTileForSourceIdAsync(
+        int z,
+        int x,
+        int y,
+        string resolvedSourceId,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default)
+        => this.GetTileAsync(z, x, y, session, cancellationToken);
+
+    /// <summary>
     /// 指定されたズーム・タイル座標のベクタータイルデータをセッション統計・レート管理付きで取得する。
     /// </summary>
     /// <param name="z">ズームレベル。</param>

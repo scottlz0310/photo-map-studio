@@ -88,6 +88,12 @@ public sealed class MainViewModel : ObservableObject
         {
             preview.PropertyChanged += (_, args) =>
             {
+                // プレビューの生成でタイルが保存されるため、完了時に使用量を実体へ合わせる
+                if (args.PropertyName == nameof(PreviewViewModel.IsGenerating) && !preview.IsGenerating)
+                {
+                    this.UpdateTileCacheUsage();
+                }
+
                 if (args.PropertyName == nameof(PreviewViewModel.LoadProgress))
                 {
                     this.OnPropertyChanged(nameof(this.ProgressIsIndeterminate));
@@ -773,6 +779,7 @@ public sealed class MainViewModel : ObservableObject
             await elapsedCancellation.CancelAsync().ConfigureAwait(true);
             await elapsedTask.ConfigureAwait(true);
             this.IsGenerating = false;
+            this.UpdateTileCacheUsage();
             this.LoadBatchHistoryCommand.NotifyCanExecuteChanged();
         }
     }

@@ -11,40 +11,33 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     public string StyleId => "openmaptiles";
 
     /// <inheritdoc />
-    public SKColor BackgroundColor => new(0xF2, 0xEF, 0xE9); // #F2EFE9
+    public SKColor BackgroundColor => new(0xEB, 0xE8, 0xE1);
 
     // 面（ポリゴン）用ペイント
     private readonly SKPaint waterPaint = new()
     {
-        Color = new SKColor(0xA5, 0xD6, 0xE7), // #A5D6E7
+        Color = new SKColor(0xA0, 0xC8, 0xF0),
         Style = SKPaintStyle.Fill,
         IsAntialias = true,
     };
 
     private readonly SKPaint parkPaint = new()
     {
-        Color = new SKColor(0xD0, 0xE7, 0xD2), // #D0E7D2
-        Style = SKPaintStyle.Fill,
-        IsAntialias = true,
-    };
-
-    private readonly SKPaint urbanLandusePaint = new()
-    {
-        Color = new SKColor(0xE8, 0xE4, 0xDE), // #E8E4DE
+        Color = new SKColor(0xD8, 0xE8, 0xC8),
         Style = SKPaintStyle.Fill,
         IsAntialias = true,
     };
 
     private readonly SKPaint buildingFillPaint = new()
     {
-        Color = new SKColor(0xE0, 0xDC, 0xD6), // #E0DCD6
+        Color = new SKColor(0xDC, 0xD5, 0xC9),
         Style = SKPaintStyle.Fill,
         IsAntialias = true,
     };
 
     private readonly SKPaint buildingStrokePaint = new()
     {
-        Color = new SKColor(0xD2, 0xCD, 0xC6), // #D2CDC6
+        Color = new SKColor(0xC9, 0xC0, 0xB1),
         Style = SKPaintStyle.Stroke,
         StrokeWidth = 0.5f,
         IsAntialias = true,
@@ -61,7 +54,6 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
     // テキスト用ペイント・フォント
     private readonly SKTypeface placeTypeface = VectorMapFontHelper.CreateJapaneseTypeface();
-    private readonly SKFont placeFont;
     private readonly SKFont roadNameFont;
     private readonly SKFont shieldFont;
 
@@ -70,8 +62,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     /// </summary>
     public OpenMapTilesStyle()
     {
-        this.placeFont = new SKFont(this.placeTypeface, 12f);
-        this.roadNameFont = new SKFont(this.placeTypeface, 10f);
+        this.roadNameFont = new SKFont(this.placeTypeface, 11f);
         this.shieldFont = new SKFont(this.placeTypeface, 9f) { Embolden = true };
     }
     private readonly SKPaint placeFillPaint = new()
@@ -111,20 +102,22 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         ArgumentNullException.ThrowIfNull(tile);
 
         // 1. 緑地・土地利用（landcover / landuse / park）
-        RenderLayerPolygons(canvas, tile.GetLayer("landcover"), this.parkPaint);
+        RenderLandcover(canvas, tile.GetLayer("landcover"), landuse: false);
+        RenderLandcover(canvas, tile.GetLayer("landuse"), landuse: true);
         RenderLayerPolygons(canvas, tile.GetLayer("park"), this.parkPaint);
-        RenderLayerPolygons(canvas, tile.GetLayer("landuse"), this.urbanLandusePaint);
 
         // 2. 水域（water）
         RenderLayerPolygons(canvas, tile.GetLayer("water"), this.waterPaint);
 
-        // 3. 建物（building）: ズーム 13 以上で描画
-        if (zoom >= 13)
+        // 3. 建物（building）: ズーム 15 以上で描画
+        if (zoom >= 15)
         {
             VectorTileLayer? buildingLayer = tile.GetLayer("building");
             if (buildingLayer is not null)
             {
-                RenderLayerPolygons(canvas, buildingLayer, this.buildingFillPaint, this.buildingStrokePaint);
+                using SKPaint outline = this.buildingStrokePaint.Clone();
+                outline.StrokeWidth = 1f / tileScale;
+                RenderLayerPolygons(canvas, buildingLayer, this.buildingFillPaint, outline);
             }
         }
     }
@@ -137,16 +130,47 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
         // 共有のペイントは書き換えず、描画ごとに線幅を設定した複製を使う（並行して描画しても線幅が混ざらない）
         using SKPaint railway = this.railwayPaint.Clone();
-        railway.StrokeWidth = 1.2f / tileScale;
+        railway.StrokeWidth = 2.5f / tileScale;
+
+        using SKPaint river = this.railwayPaint.Clone();
+        river.Color = this.waterPaint.Color;
+        river.StrokeWidth = 2.5f * ZoomScale(zoom) / tileScale;
+        RenderLayerLines(canvas, tile.GetLayer("waterway"), river);
+        using SKPaint boundary = this.railwayPaint.Clone();
+        boundary.Color = new SKColor(0xB0, 0x8F, 0xB5);
+        boundary.StrokeWidth = 1.8f / tileScale;
+        using SKPathEffect boundaryDash = SKPathEffect.CreateDash([7f / tileScale, 4f / tileScale], 0);
+        boundary.PathEffect = boundaryDash;
+        VectorTileLayer? boundaries = tile.GetLayer("boundary");
+        if (boundaries is not null)
+        {
+            foreach (VectorTileFeature feature in boundaries.Features.Where(f => f.GeometryType == VectorGeometryType.LineString && f.GetInt64("admin_level") is <= 4))
+            {
+                DrawFeatureLines(canvas, feature, boundary);
+            }
+        }
 
         VectorTileLayer? roadLayer = tile.GetLayer("transportation");
         if (roadLayer is not null)
         {
-            // 1. 鉄道（transportation 内の class="rail", "transit", "subway", "tram"）
-            RenderTransportationRailways(canvas, roadLayer, railway);
-
-            // 2. 道路（motorway, primary, secondary 等）
+            // 道路の後に鉄道の枕木を重ねる。
             RenderRoads(canvas, roadLayer, tileScale, zoom);
+            using SKPaint path = railway.Clone();
+            path.Color = new SKColor(0xB9, 0x9C, 0x80, 160);
+            path.StrokeWidth = 1.2f * Math.Max(1f, ZoomScale(zoom) * 0.45f) / tileScale;
+            using SKPathEffect pathDash = SKPathEffect.CreateDash([4f / tileScale, 3f / tileScale], 0);
+            path.PathEffect = pathDash;
+            foreach (VectorTileFeature feature in roadLayer.Features.Where(f => f.GeometryType == VectorGeometryType.LineString && IsPath(f.GetString("class"))))
+            {
+                DrawFeatureLines(canvas, feature, path);
+            }
+            RenderTransportationRailways(canvas, roadLayer, railway);
+            using SKPaint ties = railway.Clone();
+            ties.Color = SKColors.White;
+            ties.StrokeWidth = 1.2f / tileScale;
+            using SKPathEffect railDash = SKPathEffect.CreateDash([6f / tileScale, 6f / tileScale], 0);
+            ties.PathEffect = railDash;
+            RenderTransportationRailways(canvas, roadLayer, ties);
         }
 
         // フォールバック: 別途 railway レイヤーが存在する場合も描画
@@ -175,97 +199,123 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     }
 
     /// <inheritdoc />
-    public void RenderLabels(
-        SKCanvas canvas,
-        VectorTile tile,
-        SKMatrix tileToCanvasMatrix,
-        int zoom,
-        LabelCollisionGrid collisionGrid,
-        SKRect viewport)
+    public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
+        LabelCollisionGrid collisionGrid, SKRect viewport)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(tile);
+        ArgumentNullException.ThrowIfNull(collisionGrid);
+        OpenMapTilesRoadSymbols.RenderNames(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport,
+            this.roadNameFont, this.roadNameFillPaint, this.roadNameHaloPaint);
+    }
+
+    /// <inheritdoc />
+    public void RenderLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
+        LabelCollisionGrid collisionGrid, SKRect viewport)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
         ArgumentNullException.ThrowIfNull(collisionGrid);
 
-        // 1. 市区町村・地名（place）
-        VectorTileLayer? placeLayer = tile.GetLayer("place");
-        if (placeLayer is not null)
+        using SKPaint riverText = this.placeFillPaint.Clone();
+        riverText.Color = new SKColor(0x33, 0x77, 0xAA);
+        foreach (string layerName in new[] { "waterway", "water_name" })
         {
-            for (int i = 0; i < placeLayer.Features.Count; i++)
+            VectorTileLayer? layer = tile.GetLayer(layerName);
+            if (layer is null) { continue; }
+            foreach (VectorTileFeature feature in layer.Features.Where(f => f.GeometryType == VectorGeometryType.LineString))
             {
-                VectorTileFeature feature = placeLayer.Features[i];
-                if (feature.GeometryType != VectorGeometryType.Point || feature.GeometryParts.Count == 0)
-                {
-                    continue;
-                }
-
                 string? name = feature.GetString("name:ja") ?? feature.GetString("name");
-                if (string.IsNullOrWhiteSpace(name))
+                if (!string.IsNullOrWhiteSpace(name))
                 {
-                    continue;
-                }
-
-                VectorPoint pt = feature.GeometryParts[0][0];
-                SKPoint canvasPt = tileToCanvasMatrix.MapPoint(new SKPoint(pt.X, pt.Y));
-
-                float textWidth = this.placeFont.MeasureText(name);
-                var bounds = new SKRect(
-                    canvasPt.X - (textWidth / 2f),
-                    canvasPt.Y - 12f,
-                    canvasPt.X + (textWidth / 2f),
-                    canvasPt.Y + 4f);
-
-                if (collisionGrid.TryPlace(bounds, viewport))
-                {
-                    // 白ハロー（縁取り）を描画
-                    canvas.DrawText(name, bounds.Left, canvasPt.Y, SKTextAlign.Left, this.placeFont, this.textHaloPaint);
-                    // 本文を描画
-                    canvas.DrawText(name, bounds.Left, canvasPt.Y, SKTextAlign.Left, this.placeFont, this.placeFillPaint);
+                    PathLabelRenderer.Render(canvas, feature, tileToCanvasMatrix, name, this.roadNameFont,
+                        riverText, this.roadNameHaloPaint, collisionGrid, viewport, "water:" + name);
                 }
             }
         }
 
-        // 2. 道路名（transportation_name）: 地名の後、施設の前に配置する
-        OpenMapTilesRoadSymbols.RenderNames(
-            canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.roadNameFont, this.roadNameFillPaint, this.roadNameHaloPaint);
-
-        // 3. 施設（poi）: ズーム 14 以上
-        if (zoom >= 14)
+        VectorTileLayer? placeLayer = tile.GetLayer("place");
+        if (placeLayer is not null)
         {
-            VectorTileLayer? poiLayer = tile.GetLayer("poi");
-            if (poiLayer is not null)
+            foreach (VectorTileFeature feature in placeLayer.Features.OrderBy(f => f.GetInt64("rank") ?? long.MaxValue))
             {
-                for (int i = 0; i < poiLayer.Features.Count; i++)
+                string? kind = feature.GetString("class");
+                float size = kind switch
                 {
-                    VectorTileFeature feature = poiLayer.Features[i];
-                    if (feature.GeometryType != VectorGeometryType.Point || feature.GeometryParts.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    string? name = feature.GetString("name:ja") ?? feature.GetString("name");
-                    if (string.IsNullOrWhiteSpace(name))
-                    {
-                        continue;
-                    }
-
-                    VectorPoint pt = feature.GeometryParts[0][0];
-                    SKPoint canvasPt = tileToCanvasMatrix.MapPoint(new SKPoint(pt.X, pt.Y));
-
-                    float textWidth = this.placeFont.MeasureText(name);
-                    var bounds = new SKRect(
-                        canvasPt.X - (textWidth / 2f),
-                        canvasPt.Y - 10f,
-                        canvasPt.X + (textWidth / 2f),
-                        canvasPt.Y + 4f);
-
-                    if (collisionGrid.TryPlace(bounds, viewport))
-                    {
-                        canvas.DrawText(name, bounds.Left, canvasPt.Y, SKTextAlign.Left, this.placeFont, this.textHaloPaint);
-                        canvas.DrawText(name, bounds.Left, canvasPt.Y, SKTextAlign.Left, this.placeFont, this.placeFillPaint);
-                    }
-                }
+                    "city" => 16f,
+                    "town" => 14f,
+                    "village" => 12.5f,
+                    _ => 11.5f,
+                };
+                using var font = new SKFont(this.placeTypeface, size) { Embolden = kind is "city" or "town" };
+                this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, poi: false);
             }
+        }
+
+        VectorTileLayer? poiLayer = tile.GetLayer("poi");
+        if (zoom >= 15 && poiLayer is not null)
+        {
+            using var font = new SKFont(this.placeTypeface, 11f);
+            foreach (VectorTileFeature feature in poiLayer.Features.OrderBy(f => f.GetInt64("rank") ?? long.MaxValue))
+            {
+                this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, poi: true);
+            }
+        }
+    }
+
+    private void RenderPointLabel(SKCanvas canvas, VectorTileFeature feature, SKMatrix matrix, SKFont font,
+        LabelCollisionGrid grid, SKRect viewport, bool poi)
+    {
+        if (feature.GeometryType != VectorGeometryType.Point || feature.GeometryParts.Count == 0 || feature.GeometryParts[0].Count == 0) { return; }
+        string? name = feature.GetString("name:ja") ?? feature.GetString("name");
+        if (string.IsNullOrWhiteSpace(name)) { return; }
+        VectorPoint point = feature.GeometryParts[0][0];
+        SKPoint anchor = matrix.MapPoint(new SKPoint(point.X, point.Y));
+        float width = font.MeasureText(name);
+        float baseline = anchor.Y + (poi ? 15f : font.Size * 0.35f);
+        var bounds = new SKRect(anchor.X - (width / 2f) - 2f, baseline - font.Size - 2f, anchor.X + (width / 2f) + 2f, baseline + 4f);
+        if (poi) { bounds.Top = Math.Min(bounds.Top, anchor.Y - 5f); }
+        if (!grid.TryPlace([bounds], viewport, (poi ? "poi:" : "place:") + name, poi ? 140f : 220f)) { return; }
+        if (poi)
+        {
+            using SKPaint dot = this.placeFillPaint.Clone();
+            dot.Color = feature.GetString("class") switch
+            {
+                "hospital" => new SKColor(0xDA, 0x00, 0x00),
+                "school" or "college" => new SKColor(0x39, 0x73, 0x9D),
+                "station" or "railway" => new SKColor(0x79, 0x55, 0x48),
+                _ => new SKColor(0xD5, 0x7B, 0x35),
+            };
+            canvas.DrawCircle(anchor, 4.5f, this.textHaloPaint);
+            canvas.DrawCircle(anchor, 3.5f, dot);
+        }
+        canvas.DrawText(name, anchor.X, baseline, SKTextAlign.Center, font, this.textHaloPaint);
+        canvas.DrawText(name, anchor.X, baseline, SKTextAlign.Center, font, this.placeFillPaint);
+    }
+
+    private static void RenderLandcover(SKCanvas canvas, VectorTileLayer? layer, bool landuse)
+    {
+        if (layer is null) { return; }
+        using var paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        foreach (VectorTileFeature feature in layer.Features.Where(f => f.GeometryType == VectorGeometryType.Polygon))
+        {
+            string? color = (landuse, feature.GetString("class")) switch
+            {
+                (false, "wood") => "#c8dfb8",
+                (false, "grass") => "#d8e8c8",
+                (false, "wetland") => "#cfe2d6",
+                (false, "sand") => "#f2e8c4",
+                (false, "ice") => "#f4f8fb",
+                (true, "pitch" or "track") => "#cfe6c4",
+                (true, "cemetery") => "#d3dfcb",
+                (true, "school" or "college" or "university" or "hospital") => "#ebe3cf",
+                (true, "industrial" or "railway") => "#dfdad5",
+                (true, "residential") => "#e6e1d8",
+                _ => null,
+            };
+            if (color is null) { continue; }
+            paint.Color = SKColor.Parse(color);
+            RenderPolygon(canvas, feature, paint);
         }
     }
 
@@ -288,34 +338,40 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                 continue;
             }
 
-            using var builder = new SKPathBuilder { FillType = SKPathFillType.EvenOdd };
-            for (int r = 0; r < feature.GeometryParts.Count; r++)
-            {
-                IReadOnlyList<VectorPoint> ring = feature.GeometryParts[r];
-                if (ring.Count < 3)
-                {
-                    continue;
-                }
-
-                builder.MoveTo(ring[0].X, ring[0].Y);
-                for (int p = 1; p < ring.Count; p++)
-                {
-                    builder.LineTo(ring[p].X, ring[p].Y);
-                }
-                builder.Close();
-            }
-
-            using SKPath path = builder.Detach();
-            canvas.DrawPath(path, fillPaint);
-            if (strokePaint is not null)
-            {
-                canvas.DrawPath(path, strokePaint);
-            }
+            RenderPolygon(canvas, feature, fillPaint, strokePaint);
         }
     }
 
-    private static void RenderLayerLines(SKCanvas canvas, VectorTileLayer layer, SKPaint paint)
+    private static void RenderPolygon(SKCanvas canvas, VectorTileFeature feature, SKPaint fillPaint, SKPaint? strokePaint = null)
     {
+        using var builder = new SKPathBuilder { FillType = SKPathFillType.EvenOdd };
+        for (int r = 0; r < feature.GeometryParts.Count; r++)
+        {
+            IReadOnlyList<VectorPoint> ring = feature.GeometryParts[r];
+            if (ring.Count < 3)
+            {
+                continue;
+            }
+
+            builder.MoveTo(ring[0].X, ring[0].Y);
+            for (int p = 1; p < ring.Count; p++)
+            {
+                builder.LineTo(ring[p].X, ring[p].Y);
+            }
+            builder.Close();
+        }
+
+        using SKPath path = builder.Detach();
+        canvas.DrawPath(path, fillPaint);
+        if (strokePaint is not null)
+        {
+            canvas.DrawPath(path, strokePaint);
+        }
+    }
+
+    private static void RenderLayerLines(SKCanvas canvas, VectorTileLayer? layer, SKPaint paint)
+    {
+        if (layer is null) { return; }
         for (int i = 0; i < layer.Features.Count; i++)
         {
             VectorTileFeature feature = layer.Features[i];
@@ -376,6 +432,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             }
 
             string roadClass = feature.GetString("class") ?? string.Empty;
+            if (IsPath(roadClass)) { continue; }
             var (order, casingColor, fillColor, casingWidth, fillWidth) = GetRoadStyle(roadClass, zoom);
             if (fillWidth > 0f)
             {
@@ -424,46 +481,24 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
     private static (int order, SKColor casingColor, SKColor fillColor, float casingWidth, float fillWidth) GetRoadStyle(string roadClass, int zoom)
     {
-        return roadClass switch
+        float scale = ZoomScale(zoom);
+        var (order, width, fill, casing) = roadClass switch
         {
-            "motorway" or "trunk" => (
-                50,
-                new SKColor(0xCE, 0x80, 0x46),
-                new SKColor(0xF9, 0xB2, 0x9C),
-                7.5f,
-                5.0f),
-
-            "primary" => (
-                40,
-                new SKColor(0xC8, 0x8E, 0x4B),
-                new SKColor(0xFE, 0xD3, 0x82),
-                6.0f,
-                4.0f),
-
-            "secondary" => (
-                30,
-                new SKColor(0xA0, 0xA0, 0xA0),
-                SKColors.White,
-                4.5f,
-                3.0f),
-
-            "tertiary" or "minor" or "residential" => (
-                20,
-                new SKColor(0xC0, 0xC0, 0xC0),
-                SKColors.White,
-                3.5f,
-                2.0f),
-
-            "service" or "track" or "path" => (
-                10,
-                SKColors.Transparent,
-                new SKColor(0xDC, 0xDC, 0xDC),
-                0f,
-                1.5f),
-
-            _ => (0, SKColors.Transparent, SKColors.Transparent, 0f, 0f),
+            "motorway" => (90, 9.5f, "#9ad8a8", "#4f9a62"),
+            "trunk" => (80, 8.5f, "#ffb27a", "#d9803f"),
+            "primary" => (70, 7.5f, "#ffe27a", "#cfa21f"),
+            "secondary" => (60, 7f, "#ffe27a", "#cfa21f"),
+            "tertiary" => (50, 6f, "#fff3c4", "#d8c27a"),
+            "minor" or "residential" or "unclassified" or "living_street" => (40, 4.5f, "#ffffff", "#cfc9bf"),
+            "service" or "track" => (30, 3.5f, "#ffffff", "#d5cfc5"),
+            _ => (0, 0f, "#00000000", "#00000000"),
         };
+        return (order, SKColor.Parse(casing), SKColor.Parse(fill), width > 0 ? (width * scale) + 2f : 0f, width * scale);
     }
+
+    private static bool IsPath(string? roadClass) => roadClass is "path" or "pedestrian" or "footway" or "cycleway" or "steps";
+
+    private static float ZoomScale(int zoom) => (float)Math.Pow(2, (zoom - 16) * 0.75);
 
     private static void DrawFeatureLines(SKCanvas canvas, VectorTileFeature feature, SKPaint paint)
     {
@@ -492,11 +527,9 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     {
         this.waterPaint.Dispose();
         this.parkPaint.Dispose();
-        this.urbanLandusePaint.Dispose();
         this.buildingFillPaint.Dispose();
         this.buildingStrokePaint.Dispose();
         this.railwayPaint.Dispose();
-        this.placeFont.Dispose();
         this.roadNameFont.Dispose();
         this.shieldFont.Dispose();
         this.roadNameFillPaint.Dispose();

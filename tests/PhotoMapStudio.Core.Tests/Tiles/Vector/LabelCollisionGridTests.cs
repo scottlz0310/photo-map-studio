@@ -9,6 +9,29 @@ public class LabelCollisionGridTests
     private readonly SKRect viewport = new(0, 0, 800, 600);
 
     [Fact]
+    public void 曲線注記の一部が衝突した場合は配置全体を登録しない()
+    {
+        var grid = new LabelCollisionGrid();
+        Assert.True(grid.TryPlace(new SKRect(100, 100, 150, 120), this.viewport));
+        SKRect free = new(200, 100, 250, 120);
+        Assert.False(grid.TryPlace([free, new SKRect(110, 100, 160, 120)], this.viewport));
+        Assert.True(grid.TryPlace(free, this.viewport));
+    }
+
+    [Fact]
+    public void 同じ名前は指定距離を空けて配置しClearで名前も消す()
+    {
+        var grid = new LabelCollisionGrid();
+        SKRect first = new(20, 20, 60, 40);
+        SKRect near = new(20, 70, 60, 90);
+        Assert.True(grid.TryPlace([first], this.viewport, "place:同じ町名", 200));
+        Assert.False(grid.TryPlace([near], this.viewport, "place:同じ町名", 200));
+        Assert.True(grid.TryPlace([new SKRect(400, 20, 440, 40)], this.viewport, "place:同じ町名", 200));
+        grid.Clear();
+        Assert.True(grid.TryPlace([near], this.viewport, "place:同じ町名", 200));
+    }
+
+    [Fact]
     public void 画面内に収まる最初の矩形は配置に成功する()
     {
         var grid = new LabelCollisionGrid(padding: 2f);

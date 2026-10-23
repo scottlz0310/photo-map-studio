@@ -24,7 +24,7 @@ internal enum RouteShieldKind
 /// OpenMapTiles スキーマの <c>transportation_name</c> レイヤーから、経路番号の盾と道路名注記を描画する。
 /// </summary>
 /// <remarks>
-/// 道路名は折れ線に沿わせず、道路の中央に水平に配置する（折れ線追従は別途検討）。
+/// 道路名は画面内の折れ線に沿わせ、短い区間・急カーブ・重なりを避ける。
 /// </remarks>
 internal static class OpenMapTilesRoadSymbols
 {
@@ -33,8 +33,6 @@ internal static class OpenMapTilesRoadSymbols
     private const float ShieldHeight = 14f;
     private const float ShieldMinWidth = 16f;
     private const float ShieldPadding = 4f;
-    private const float NameAscent = 9f;
-    private const float NameDescent = 3f;
 
     /// <summary>
     /// 道路種別と経路網から盾の種別を決める。
@@ -146,95 +144,39 @@ internal static class OpenMapTilesRoadSymbols
         {
             float width = Math.Max(ShieldMinWidth, shieldFont.MeasureText(text) + (ShieldPadding * 2f));
             var bounds = SKRect.Create(anchor.X - (width / 2f), anchor.Y - (ShieldHeight / 2f), width, ShieldHeight);
-            if (collisionGrid.TryPlace(bounds, viewport))
+            if (collisionGrid.TryPlace([bounds], viewport, $"shield:{kind}:{text}", repeatDistance: 260f))
             {
                 DrawShield(canvas, kind, text, bounds, shieldFont);
             }
         }
     }
 
-    /// <summary>
-    /// 道路名を描画する（折れ線には沿わせず、道路の中央に水平に置く）。
-    /// </summary>
+    /// <summary>細街路を含む道路名を、ズームに応じて道路に沿って描画する。</summary>
     internal static void RenderNames(
-        SKCanvas canvas,
-        VectorTile tile,
-        SKMatrix tileToCanvasMatrix,
-        int zoom,
-        LabelCollisionGrid collisionGrid,
-        SKRect viewport,
-        SKFont font,
-        SKPaint fillPaint,
-        SKPaint haloPaint)
+        SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
+        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint)
     {
         VectorTileLayer? layer = tile.GetLayer(LayerName);
-        if (layer is null)
+        if (layer is null) { return; }
+        foreach (VectorTileFeature feature in layer.Features
+            .Where(f => f.GeometryType == VectorGeometryType.LineString && GetNameRank(f.GetString("class"), zoom) >= 0)
+            .OrderByDescending(f => GetNameRank(f.GetString("class"), zoom)))
         {
-            return;
-        }
-
-        // 同じ名前は 1 つのタイルの中で最も長い区間に 1 つだけ置き、主要な道路から先に配置する
-        var candidates = new Dictionary<string, (SKPoint Anchor, float Length, int Rank)>(StringComparer.Ordinal);
-        for (int i = 0; i < layer.Features.Count; i++)
-        {
-            VectorTileFeature feature = layer.Features[i];
-            if (feature.GeometryType != VectorGeometryType.LineString)
-            {
-                continue;
-            }
-
-            int rank = GetNameRank(feature.GetString("class"), zoom);
             string? name = feature.GetString("name:ja") ?? feature.GetString("name");
-            if (rank < 0 || string.IsNullOrWhiteSpace(name))
-            {
-                continue;
-            }
-
-            // 道路より長い名前は、隣の道路に重なって読みにくいため置かない（画面内に見えている長さで判断する）
-            float textWidth = font.MeasureText(name);
-            if (!TryGetVisibleMidpoint(feature, tileToCanvasMatrix, viewport, out _, out float visibleLength)
-                || visibleLength < textWidth * 0.9f)
-            {
-                continue;
-            }
-
-            // 配置点は、文字が画面からはみ出さない範囲の、見えている区間の中央にする
-            SKRect placeable = Inset(viewport, textWidth / 2f, NameAscent, textWidth / 2f, NameDescent);
-            if (!TryGetVisibleMidpoint(feature, tileToCanvasMatrix, placeable, out SKPoint anchor, out _))
-            {
-                continue;
-            }
-
-            if (!candidates.TryGetValue(name, out var existing) || visibleLength > existing.Length)
-            {
-                candidates[name] = (anchor, visibleLength, rank);
-            }
-        }
-
-        foreach (var (name, (anchor, _, _)) in candidates
-            .OrderByDescending(static c => c.Value.Rank)
-            .ThenByDescending(static c => c.Value.Length))
-        {
-            float textWidth = font.MeasureText(name);
-            var bounds = new SKRect(anchor.X - (textWidth / 2f), anchor.Y - NameAscent, anchor.X + (textWidth / 2f), anchor.Y + NameDescent);
-            if (collisionGrid.TryPlace(bounds, viewport))
-            {
-                canvas.DrawText(name, bounds.Left, anchor.Y, SKTextAlign.Left, font, haloPaint);
-                canvas.DrawText(name, bounds.Left, anchor.Y, SKTextAlign.Left, font, fillPaint);
-            }
+            if (string.IsNullOrWhiteSpace(name)) { continue; }
+            PathLabelRenderer.Render(canvas, feature, tileToCanvasMatrix, name, font,
+                fillPaint, haloPaint, collisionGrid, viewport, "road:" + name);
         }
     }
 
-    /// <summary>
-    /// 道路種別から道路名の優先度を決める。ズームに対して表示しない種別は負の値を返す。
-    /// </summary>
     private static int GetNameRank(string? roadClass, int zoom) => roadClass switch
     {
         "motorway" or "trunk" => zoom >= 12 ? 5 : -1,
         "primary" => zoom >= 12 ? 4 : -1,
         "secondary" => zoom >= 13 ? 3 : -1,
         "tertiary" => zoom >= 14 ? 2 : -1,
-        "minor" or "service" => zoom >= 15 ? 1 : -1,
+        "minor" or "residential" or "unclassified" or "service" => zoom >= 15 ? 1 : -1,
+        "track" or "path" or "pedestrian" or "footway" or "cycleway" or "steps" or "living_street" => zoom >= 17 ? 0 : -1,
         _ => -1,
     };
 
@@ -400,7 +342,7 @@ internal static class OpenMapTilesRoadSymbols
         {
             RouteShieldKind.Expressway => (new SKColor(0x0A, 0x8A, 0x3C), SKColors.White, SKColors.White),
             RouteShieldKind.National => (new SKColor(0x00, 0x62, 0xB8), SKColors.White, SKColors.White),
-            _ => (SKColors.White, new SKColor(0x33, 0x33, 0x33), new SKColor(0x22, 0x22, 0x22)),
+            _ => (SKColors.White, new SKColor(0x00, 0x62, 0xB8), new SKColor(0x00, 0x62, 0xB8)),
         };
 
         using var fillPaint = new SKPaint { Color = fill, Style = SKPaintStyle.Fill, IsAntialias = true };
@@ -408,7 +350,7 @@ internal static class OpenMapTilesRoadSymbols
         {
             Color = outline,
             Style = SKPaintStyle.Stroke,
-            StrokeWidth = 1.2f,
+            StrokeWidth = kind == RouteShieldKind.Prefectural ? 1.8f : 1.2f,
             StrokeJoin = SKStrokeJoin.Round,
             IsAntialias = true,
         };

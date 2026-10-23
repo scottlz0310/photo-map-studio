@@ -8,7 +8,7 @@ public sealed class OpenMapTilesRoadSymbolsTests
 {
     private static readonly SKColor ExpresswayGreen = new(0x0A, 0x8A, 0x3C);
     private static readonly SKColor NationalBlue = new(0x00, 0x62, 0xB8);
-    private static readonly SKColor PrefecturalOutline = new(0x33, 0x33, 0x33);
+    private static readonly SKColor PrefecturalOutline = new(0x00, 0x62, 0xB8);
 
     [Theory]
     [InlineData("motorway", null, "Expressway")]
@@ -51,7 +51,7 @@ public sealed class OpenMapTilesRoadSymbolsTests
     }
 
     [Fact]
-    public void 都道府県道の盾は白地に濃い縁で描画される()
+    public void 都道府県道の盾は白地に青い縁で描画される()
     {
         using SKBitmap bitmap = RenderSymbols(zoom: 14, Line("secondary", "299", name: null, y: 2048));
 
@@ -103,7 +103,7 @@ public sealed class OpenMapTilesRoadSymbolsTests
     }
 
     [Fact]
-    public void 道路名は道路の中央に水平に描画される()
+    public void 道路名は直線道路に沿って描画される()
     {
         using SKBitmap bitmap = RenderLabels(zoom: 14, Line("tertiary", reference: null, name: "桜田通り", y: 2048));
 
@@ -124,12 +124,27 @@ public sealed class OpenMapTilesRoadSymbolsTests
     [Theory]
     [InlineData("tertiary", 13)]
     [InlineData("minor", 14)]
-    [InlineData("path", 18)]
+    [InlineData("path", 16)]
     public void 道路名はズームと道路種別に応じて表示を絞る(string roadClass, int zoom)
     {
         using SKBitmap bitmap = RenderLabels(zoom, Line(roadClass, reference: null, name: "桜田通り", y: 2048));
 
         Assert.Equal(0, CountDark(bitmap));
+    }
+
+    [Theory]
+    [InlineData("minor", 15)]
+    [InlineData("residential", 15)]
+    [InlineData("unclassified", 15)]
+    [InlineData("service", 15)]
+    [InlineData("path", 17)]
+    [InlineData("track", 17)]
+    [InlineData("pedestrian", 17)]
+    [InlineData("living_street", 17)]
+    public void 拡大時はデータのある細街路や小道の名前を表示する(string roadClass, int zoom)
+    {
+        using SKBitmap bitmap = RenderLabels(zoom, Line(roadClass, reference: null, name: "北２丁目通り", y: 2048));
+        Assert.True(CountDark(bitmap) >= 8);
     }
 
     // 過拡大（OpenFreeMap は最大ズーム 14 のタイルを拡大する）では、1 つのタイルが画面より大きくなる。
@@ -224,7 +239,7 @@ public sealed class OpenMapTilesRoadSymbolsTests
         }
         else
         {
-            style.RenderLabels(canvas, tile, matrix, zoom, grid, viewport);
+            style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport);
         }
 
         return bitmap;

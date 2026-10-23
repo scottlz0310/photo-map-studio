@@ -289,6 +289,14 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             activeStyle.RenderSymbols(canvas, item.tile, tileToCanvasMatrix, zoom, collisionGrid, viewport);
         }
 
+        // 道路名を全タイルの地名・施設名より先に配置する。
+        for (int i = 0; i < loadedTiles.Count; i++)
+        {
+            var item = loadedTiles[i];
+            SKMatrix matrix = SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy);
+            activeStyle.RenderLineLabels(canvas, item.tile, matrix, zoom, collisionGrid, viewport);
+        }
+
         // パス 3b: 全タイルの注記・ラベル（画面座標系で直接描画）
         for (int i = 0; i < loadedTiles.Count; i++)
         {

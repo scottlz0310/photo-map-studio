@@ -22,11 +22,22 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
     /// <summary>OpenFreeMap の最大提供ズームレベル。</summary>
     public const int DefaultMaxZoom = 14;
 
+    /// <summary>最後に解決した URL テンプレートを保存するキャッシュキー。</summary>
+    public const string UrlTemplateStoreKey = "openfreemap-urltemplate.txt";
+
+    /// <summary>TileJSON の取得に失敗した後、次に取得を試みるまでの待機時間。タイルごとの再要求を避ける。</summary>
+    public static TimeSpan ResolveRetryInterval { get; } = TimeSpan.FromSeconds(60);
+
     private readonly HttpClient httpClient;
     private readonly string? explicitUrlTemplate;
     private readonly string tileJsonUrl;
     private readonly SemaphoreSlim resolveLock = new(1, 1);
+    private readonly ITileCache? urlTemplateStore;
+    private readonly TimeProvider timeProvider;
     private string? resolvedUrlTemplate;
+    private string? lastKnownUrlTemplate;
+    private bool lastKnownLoaded;
+    private DateTimeOffset? lastResolveFailure;
 
     /// <summary>
     /// OpenFreeMap タイルソースを初期化する。
@@ -35,6 +46,8 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
     /// <param name="urlTemplate">明示的に指定する固定 URL テンプレート。省略時は TileJSON から動的に解決する。</param>
     /// <param name="maxZoom">最大ズームレベル。省略時は <see cref="DefaultMaxZoom"/>。</param>
     /// <param name="tileJsonUrl">TileJSON の取得元 URL。省略時は <see cref="DefaultTileJsonUrl"/>。</param>
+    /// <param name="urlTemplateStore">最後に解決した URL テンプレートの保存先。指定すると、オフラインなどで TileJSON を取得できないときに前回の版を使い、その版のキャッシュを引き続き利用できる。</param>
+    /// <param name="timeProvider">取得失敗後の待機時間の判定に使う時刻源。</param>
     [SuppressMessage(
         "Design",
         "CA1054:URI パラメーターは文字列にしません",
@@ -43,13 +56,17 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
         HttpClient httpClient,
         string? urlTemplate = null,
         int maxZoom = DefaultMaxZoom,
-        string? tileJsonUrl = null)
+        string? tileJsonUrl = null,
+        ITileCache? urlTemplateStore = null,
+        TimeProvider? timeProvider = null)
     {
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.explicitUrlTemplate = string.IsNullOrWhiteSpace(urlTemplate) ? null : urlTemplate;
         this.tileJsonUrl = string.IsNullOrWhiteSpace(tileJsonUrl) ? DefaultTileJsonUrl : tileJsonUrl;
         this.MaxZoom = maxZoom;
         this.resolvedUrlTemplate = this.explicitUrlTemplate;
+        this.urlTemplateStore = urlTemplateStore;
+        this.timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <inheritdoc />
@@ -66,13 +83,14 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
     }
 
     /// <summary>
-    /// 現在解決されている実効 URL テンプレート。未解決時はフォールバック URL を返す。
+    /// 現在の実効 URL テンプレート。未解決時は前回解決した URL、それも無ければフォールバック URL を返す。
     /// </summary>
     [SuppressMessage(
         "Design",
         "CA1056:URI プロパティは文字列にしません",
         Justification = "URL テンプレートは {z}/{x}/{y} を含む置換前の文字列であり、Uri では表現できない。")]
-    public string EffectiveUrlTemplate => this.resolvedUrlTemplate ?? this.explicitUrlTemplate ?? FallbackUrlTemplate;
+    public string EffectiveUrlTemplate
+        => this.resolvedUrlTemplate ?? this.explicitUrlTemplate ?? this.lastKnownUrlTemplate ?? FallbackUrlTemplate;
 
     /// <summary>
     /// TileJSON から最新の URL テンプレートを解決する（明示指定時は何もしない）。
@@ -103,6 +121,38 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
                 return this.resolvedUrlTemplate;
             }
 
+            await this.LoadLastKnownUrlTemplateAsync(cancellationToken).ConfigureAwait(false);
+
+            // 取得に失敗した直後は、タイルごとに TileJSON を再要求しないよう待機する
+            if (this.lastResolveFailure is { } failedAt
+                && this.timeProvider.GetUtcNow() - failedAt < ResolveRetryInterval)
+            {
+                return this.EffectiveUrlTemplate;
+            }
+
+            string? template = await this.TryFetchUrlTemplateAsync(cancellationToken).ConfigureAwait(false);
+            if (template is not null)
+            {
+                this.resolvedUrlTemplate = template;
+                this.lastResolveFailure = null;
+                await this.SaveLastKnownUrlTemplateAsync(template, cancellationToken).ConfigureAwait(false);
+                return template;
+            }
+
+            // 失敗は確定させない。次回（待機後）に TileJSON を再取得して最新の版へ戻れるようにする
+            this.lastResolveFailure = this.timeProvider.GetUtcNow();
+            return this.EffectiveUrlTemplate;
+        }
+        finally
+        {
+            this.resolveLock.Release();
+        }
+    }
+
+    private async Task<string?> TryFetchUrlTemplateAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
             var requestUri = new Uri(this.tileJsonUrl, UriKind.Absolute);
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.UserAgent.ParseAdd(UserAgentProvider.Value);
@@ -111,23 +161,23 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
                 .SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                if (doc.RootElement.TryGetProperty("tiles", out JsonElement tiles) &&
-                    tiles.ValueKind == JsonValueKind.Array &&
-                    tiles.GetArrayLength() > 0)
-                {
-                    string? template = tiles[0].GetString();
-                    if (!string.IsNullOrWhiteSpace(template))
-                    {
-                        this.resolvedUrlTemplate = template;
-                        return template;
-                    }
-                }
+                return null;
             }
+
+            using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (doc.RootElement.TryGetProperty("tiles", out JsonElement tiles) &&
+                tiles.ValueKind == JsonValueKind.Array &&
+                tiles.GetArrayLength() > 0)
+            {
+                string? template = tiles[0].GetString();
+                return string.IsNullOrWhiteSpace(template) ? null : template;
+            }
+
+            return null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -136,15 +186,52 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or OperationCanceledException)
         {
-            // オフラインや一時エラー、内部タイムアウト時はフォールバックテンプレートを使用
+            // オフラインや一時エラー、内部タイムアウト時は前回の版（なければフォールバック）を使う
+            return null;
         }
-        finally
+    }
+
+    private async Task LoadLastKnownUrlTemplateAsync(CancellationToken cancellationToken)
+    {
+        if (this.lastKnownLoaded || this.urlTemplateStore is null)
         {
-            this.resolveLock.Release();
+            return;
         }
 
-        this.resolvedUrlTemplate = FallbackUrlTemplate;
-        return FallbackUrlTemplate;
+        this.lastKnownLoaded = true;
+        byte[]? stored = await this.urlTemplateStore.TryReadAsync(UrlTemplateStoreKey, cancellationToken).ConfigureAwait(false);
+        if (stored is { Length: > 0 })
+        {
+            string template = System.Text.Encoding.UTF8.GetString(stored).Trim();
+
+            // 破損や改ざんで想定外の文字列を要求先にしない。https かつ座標のプレースホルダーを持つものだけ使う
+            if (template.StartsWith("https://", StringComparison.Ordinal)
+                && template.Contains("{z}", StringComparison.Ordinal)
+                && template.Contains("{x}", StringComparison.Ordinal)
+                && template.Contains("{y}", StringComparison.Ordinal))
+            {
+                this.lastKnownUrlTemplate = template;
+            }
+        }
+    }
+
+    private async Task SaveLastKnownUrlTemplateAsync(string template, CancellationToken cancellationToken)
+    {
+        if (this.urlTemplateStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await this.urlTemplateStore
+                .WriteAsync(UrlTemplateStoreKey, System.Text.Encoding.UTF8.GetBytes(template), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 保存に失敗しても今回の解決結果はそのまま使う（次回オフライン時に前回の版を使えないだけ）
+        }
     }
 
     /// <inheritdoc />

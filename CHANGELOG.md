@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- OpenFreeMap の TileJSON 取得に失敗した（オフライン・一時エラー）とき、フォールバック URL がプロセス終了まで固定される不具合を修正。失敗は確定せず、60 秒の待機後に再取得して最新の版へ戻る。解決した版の URL をタイルキャッシュに保存し、次回起動時に TileJSON を取得できなくても前回の版（とそのキャッシュ）を使う。配信の版ごとにキャッシュを分ける従来の設計は維持する（[#66](https://github.com/scottlz0310/photo-map-studio/issues/66)）
 - ベクター地図スタイル（国土地理院 最適化ベクトルおよび OpenFreeMap）において、Windows 標準の日本語フォント（Yu Gothic UI / 日本語対応 Typeface）を自動解決する VectorMapFontHelper を導入し、地名・施設名・等高線注記の漢字・ひらがなが豆腐（□）として描画される不具合を修正（[#49](https://github.com/scottlz0310/photo-map-studio/issues/49)）
 
 ## [0.2.3] - 2026-10-18

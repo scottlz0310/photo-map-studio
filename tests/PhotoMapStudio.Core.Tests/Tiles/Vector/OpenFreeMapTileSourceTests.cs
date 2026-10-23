@@ -165,6 +165,83 @@ public class OpenFreeMapTileSourceTests
     }
 
     [Fact]
+    public async Task TileJSON取得に失敗してもフォールバックを確定せず待機後に再取得して最新の版へ戻る()
+    {
+        bool tileJsonAvailable = false;
+        int tileJsonRequestCount = 0;
+        using var factory = new StubHttpClientFactory(req =>
+        {
+            if (req.RequestUri == new Uri(OpenFreeMapTileSource.DefaultTileJsonUrl))
+            {
+                tileJsonRequestCount++;
+                return tileJsonAvailable
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(SampleTileJson) }
+                    : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1]) };
+        });
+        var time = new ManualTimeProvider();
+        using var client = factory.CreateClient("test");
+        using var source = new OpenFreeMapTileSource(client, timeProvider: time);
+
+        // 1 回目: 失敗してフォールバックを使う（確定しない）
+        Assert.Equal(OpenFreeMapTileSource.FallbackUrlTemplate, await source.ResolveUrlTemplateAsync(CancellationToken.None));
+
+        // 待機中は TileJSON を再要求しない（タイルごとの再要求を避ける）
+        tileJsonAvailable = true;
+        Assert.Equal(OpenFreeMapTileSource.FallbackUrlTemplate, await source.ResolveUrlTemplateAsync(CancellationToken.None));
+        Assert.Equal(1, tileJsonRequestCount);
+
+        // 待機後は再取得して最新の版へ戻る
+        time.Advance(OpenFreeMapTileSource.ResolveRetryInterval + TimeSpan.FromSeconds(1));
+        string resolved = await source.ResolveUrlTemplateAsync(CancellationToken.None);
+
+        Assert.Equal("https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", resolved);
+        Assert.Equal(2, tileJsonRequestCount);
+    }
+
+    [Fact]
+    public async Task 解決した版を保存し再起動後にTileJSONが取得できなくても前回の版を使う()
+    {
+        var store = new MemoryTileCache();
+
+        // 1 回目の起動: TileJSON を取得でき、前回の版として保存される
+        using (var okFactory = new StubHttpClientFactory(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(SampleTileJson) }))
+        using (var client = okFactory.CreateClient("test"))
+        using (var source = new OpenFreeMapTileSource(client, urlTemplateStore: store))
+        {
+            await source.ResolveUrlTemplateAsync(CancellationToken.None);
+        }
+
+        // 2 回目の起動: オフライン相当。保存された版を使うので、その版のキャッシュ鍵が変わらない
+        using var offlineFactory = new StubHttpClientFactory(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        using var offlineClient = offlineFactory.CreateClient("test");
+        using var offline = new OpenFreeMapTileSource(offlineClient, urlTemplateStore: store);
+
+        string sourceId = await offline.GetSourceIdAsync(CancellationToken.None);
+
+        Assert.Equal("openfreemap:https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", sourceId);
+    }
+
+    [Theory]
+    [InlineData("http://example.com/{z}/{x}/{y}.pbf")]
+    [InlineData("https://example.com/no-placeholders.pbf")]
+    [InlineData("")]
+    public async Task 保存された版が不正な値ならフォールバックを使う(string stored)
+    {
+        var store = new MemoryTileCache();
+        await store.WriteAsync(OpenFreeMapTileSource.UrlTemplateStoreKey, System.Text.Encoding.UTF8.GetBytes(stored), CancellationToken.None);
+        using var factory = new StubHttpClientFactory(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        using var client = factory.CreateClient("test");
+        using var source = new OpenFreeMapTileSource(client, urlTemplateStore: store);
+
+        string sourceId = await source.GetSourceIdAsync(CancellationToken.None);
+
+        Assert.Equal($"openfreemap:{OpenFreeMapTileSource.FallbackUrlTemplate}", sourceId);
+    }
+
+    [Fact]
     public async Task TileJSON取得中の呼出し元キャンセルは状態を確定せず再実行時に最新URLを解決する()
     {
         int tileJsonRequestCount = 0;
@@ -200,5 +277,28 @@ public class OpenFreeMapTileSourceTests
         Assert.Equal("https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", resolved);
         Assert.Equal("openfreemap:https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", source.SourceId);
         Assert.True(tileJsonRequestCount >= 1);
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset now = new(2026, 10, 23, 0, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => this.now;
+
+        public void Advance(TimeSpan duration) => this.now += duration;
+    }
+
+    private sealed class MemoryTileCache : ITileCache
+    {
+        private readonly Dictionary<string, byte[]> entries = new(StringComparer.Ordinal);
+
+        public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken)
+            => Task.FromResult(this.entries.TryGetValue(key, out byte[]? value) ? value : null);
+
+        public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken)
+        {
+            this.entries[key] = content;
+            return Task.CompletedTask;
+        }
     }
 }

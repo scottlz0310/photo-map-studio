@@ -51,7 +51,9 @@ public static class PhotoMapStudioCoreServiceCollectionExtensions
         services.TryAddSingleton<IVectorMapStyle>(provider => provider.GetRequiredService<OpenMapTilesStyle>());
 
         services.TryAddSingleton<OpenFreeMapTileSource>(provider =>
-            new OpenFreeMapTileSource(provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName)));
+            new OpenFreeMapTileSource(
+                provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpTileClient.HttpClientName),
+                urlTemplateStore: provider.GetRequiredService<ITileCache>()));
 
         services.TryAddSingleton<IVectorTileSource>(provider =>
             new CachedVectorTileSource(

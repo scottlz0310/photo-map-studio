@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-23
+
 ### Added
 
 - OpenFreeMap の経路番号の盾（高速道路・国道・都道府県道）と道路名注記を追加。道路種別の判定には配信データの network / class を使用する（[#64](https://github.com/scottlz0310/photo-map-studio/issues/64)）

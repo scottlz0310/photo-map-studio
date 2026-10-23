@@ -56,7 +56,7 @@ public sealed class CachedVectorTileSource : IVectorTileSource
         byte[]? fetched;
         try
         {
-            fetched = await this.inner.GetTileAsync(z, x, y, session, cancellationToken).ConfigureAwait(false);
+            fetched = await this.inner.GetTileForSourceIdAsync(z, x, y, sourceId, session, cancellationToken).ConfigureAwait(false);
             session?.RecordSuccess(cached: false);
         }
         catch (TileFetchException ex)

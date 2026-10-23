@@ -242,6 +242,74 @@ public class OpenFreeMapTileSourceTests
     }
 
     [Fact]
+    public async Task 保存値の読み込みが呼び出し元のキャンセルで中断されても次回は保存値を読み直す()
+    {
+        var store = new MemoryTileCache();
+        await store.WriteAsync(
+            OpenFreeMapTileSource.UrlTemplateStoreKey,
+            System.Text.Encoding.UTF8.GetBytes("https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf"),
+            CancellationToken.None);
+        var cancelOnce = new CancelFirstReadTileCache(store);
+        using var factory = new StubHttpClientFactory(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        using var client = factory.CreateClient("test");
+        using var source = new OpenFreeMapTileSource(client, urlTemplateStore: cancelOnce);
+
+        // 1 回目: 保存値の読み込みが呼び出し元のキャンセルで中断される
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => source.ResolveUrlTemplateAsync(CancellationToken.None));
+
+        // 2 回目: ロード済みと誤認せず保存値を読み直し、TileJSON が取得できなくても前回の版を使う
+        string sourceId = await source.GetSourceIdAsync(CancellationToken.None);
+
+        Assert.Equal("openfreemap:https://tiles.openfreemap.org/planet/20261020_080001_pt/{z}/{x}/{y}.pbf", sourceId);
+    }
+
+    [Fact]
+    public async Task 再取得の待機期限をまたいでも取得したタイルを識別子と同じ版の鍵で保存する()
+    {
+        bool tileJsonAvailable = false;
+        var requestedTiles = new List<Uri>();
+        using var factory = new StubHttpClientFactory(req =>
+        {
+            if (req.RequestUri == new Uri(OpenFreeMapTileSource.DefaultTileJsonUrl))
+            {
+                return tileJsonAvailable
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(SampleTileJson) }
+                    : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            }
+
+            requestedTiles.Add(req.RequestUri!);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([9]) };
+        });
+        var time = new ManualTimeProvider();
+        using var client = factory.CreateClient("test");
+        using var source = new OpenFreeMapTileSource(client, timeProvider: time);
+
+        // TileJSON の取得に失敗し、待機中の状態にする（フォールバックの版を使う）
+        await source.ResolveUrlTemplateAsync(CancellationToken.None);
+
+        // キャッシュ読み込みの最中に、待機期限が過ぎて TileJSON が取得できるようになる（識別子の確定後に版が変わり得る）
+        var cache = new AdvancingTileCache(() =>
+        {
+            time.Advance(OpenFreeMapTileSource.ResolveRetryInterval + TimeSpan.FromSeconds(1));
+            tileJsonAvailable = true;
+        });
+        var cached = new CachedVectorTileSource(source, cache);
+
+        byte[]? tile = await cached.GetTileAsync(14, 1, 2, CancellationToken.None);
+
+        Assert.Equal([9], tile);
+
+        // 識別子（フォールバックの版）と同じ版の URL で取得し、同じ版の鍵で保存する
+        Assert.Equal(
+            new Uri("https://tiles.openfreemap.org/planet/20261018_080001_pt/14/1/2.pbf"),
+            Assert.Single(requestedTiles));
+        Assert.Equal(
+            VectorTileCacheKey.Create($"openfreemap:{OpenFreeMapTileSource.FallbackUrlTemplate}", 14, 1, 2),
+            Assert.Single(cache.WrittenKeys));
+    }
+
+    [Fact]
     public async Task TileJSON取得中の呼出し元キャンセルは状態を確定せず再実行時に最新URLを解決する()
     {
         int tileJsonRequestCount = 0;
@@ -298,6 +366,44 @@ public class OpenFreeMapTileSourceTests
         public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken)
         {
             this.entries[key] = content;
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>最初の読み取りだけ呼び出し元のキャンセルとして中断するキャッシュ。</summary>
+    private sealed class CancelFirstReadTileCache(ITileCache inner) : ITileCache
+    {
+        private bool cancelled;
+
+        public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken)
+        {
+            if (!this.cancelled)
+            {
+                this.cancelled = true;
+                throw new OperationCanceledException();
+            }
+
+            return inner.TryReadAsync(key, cancellationToken);
+        }
+
+        public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken)
+            => inner.WriteAsync(key, content, cancellationToken);
+    }
+
+    /// <summary>読み取りの最中に任意の処理（時刻の進行など）を行い、常にミスを返すキャッシュ。</summary>
+    private sealed class AdvancingTileCache(Action onRead) : ITileCache
+    {
+        public List<string> WrittenKeys { get; } = [];
+
+        public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken)
+        {
+            onRead();
+            return Task.FromResult<byte[]?>(null);
+        }
+
+        public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken)
+        {
+            this.WrittenKeys.Add(key);
             return Task.CompletedTask;
         }
     }

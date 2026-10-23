@@ -198,22 +198,28 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
             return;
         }
 
-        this.lastKnownLoaded = true;
         byte[]? stored = await this.urlTemplateStore.TryReadAsync(UrlTemplateStoreKey, cancellationToken).ConfigureAwait(false);
         if (stored is { Length: > 0 })
         {
             string template = System.Text.Encoding.UTF8.GetString(stored).Trim();
 
-            // 破損や改ざんで想定外の文字列を要求先にしない。https かつ座標のプレースホルダーを持つものだけ使う
-            if (template.StartsWith("https://", StringComparison.Ordinal)
-                && template.Contains("{z}", StringComparison.Ordinal)
-                && template.Contains("{x}", StringComparison.Ordinal)
-                && template.Contains("{y}", StringComparison.Ordinal))
+            // 破損や改ざんで想定外の文字列を要求先にしない
+            if (IsValidUrlTemplate(template))
             {
                 this.lastKnownUrlTemplate = template;
             }
         }
+
+        // 読み込みが完了してから確定する。呼び出し元のキャンセルで中断された場合は、次回また読み直す
+        this.lastKnownLoaded = true;
     }
+
+    /// <summary>https かつ座標のプレースホルダーを持つものだけを有効な URL テンプレートとする。</summary>
+    private static bool IsValidUrlTemplate(string template)
+        => template.StartsWith("https://", StringComparison.Ordinal)
+            && template.Contains("{z}", StringComparison.Ordinal)
+            && template.Contains("{x}", StringComparison.Ordinal)
+            && template.Contains("{y}", StringComparison.Ordinal);
 
     private async Task SaveLastKnownUrlTemplateAsync(string template, CancellationToken cancellationToken)
     {
@@ -246,8 +252,55 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
         TileFetchSession? session,
         CancellationToken cancellationToken = default)
     {
-        session?.ThrowIfStopped();
         string template = await this.ResolveUrlTemplateAsync(cancellationToken).ConfigureAwait(false);
+        return await this.FetchTileAsync(template, z, x, y, session, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<byte[]?> GetTileForSourceIdAsync(
+        int z,
+        int x,
+        int y,
+        string resolvedSourceId,
+        TileFetchSession? session,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(resolvedSourceId);
+
+        // 識別子（= キャッシュ鍵の元）に含まれる版の URL で取得する。再解決で版が変わっていても、
+        // 取得したタイルを別の版の鍵で保存しない。
+        string? template = this.TemplateFromSourceId(resolvedSourceId);
+        template ??= await this.ResolveUrlTemplateAsync(cancellationToken).ConfigureAwait(false);
+        return await this.FetchTileAsync(template, z, x, y, session, cancellationToken).ConfigureAwait(false);
+    }
+
+    private string? TemplateFromSourceId(string sourceId)
+    {
+        // 明示指定のテンプレートは版が変わらない
+        if (this.explicitUrlTemplate is not null)
+        {
+            return this.explicitUrlTemplate;
+        }
+
+        string prefix = BaseIdentifier + ":";
+        if (!sourceId.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string template = sourceId[prefix.Length..];
+        return IsValidUrlTemplate(template) ? template : null;
+    }
+
+    private async Task<byte[]?> FetchTileAsync(
+        string template,
+        int z,
+        int x,
+        int y,
+        TileFetchSession? session,
+        CancellationToken cancellationToken)
+    {
+        session?.ThrowIfStopped();
 
         string requestUrl = template
             .Replace("{z}", z.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)

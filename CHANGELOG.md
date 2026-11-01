@@ -90,3 +90,5 @@
 
 - 下位フォルダの再帰探索、各写真フォルダ基準の相対出力、出力名の先頭・末尾文字の設定と永続化（[#34](https://github.com/scottlz0310/photo-map-studio/issues/34)）
 - 写真一覧の段階読み込み、列挙・GPS確認・一括生成の進捗、経過時間、処理結果とタイル取得／キャッシュ件数、キャンセル後の候補保持
+
+[Unreleased]: https://github.com/scottlz0310/photo-map-studio/compare/v0.3.2...HEAD

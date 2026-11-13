@@ -1,3 +1,6 @@
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
+
 namespace PhotoMapStudio.Core.Tiles.Vector;
 
 /// <summary>1画像に限定した縮退描画の設定と欠落集計。他の画像と共有しない。</summary>

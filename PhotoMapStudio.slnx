@@ -8,9 +8,11 @@
   <Folder Name="/src/">
     <Project Path="src/PhotoMapStudio.App/PhotoMapStudio.App.csproj" />
     <Project Path="src/PhotoMapStudio.Core/PhotoMapStudio.Core.csproj" />
+    <Project Path="src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PhotoMapStudio.App.Tests/PhotoMapStudio.App.Tests.csproj" />
     <Project Path="tests/PhotoMapStudio.Core.Tests/PhotoMapStudio.Core.Tests.csproj" />
+    <Project Path="tests/PhotoMapStudio.Tiles.Tests/PhotoMapStudio.Tiles.Tests.csproj" />
   </Folder>
 </Solution>

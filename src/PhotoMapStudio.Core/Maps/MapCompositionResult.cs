@@ -1,4 +1,4 @@
-using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tiles;
 
 namespace PhotoMapStudio.Core.Maps;
 

@@ -3,7 +3,7 @@ using System.Net;
 
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
-using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tiles;
 
 using SkiaSharp;
 
@@ -102,7 +102,7 @@ public class FallbackCompositionIntegrationTests
             using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
             FallbackMapImageComposer composer = CreateVectorComposer(client, style);
             TileSource local = TileSources.CustomVector(
-                PhotoMapStudio.Core.Tiles.Vector.VectorSourceSpec.Create(path, PhotoMapStudio.Core.Tiles.Vector.VectorStyleSchema.OpenMapTiles),
+                PhotoMapStudio.Tiles.Vector.VectorSourceSpec.Create(path, PhotoMapStudio.Tiles.Vector.VectorStyleSchema.OpenMapTiles),
                 "© 検証");
 
             // プレビュー相当（切り替え有効）。撮影地点にタイルがなくても、OSM などへ取得に行かない
@@ -191,7 +191,7 @@ public class FallbackCompositionIntegrationTests
     }
 
     /// <summary>配信範囲外を模擬し、どのタイルも持たない（PMTiles に該当エントリがない）ベクタータイルソース。</summary>
-    private sealed class EmptyVectorTileSource : PhotoMapStudio.Core.Tiles.Vector.IVectorTileSource
+    private sealed class EmptyVectorTileSource : PhotoMapStudio.Tiles.Vector.IVectorTileSource
     {
         public string SourceId => "empty";
 

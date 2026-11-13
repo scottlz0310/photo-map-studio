@@ -1,0 +1,174 @@
+using System.Net;
+
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector.Pmtiles;
+
+namespace PhotoMapStudio.Tiles.Tests.Vector.Pmtiles;
+
+public sealed class HttpPmtilesByteSourceTests
+{
+    private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(handler(request));
+    }
+
+    /// <summary>HttpClient のタイムアウトと同じく、呼び出し元のトークンとは無関係に取り消しを送出するハンドラー。</summary>
+    private sealed class TimeoutHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TaskCanceledException("タイムアウトを模擬");
+        }
+    }
+
+    [Fact]
+    public async Task 正常な206応答で要求バイト列を取得できる()
+    {
+        byte[] expected = [0x01, 0x02, 0x03, 0x04];
+        using var handler = new StubHttpMessageHandler(req =>
+        {
+            Assert.Equal("bytes=10-13", req.Headers.Range?.ToString());
+            return new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(expected),
+            };
+        });
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        byte[] actual = await source.ReadRangeAsync(10, 4, session: null, CancellationToken.None);
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task 要求にUserAgentを付与する()
+    {
+        string? userAgent = null;
+        using var handler = new StubHttpMessageHandler(req =>
+        {
+            userAgent = req.Headers.UserAgent.ToString();
+            return new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent([0x01]),
+            };
+        });
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        await source.ReadRangeAsync(0, 1, session: null, CancellationToken.None);
+
+        Assert.False(string.IsNullOrWhiteSpace(userAgent));
+        Assert.Equal(UserAgentProvider.Value, userAgent);
+    }
+
+    [Fact]
+    public async Task 呼び出し元のキャンセルではないタイムアウトはTileFetchExceptionへ変換する()
+    {
+        using var handler = new TimeoutHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+        var session = new TileFetchSession(TimeProvider.System);
+
+        TileFetchException ex = await Assert.ThrowsAsync<TileFetchException>(
+            () => source.ReadRangeAsync(0, 10, session, CancellationToken.None));
+
+        Assert.Contains("タイムアウト", ex.Message, StringComparison.Ordinal);
+        Assert.Null(ex.StatusCode);
+        Assert.IsAssignableFrom<OperationCanceledException>(ex.InnerException);
+    }
+
+    [Fact]
+    public async Task 呼び出し元のキャンセルはOperationCanceledExceptionのまま伝播する()
+    {
+        using var handler = new TimeoutHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => source.ReadRangeAsync(0, 10, session: null, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task サーバーが200全体応答を返した場合は本文を読み込まず拒否する()
+    {
+        bool contentRead = false;
+        using var handler = new StubHttpMessageHandler(req =>
+        {
+            var content = new ByteArrayContent(new byte[1024 * 1024]); // 1MB のダミー全体データ
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = content,
+            };
+        });
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        TileFetchException ex = await Assert.ThrowsAsync<TileFetchException>(
+            () => source.ReadRangeAsync(0, 127, session: null, CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.OK, ex.StatusCode);
+        Assert.Contains("206 Partial Content", ex.Message, StringComparison.Ordinal);
+        Assert.False(contentRead);
+    }
+
+    [Fact]
+    public async Task 応答ステータスが503の場合はTileFetchExceptionを送出する()
+    {
+        using var handler = new StubHttpMessageHandler(req =>
+            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        TileFetchException ex = await Assert.ThrowsAsync<TileFetchException>(
+            () => source.ReadRangeAsync(100, 200, session: null, CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task 不正なバイト長の応答を受信した場合はTileFetchExceptionを送出する()
+    {
+        using var handler = new StubHttpMessageHandler(req =>
+            new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent([0x01, 0x02]), // 要求 4 バイトに対し 2 バイト
+            });
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        TileFetchException ex = await Assert.ThrowsAsync<TileFetchException>(
+            () => source.ReadRangeAsync(0, 4, session: null, CancellationToken.None));
+
+        Assert.Contains("バイト長が不正", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HttpPmtilesByteSourceは二重計数を防ぐため直接RecordFailureを呼ばない()
+    {
+        using var handler = new StubHttpMessageHandler(req =>
+            new HttpResponseMessage(HttpStatusCode.InternalServerError));
+
+        using var client = new HttpClient(handler);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+        var session = new TileFetchSession(TimeProvider.System);
+
+        // 5回失敗しても、HttpPmtilesByteSource 自体は RecordFailure を呼ばないため session.IsStopped は false のまま
+        for (int i = 0; i < 5; i++)
+        {
+            await Assert.ThrowsAsync<TileFetchException>(
+                () => source.ReadRangeAsync(0, 10, session, CancellationToken.None));
+        }
+
+        Assert.False(session.IsStopped);
+        Assert.Equal(5, session.Snapshot().NetworkCount);
+    }
+}

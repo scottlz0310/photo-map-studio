@@ -32,6 +32,20 @@ jobs:
       - name: Build
         run: dotnet build PhotoMapStudio.slnx -c Release -p:Platform=x64 --no-restore
 
+      - name: Test (Tiles)
+        run: dotnet test tests/PhotoMapStudio.Tiles.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
+
+      # 取得・デコード層のパッケージが、描画（SkiaSharp）・WinUI・Windows App SDK へ依存していないことを守る
+      - name: Verify Tiles package dependencies
+        shell: pwsh
+        run: |
+          $packages = dotnet list src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj package --include-transitive
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet list package failed' }
+          $forbidden = $packages | Select-String -Pattern 'SkiaSharp|WindowsAppSDK|Microsoft\.WinUI|Microsoft\.Windows\.SDK'
+          if ($forbidden) { $forbidden | ForEach-Object { Write-Error $_.Line }; throw 'PhotoMapStudio.Tiles must not depend on rendering or UI packages' }
+          dotnet pack src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj -c Release --no-build -o "$env:RUNNER_TEMP/nupkg"
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet pack failed' }
+
       - name: Test (Core)
         run: dotnet test tests/PhotoMapStudio.Core.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
 

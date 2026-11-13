@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PhotoMapStudio.Tiles</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet パッケージ。描画（SkiaSharp）・WinUI・Windows App SDK に依存しない、タイルの取得・キャッシュ・デコード層 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>PhotoMapStudio.Tiles</PackageId>
+    <Description>地図タイル（ラスター・ベクター MVT・PMTiles）の取得・キャッシュ・レート制御・デコード。描画には依存しない。</Description>
+    <Authors>scottlz0310</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/scottlz0310/photo-map-studio</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/scottlz0310/photo-map-studio</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- タイル取得の HttpClient 管理（IHttpClientFactory） -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.14" />
+  </ItemGroup>
+
+</Project>

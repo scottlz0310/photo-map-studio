@@ -4,7 +4,7 @@ using PhotoMapStudio.App.Models;
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
-using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tiles;
 
 namespace PhotoMapStudio.App.Services;
 

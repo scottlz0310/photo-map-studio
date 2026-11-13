@@ -6,8 +6,8 @@ using PhotoMapStudio.App.Services;
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
-using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Tests.TestSupport;
+using PhotoMapStudio.Tiles;
 
 namespace PhotoMapStudio.App.Tests.Services;
 

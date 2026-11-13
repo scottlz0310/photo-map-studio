@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 
 using PhotoMapStudio.Core.DependencyInjection;
-using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tiles;
 
 namespace PhotoMapStudio.Core.Tests.DependencyInjection;
 

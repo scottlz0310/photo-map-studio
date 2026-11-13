@@ -1,4 +1,6 @@
 using PhotoMapStudio.Core.Geo;
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 

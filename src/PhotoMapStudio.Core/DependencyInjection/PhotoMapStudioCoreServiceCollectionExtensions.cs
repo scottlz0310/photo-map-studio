@@ -3,8 +3,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
-using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
 
 namespace PhotoMapStudio.Core.DependencyInjection;
 

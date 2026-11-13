@@ -104,7 +104,7 @@ public class MainViewModelGenerationTests
         Assert.Contains($"使用量: {cache.Size / (1024.0 * 1024.0):F1} MB /", viewModel.TileCacheUsageText, StringComparison.Ordinal);
     }
 
-    private sealed class GrowingTileCache : PhotoMapStudio.Core.Tiles.ITileCache
+    private sealed class GrowingTileCache : PhotoMapStudio.Tiles.ITileCache
     {
         public long Size { get; set; }
 

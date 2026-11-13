@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
-using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tiles;
 
 namespace PhotoMapStudio.App.Models;
 

@@ -6,7 +6,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- タイルの取得・キャッシュ・レート制御・デコードを、NuGet パッケージ `PhotoMapStudio.Tiles`（`src/PhotoMapStudio.Tiles`）として切り出した。SkiaSharp・WinUI・Windows App SDK に依存せず、他のアプリ（PhotoGeoExplorer の最寄り道路名など）から使える。取得元の組み立て（キャッシュ・要求間隔・共有）は `VectorTileSourceFactory` が担い、`CustomVectorSourceFactory` は取得元に描画スタイルを組み合わせる。CI で、Tiles が描画・UI のパッケージへ依存していないことと `dotnet pack` の成功を確認する。公開先・版の運用は別途決める。
+
 ### Changed
+
+- タイル層の名前空間を `PhotoMapStudio.Core.Tiles` から `PhotoMapStudio.Tiles`（`.Vector`・`.Vector.Pmtiles`）へ変更した。描画・スタイルの型は `PhotoMapStudio.Core.Tiles.Vector` のまま。`TileFetchException.IsCacheOnlyMiss` を公開した。アプリの動作は変わらない。
 
 - `renovate.json` の `extends` から、中央プリセットで解除済みの非推奨プリセット（`options/automerge`・`options/schedule`・`options/security`）への参照を削除した。スケジュール・待機期間・自動マージ等は中央側で既に解除されているため更新の挙動は変わらず、Dependency Dashboard の警告表示が消える。
 - `tasks.md` を撤去した。進捗とタスクは Issue と Pull Request、リポジトリの外のハンドオフで管理する。

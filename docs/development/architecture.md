@@ -3,8 +3,9 @@
 ## 実行時の構成
 
 - `src/PhotoMapStudio.App`: WinUI 3 の画面、設定、MSIX マニフェスト
-- `src/PhotoMapStudio.Core`: EXIF 解析、タイル取得、キャッシュ、地図合成
-- `tests/`: UI とドメインの単体テスト
+- `src/PhotoMapStudio.Core`: EXIF 解析、地図合成、ベクター描画（SkiaSharp）
+- `src/PhotoMapStudio.Tiles`: タイルの取得・キャッシュ・レート制御・デコード。SkiaSharp・WinUI に依存せず、NuGet パッケージ `PhotoMapStudio.Tiles` として他のアプリからも使える。`PhotoMapStudio.Core` がこれを参照する
+- `tests/`: UI とドメインの単体テスト（`PhotoMapStudio.Tiles.Tests` は取得・キャッシュ・デコード、`PhotoMapStudio.Core.Tests` は描画・合成）
 
 一括生成の確定結果は `BatchGenerationService` が `BatchGenerationSummary.Issues` として返します。写真の相対パス・結果・理由コード・HTTP状態・例外型/HResultを処理側で保持し、UIの進捗文字列から再構成しません。途中中止までの結果も同じ契約で返します。履歴保存はDI境界の `IBatchGenerationHistoryStore` が担当し、`LocalState/batch-history` に実行単位のJSONを保存して直近30回を保持します。ViewModelは実行を調整し、表示用の日本語文言と履歴選択を担当します。履歴への保存失敗は写真の処理結果と分けて通知します。履歴内容とプライバシーは [ユーザーガイド](../user-guide.md#一括生成と結果履歴) と [プライバシーポリシー](../privacy-policy.html)を参照してください。
 

@@ -204,7 +204,7 @@ public sealed class PreviewViewModel : ObservableObject, IDisposable
 
     private void UpdateAttribution(PreviewGenerationSettings current)
     {
-        PhotoMapStudio.Core.Tiles.TileSource? source = current.SelectedTileSource.Source;
+        PhotoMapStudio.Tiles.TileSource? source = current.SelectedTileSource.Source;
         string value = current.SelectedTileSource.IsCustomVector
             ? current.CustomVectorAttribution.Trim()
             : current.SelectedTileSource.IsCustom ? current.CustomTileAttribution.Trim() : source?.Attribution ?? string.Empty;

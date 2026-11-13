@@ -5,8 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using PhotoMapStudio.Core.DependencyInjection;
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
+using PhotoMapStudio.Core.Tests.TestSupport;
 using PhotoMapStudio.Core.Tests.Tiles;
-using PhotoMapStudio.Core.Tiles;
+using PhotoMapStudio.Tiles;
 
 namespace PhotoMapStudio.Core.Tests.Maps;
 

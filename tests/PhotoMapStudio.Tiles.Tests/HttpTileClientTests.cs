@@ -44,6 +44,19 @@ public class HttpTileClientTests
         Assert.Equal(UserAgentProvider.Value, factory.Requests[0].Headers.UserAgent.ToString());
     }
 
+    [Fact]
+    public async Task クライアントにUserAgentが設定されていればそれを表明する()
+    {
+        const string appUserAgent = "SampleApp/2.0 (+https://example.com/sample)";
+        using var factory = StubHttpClientFactory.WithStatus(HttpStatusCode.OK);
+        factory.ConfigureClient = client => client.DefaultRequestHeaders.UserAgent.ParseAdd(appUserAgent);
+        var tileClient = new HttpTileClient(factory);
+
+        await tileClient.GetTileAsync(Source, 15, 29105, 12903, CancellationToken.None);
+
+        Assert.Equal(appUserAgent, factory.Requests[0].Headers.UserAgent.ToString());
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.Forbidden)]

@@ -35,10 +35,10 @@ public sealed class HttpTileClient : ITileClient
         Uri requestUri = source.BuildTileUri(zoom, x, y);
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 
-        // ライブラリ既定の User-Agent は OSM でブロック対象のため、必ず自前の値を表明する
-        request.Headers.UserAgent.ParseAdd(UserAgentProvider.Value);
-
         HttpClient client = this.httpClientFactory.CreateClient(HttpClientName);
+
+        // ライブラリ既定の User-Agent は OSM でブロック対象のため、必ず自前の値を表明する（利用側の設定があればそれを使う）
+        UserAgentProvider.ApplyDefault(request, client);
 
         try
         {

@@ -52,7 +52,7 @@ public sealed class HttpPmtilesByteSource : IPmtilesByteSource
             session?.RecordRequest();
 
             using var request = new HttpRequestMessage(HttpMethod.Get, this.archiveUri);
-            request.Headers.UserAgent.ParseAdd(UserAgentProvider.Value);
+            UserAgentProvider.ApplyDefault(request, this.httpClient);
             request.Headers.Range = new RangeHeaderValue(offset, offset + length - 1);
 
             using var response = await this.httpClient.SendAsync(

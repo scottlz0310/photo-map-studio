@@ -122,6 +122,22 @@ public class OpenFreeMapTileSourceTests
     }
 
     [Fact]
+    public async Task クライアントにUserAgentが設定されていればTileJSONとタイルの要求でそれを表明する()
+    {
+        const string appUserAgent = "SampleApp/2.0 (+https://example.com/sample)";
+        using var factory = StubHttpClientFactory.WithStatus(HttpStatusCode.OK, [1]);
+        factory.ConfigureClient = c => c.DefaultRequestHeaders.UserAgent.ParseAdd(appUserAgent);
+        using var client = factory.CreateClient("test");
+
+        // テンプレートを指定しないので、TileJSON の要求とタイルの要求の両方が発生する
+        using var source = new OpenFreeMapTileSource(client);
+        await source.GetTileAsync(14, 14675, 5991, CancellationToken.None);
+
+        Assert.True(factory.Requests.Count >= 2);
+        Assert.All(factory.Requests, request => Assert.Equal(appUserAgent, request.Headers.UserAgent.ToString()));
+    }
+
+    [Fact]
     public async Task 存在しないタイル404の場合はnullを返す()
     {
         using var factory = StubHttpClientFactory.WithStatus(HttpStatusCode.NotFound);

@@ -155,7 +155,7 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
         {
             var requestUri = new Uri(this.tileJsonUrl, UriKind.Absolute);
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.UserAgent.ParseAdd(UserAgentProvider.Value);
+            UserAgentProvider.ApplyDefault(request, this.httpClient);
 
             using HttpResponseMessage response = await this.httpClient
                 .SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken)
@@ -309,7 +309,7 @@ public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
 
         var requestUri = new Uri(requestUrl, UriKind.Absolute);
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.UserAgent.ParseAdd(UserAgentProvider.Value);
+        UserAgentProvider.ApplyDefault(request, this.httpClient);
 
         try
         {

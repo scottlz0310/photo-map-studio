@@ -14,6 +14,9 @@ internal sealed class StubHttpClientFactory : IHttpClientFactory, IDisposable
 
     public IReadOnlyList<HttpRequestMessage> Requests => this.handler.Requests;
 
+    /// <summary>作成するクライアントへの設定（アプリが <c>AddHttpClient</c> で行う設定の再現）。</summary>
+    public Action<HttpClient>? ConfigureClient { get; set; }
+
     public static StubHttpClientFactory WithStatus(HttpStatusCode statusCode, byte[]? content = null)
         => new(_ => new HttpResponseMessage(statusCode)
         {
@@ -29,7 +32,12 @@ internal sealed class StubHttpClientFactory : IHttpClientFactory, IDisposable
             Content = new FailingContent(failure),
         });
 
-    public HttpClient CreateClient(string name) => new(this.handler, disposeHandler: false);
+    public HttpClient CreateClient(string name)
+    {
+        var client = new HttpClient(this.handler, disposeHandler: false);
+        this.ConfigureClient?.Invoke(client);
+        return client;
+    }
 
     public void Dispose() => this.handler.Dispose();
 

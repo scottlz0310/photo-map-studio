@@ -37,8 +37,9 @@ $escapedProject = [System.Security.SecurityElement]::Escape($projectPath)
 @'
 using System.Globalization;
 using PhotoMapStudio.Core.Geo;
-using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
 using SkiaSharp;
 
 string cache = args[0], output = args[1];

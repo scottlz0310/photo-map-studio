@@ -7,10 +7,19 @@ namespace PhotoMapStudio.Tiles.Vector.Pmtiles;
 /// </summary>
 public enum PmtilesCompression
 {
+    /// <summary>不明。</summary>
     Unknown = 0,
+
+    /// <summary>圧縮なし。</summary>
     None = 1,
+
+    /// <summary>gzip。</summary>
     Gzip = 2,
+
+    /// <summary>Brotli。</summary>
     Brotli = 3,
+
+    /// <summary>Zstandard。</summary>
     Zstd = 4,
 }
 
@@ -19,11 +28,22 @@ public enum PmtilesCompression
 /// </summary>
 public enum PmtilesTileType
 {
+    /// <summary>不明。</summary>
     Unknown = 0,
+
+    /// <summary>Mapbox Vector Tile（ベクタータイル）。</summary>
     Mvt = 1,
+
+    /// <summary>PNG 画像。</summary>
     Png = 2,
+
+    /// <summary>JPEG 画像。</summary>
     Jpeg = 3,
+
+    /// <summary>WebP 画像。</summary>
     Webp = 4,
+
+    /// <summary>AVIF 画像。</summary>
     Avif = 5,
 }
 
@@ -32,33 +52,84 @@ public enum PmtilesTileType
 /// </summary>
 public sealed record PmtilesHeader
 {
+    /// <summary>ヘッダーのバイト数。</summary>
     public const int HeaderSize = 127;
+
     private static readonly byte[] Magic = "PMTiles"u8.ToArray();
 
+    /// <summary>PMTiles 仕様のバージョン（v3 のみ対応）。</summary>
     public byte Version { get; init; } = 3;
+
+    /// <summary>ルートディレクトリのファイル先頭からのバイト位置。</summary>
     public ulong RootDirectoryOffset { get; init; }
+
+    /// <summary>ルートディレクトリのバイト長。</summary>
     public ulong RootDirectoryLength { get; init; }
+
+    /// <summary>JSON メタデータのファイル先頭からのバイト位置。</summary>
     public ulong JsonMetadataOffset { get; init; }
+
+    /// <summary>JSON メタデータのバイト長。</summary>
     public ulong JsonMetadataLength { get; init; }
+
+    /// <summary>リーフディレクトリ領域のファイル先頭からのバイト位置。</summary>
     public ulong LeafDirectoriesOffset { get; init; }
+
+    /// <summary>リーフディレクトリ領域のバイト長。</summary>
     public ulong LeafDirectoriesLength { get; init; }
+
+    /// <summary>タイルデータ領域のファイル先頭からのバイト位置。</summary>
     public ulong TileDataOffset { get; init; }
+
+    /// <summary>タイルデータ領域のバイト長。</summary>
     public ulong TileDataLength { get; init; }
+
+    /// <summary>アーカイブ内でアドレスできるタイルの数（0 は不明）。</summary>
     public ulong AddressedTilesCount { get; init; }
+
+    /// <summary>ディレクトリ内のタイルエントリの数（0 は不明）。</summary>
     public ulong TileEntriesCount { get; init; }
+
+    /// <summary>重複を除いたタイルの内容の数（0 は不明）。</summary>
     public ulong TileContentsCount { get; init; }
+
+    /// <summary>タイルデータが、タイル ID の順に並んでいるか。</summary>
     public bool Clustered { get; init; }
+
+    /// <summary>ディレクトリと JSON メタデータの圧縮。</summary>
     public PmtilesCompression InternalCompression { get; init; }
+
+    /// <summary>タイルデータの圧縮。</summary>
     public PmtilesCompression TileCompression { get; init; }
+
+    /// <summary>タイルの種別。</summary>
     public PmtilesTileType TileType { get; init; }
+
+    /// <summary>収録している最小のズームレベル。</summary>
     public byte MinZoom { get; init; }
+
+    /// <summary>収録している最大のズームレベル。</summary>
     public byte MaxZoom { get; init; }
+
+    /// <summary>収録範囲の西端の経度（度）。</summary>
     public double MinLon { get; init; }
+
+    /// <summary>収録範囲の南端の緯度（度）。</summary>
     public double MinLat { get; init; }
+
+    /// <summary>収録範囲の東端の経度（度）。</summary>
     public double MaxLon { get; init; }
+
+    /// <summary>収録範囲の北端の緯度（度）。</summary>
     public double MaxLat { get; init; }
+
+    /// <summary>表示の中心とするズームレベル。</summary>
     public byte CenterZoom { get; init; }
+
+    /// <summary>表示の中心の経度（度）。</summary>
     public double CenterLon { get; init; }
+
+    /// <summary>表示の中心の緯度（度）。</summary>
     public double CenterLat { get; init; }
 
     /// <summary>
@@ -118,10 +189,13 @@ public sealed record PmtilesHeader
 /// </summary>
 public sealed class PmtilesEntry
 {
+    /// <summary>Hilbert 曲線上のタイル ID（先頭のタイル、または連長の開始）。</summary>
     public ulong TileId { get; set; }
 
+    /// <summary>タイルデータ領域（リーフディレクトリ参照のときはリーフディレクトリ領域）の先頭からのバイト位置。</summary>
     public long Offset { get; set; }
 
+    /// <summary>タイルまたはリーフディレクトリのバイト長。</summary>
     public uint Length { get; set; }
 
     /// <summary>

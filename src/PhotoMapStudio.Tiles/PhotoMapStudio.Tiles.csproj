@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>PhotoMapStudio.Tiles</RootNamespace>
+    <!-- 公開 API の XML ドキュメントをパッケージへ含め、未記載（CS1591）をビルドエラーにする -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <!-- NuGet パッケージ。描画（SkiaSharp）・WinUI・Windows App SDK に依存しない、タイルの取得・キャッシュ・デコード層 -->

@@ -10,6 +10,11 @@ public sealed class FilePmtilesByteSource : IPmtilesByteSource
     private readonly SafeFileHandle fileHandle;
     private bool disposed;
 
+    /// <summary>
+    /// 指定のファイルを読み取り専用で開く。使用中は、ファイルの差し替え・削除をできないように（他の読み取りは許可して）ロックする。
+    /// </summary>
+    /// <param name="filePath">PMTiles ファイルのパス。</param>
+    /// <exception cref="FileNotFoundException">ファイルが存在しない。</exception>
     public FilePmtilesByteSource(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);

@@ -5,6 +5,7 @@
 | 文書 | 内容 |
 | --- | --- |
 | [architecture.md](architecture.md) | 実行時の構成、配布（MSIX・App Installer）、リリースフロー、署名 |
+| [releasing-tiles.md](releasing-tiles.md) | NuGet パッケージ `PhotoMapStudio.Tiles` の公開手順（nuget.org の Trusted Publishing、タグ `tiles-vX.Y.Z`） |
 | [vector-map-architecture.md](vector-map-architecture.md) | ベクタータイル直接描画の設計仕様（取得・キャッシュ・スタイル・描画） |
 | [photo-map-studio-migration-spec.md](photo-map-studio-migration-spec.md) | auto-map-generator からの移行仕様（引き継いだ要件と処理アルゴリズム） |
 | [issue-34-validation.md](issue-34-validation.md) | ローカル実写真による段階検証の記録 |

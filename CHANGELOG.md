@@ -12,6 +12,7 @@
 - `PhotoMapStudio.Tiles` を nuget.org へ公開するワークフロー `.github/workflows/publish-tiles.yml` と、手順書 `docs/development/releasing-tiles.md` を追加した。`tiles-vX.Y.Z` のタグの push で起動し（アプリのリリース `vX.Y.Z` とは独立）、タグが `main` のコミットであることの検証・テスト・依存の検査をしたうえで、環境 `nuget`（承認者を設定できる）の承認を待ち、Trusted Publishing（OIDC。長期の API キーなし）で push する。環境に承認者が設定されていない場合（GitHub は未作成の環境を保護ルールなしで自動作成する）は、push の前に失敗する。事前設定（環境と承認者・変数 `NUGET_USER`・nuget.org のポリシー）が済むまでは公開されない。
 - `PhotoMapStudio.Tiles` の公開 API の XML ドキュメントを、未記載だった 45 メンバー（PMTiles のヘッダー・エントリー・列挙値、`VectorGeometryType`、`FilePmtilesByteSource` のコンストラクターなど）に追加し、`GenerateDocumentationFile` を有効にした。パッケージに XML ドキュメントが含まれ、未記載の公開メンバーはビルドエラーになる。
 - `PhotoMapStudio.Tiles` のパッケージに README（`src/PhotoMapStudio.Tiles/README.md`。概要・使い方・User-Agent の設定）を含め、nuget.org のパッケージのページに表示されるようにした。使い方のサンプルコードは、パッケージを参照する別のプロジェクトでコンパイルできることを確認した。
+- リポジトリの README に、`PhotoMapStudio.Tiles` の NuGet バッジ（最新の安定版）と、パッケージの README・公開手順へのリンクを追加した。
 
 ### Changed
 

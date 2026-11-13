@@ -8,6 +8,11 @@ namespace PhotoMapStudio.Tiles.Vector;
 /// <summary>
 /// OpenFreeMap のパブリックベクタータイル配信（MVT / PBF）からタイルを取得する <see cref="IVectorTileSource"/> 実装。
 /// </summary>
+/// <remarks>
+/// 配信元へ表明する User-Agent は、渡した <see cref="HttpClient"/> の <see cref="HttpClient.DefaultRequestHeaders"/> の <c>UserAgent</c> が
+/// 設定されていればそれを使い、設定されていなければ <c>PhotoMapStudio/&lt;版&gt;</c> を表明する。このライブラリを使う他のアプリは、
+/// 自分の名称と連絡先を設定する。
+/// </remarks>
 public sealed class OpenFreeMapTileSource : IVectorTileSource, IDisposable
 {
     /// <summary>TileJSON メタデータの既定 URL。</summary>

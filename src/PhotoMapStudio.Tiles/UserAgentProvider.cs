@@ -5,7 +5,7 @@ namespace PhotoMapStudio.Tiles;
 /// <summary>
 /// タイル取得時に表明する User-Agent を一元管理する（NFR-NET-02）。
 /// </summary>
-public static class UserAgentProvider
+internal static class UserAgentProvider
 {
     private const string ProductName = "PhotoMapStudio";
     private const string ProjectUrl = "https://github.com/scottlz0310/photo-map-studio";

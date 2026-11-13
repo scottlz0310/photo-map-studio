@@ -5,6 +5,11 @@ namespace PhotoMapStudio.Tiles;
 /// <summary>
 /// <see cref="HttpClient"/> によるタイル取得。
 /// </summary>
+/// <remarks>
+/// 配信元へ表明する User-Agent は、<see cref="HttpClient.DefaultRequestHeaders"/> の <c>UserAgent</c> が設定されていればそれを使い、
+/// 設定されていなければ <c>PhotoMapStudio/&lt;版&gt;</c> を表明する。このライブラリを使う他のアプリは、自分の名称と連絡先を設定する
+/// （<c>AddHttpClient</c> の構成など）。
+/// </remarks>
 public sealed class HttpTileClient : ITileClient
 {
     /// <summary><see cref="IHttpClientFactory"/> から取得するクライアントの名前。</summary>

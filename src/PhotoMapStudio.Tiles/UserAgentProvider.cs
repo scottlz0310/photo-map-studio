@@ -10,8 +10,32 @@ public static class UserAgentProvider
     private const string ProductName = "PhotoMapStudio";
     private const string ProjectUrl = "https://github.com/scottlz0310/photo-map-studio";
 
-    /// <summary>タイル配信元へ表明する User-Agent。</summary>
+    /// <summary>
+    /// タイル配信元へ表明する、このライブラリの既定の User-Agent。
+    /// </summary>
+    /// <remarks>
+    /// 他のアプリがこのライブラリを使うときは、自分の名称と連絡先で表明するため、
+    /// <see cref="HttpClient.DefaultRequestHeaders"/> の <c>UserAgent</c> を設定する（<c>AddHttpClient</c> の構成など）。
+    /// 設定されていれば、この値は使われない。
+    /// </remarks>
     public static string Value { get; } = Build();
+
+    /// <summary>
+    /// <paramref name="client"/> に User-Agent が設定されていないときだけ、既定の値を要求へ付ける。
+    /// </summary>
+    /// <remarks>
+    /// 要求に明示した User-Agent は、クライアントの既定値より優先される。
+    /// 既定値を常に付けると、利用側が設定した User-Agent が上書きされるため、設定の有無で分ける。
+    /// </remarks>
+    /// <param name="request">送信する要求。</param>
+    /// <param name="client">要求を送るクライアント。</param>
+    internal static void ApplyDefault(HttpRequestMessage request, HttpClient client)
+    {
+        if (client.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            request.Headers.UserAgent.ParseAdd(Value);
+        }
+    }
 
     private static string Build()
     {

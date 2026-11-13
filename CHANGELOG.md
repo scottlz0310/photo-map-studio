@@ -13,7 +13,7 @@
 ### Changed
 
 - タイル層の名前空間を `PhotoMapStudio.Core.Tiles` から `PhotoMapStudio.Tiles`（`.Vector`・`.Vector.Pmtiles`）へ変更した。描画・スタイルの型は `PhotoMapStudio.Core.Tiles.Vector` のまま。`TileFetchException.IsCacheOnlyMiss` を公開した。アプリの動作は変わらない。
-
+- タイルの取得（`HttpTileClient`・`OpenFreeMapTileSource`・`HttpPmtilesByteSource`）の User-Agent を、`HttpClient.DefaultRequestHeaders.UserAgent` が設定されていればそれを使うようにした。`PhotoMapStudio.Tiles` を使う他のアプリが、自分の名称と連絡先で配信元へ表明できる（`AddHttpClient` の構成で設定する）。設定がなければ、これまでどおり `PhotoMapStudio/<版>` を表明するため、このアプリの動作は変わらない。
 - `renovate.json` の `extends` から、中央プリセットで解除済みの非推奨プリセット（`options/automerge`・`options/schedule`・`options/security`）への参照を削除した。スケジュール・待機期間・自動マージ等は中央側で既に解除されているため更新の挙動は変わらず、Dependency Dashboard の警告表示が消える。
 - `tasks.md` を撤去した。進捗とタスクは Issue と Pull Request、リポジトリの外のハンドオフで管理する。
 

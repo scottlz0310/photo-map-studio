@@ -66,6 +66,29 @@ public sealed class HttpPmtilesByteSourceTests
     }
 
     [Fact]
+    public async Task クライアントにUserAgentが設定されていればそれを付与する()
+    {
+        const string appUserAgent = "SampleApp/2.0 (+https://example.com/sample)";
+        string? userAgent = null;
+        using var handler = new StubHttpMessageHandler(req =>
+        {
+            userAgent = req.Headers.UserAgent.ToString();
+            return new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent([0x01]),
+            };
+        });
+
+        using var client = new HttpClient(handler);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(appUserAgent);
+        using var source = new HttpPmtilesByteSource(client, new Uri("https://example.com/test.pmtiles"));
+
+        await source.ReadRangeAsync(0, 1, session: null, CancellationToken.None);
+
+        Assert.Equal(appUserAgent, userAgent);
+    }
+
+    [Fact]
     public async Task 呼び出し元のキャンセルではないタイムアウトはTileFetchExceptionへ変換する()
     {
         using var handler = new TimeoutHttpMessageHandler();

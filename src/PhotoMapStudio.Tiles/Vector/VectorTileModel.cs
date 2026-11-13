@@ -5,9 +5,16 @@ namespace PhotoMapStudio.Tiles.Vector;
 /// </summary>
 public enum VectorGeometryType
 {
+    /// <summary>不明。</summary>
     Unknown = 0,
+
+    /// <summary>点。</summary>
     Point = 1,
+
+    /// <summary>線（折れ線）。</summary>
     LineString = 2,
+
+    /// <summary>面（ポリゴン）。</summary>
     Polygon = 3,
 }
 

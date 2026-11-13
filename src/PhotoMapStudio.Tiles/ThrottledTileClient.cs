@@ -17,6 +17,7 @@ public sealed class ThrottledTileClient : ITileClient, IDisposable
     /// </summary>
     /// <param name="inner">実際にタイルを取得するクライアント。</param>
     /// <param name="timeProvider">間隔制御に使う時刻源。</param>
+    /// <param name="trafficController">同じ配信ホストへのプレビューと一括生成で共有する制限。省略すると、このクライアント専用のものを使う。</param>
     public ThrottledTileClient(ITileClient inner, TimeProvider? timeProvider = null, TileTrafficController? trafficController = null)
     {
         ArgumentNullException.ThrowIfNull(inner);

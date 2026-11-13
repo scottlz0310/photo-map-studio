@@ -12,9 +12,10 @@
 
 ## 事前設定（初回だけ）
 
-次の 3 つを、リポジトリの所有者が設定します。どれが欠けても、ワークフローは公開の前に止まります。
+次の 3 つを、リポジトリの所有者が設定します。どれが欠けても、ワークフローは公開（nuget.org への push）の前に止まります。
 
-1. **GitHub の環境 `nuget`**: Settings → Environments → New environment で `nuget` を作り、Required reviewers に承認者を設定する。設定すると、タグを push しても、承認するまで公開されない（誤ったタグでの公開を防ぐ）。
+1. **GitHub の環境 `nuget`**: Settings → Environments → New environment で `nuget` を作り、Required reviewers に承認者を設定する。設定すると、タグを push しても、承認するまで `publish` ジョブは始まらない（誤ったタグでの公開を防ぐ）。
+   - GitHub は、存在しない環境を、保護ルールなしで自動作成する。そのため `publish` ジョブは、最初の step で環境 `nuget` に承認者が設定されていることを検査し、設定されていない（または取得できない）場合は、OIDC ログインと push の前に失敗する。検査するのは「承認者が設定されていること」だけで、承認者の適切さ（自己承認の可否など）は見ない。
 2. **Actions の変数 `NUGET_USER`**: Settings → Secrets and variables → Actions → Variables に、nuget.org の**プロフィール名**（メールアドレスではない）を設定する。
 3. **nuget.org の Trusted Publishing ポリシー**: nuget.org にログインし、ユーザー名 → Trusted Publishing でポリシーを追加する。
 

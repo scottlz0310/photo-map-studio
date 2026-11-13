@@ -91,13 +91,31 @@ jobs:
   publish:
     needs: pack
     runs-on: ubuntu-latest
-    # 承認者（Required reviewers）を設定すると、タグを push しても承認するまで公開されない
+    # 環境 `nuget` に承認者（Required reviewers）を設定すると、タグを push しても承認するまでこのジョブは始まらない。
+    # 環境が無いと GitHub は保護ルールなしで自動作成するため、設定漏れは次の検査の step で止める。
     environment: nuget
     permissions:
       contents: read
       # nuget.org へ渡す OIDC トークンの発行に必要
       id-token: write
     steps:
+      # 承認者の設定がない（環境を自動作成された、設定を取得できない）ときは、OIDC ログインと push の前に失敗させる。
+      # 取得は、リポジトリの read 権限だけで足りる（contents: read の GITHUB_TOKEN で確認済み）。
+      # 検査するのは承認者が設定されていることだけで、承認者が適切か（自己承認の可否など）は見ない。
+      - name: Verify the environment requires reviewers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! reviewer_rules=$(gh api "repos/${GITHUB_REPOSITORY}/environments/nuget" --jq '[.protection_rules[]? | select((.reviewers // []) | length > 0)] | length'); then
+            echo "::error::環境 nuget の保護ルールを取得できませんでした。承認者の設定を確認できないため、公開を中止します。"
+            exit 1
+          fi
+          if [ "${reviewer_rules}" -lt 1 ]; then
+            echo "::error::環境 nuget に Required reviewers が設定されていません。Settings → Environments → nuget で承認者を設定してから、再実行してください。公開を中止します。"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nupkg

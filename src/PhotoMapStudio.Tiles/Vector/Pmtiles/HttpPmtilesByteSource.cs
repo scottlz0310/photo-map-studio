@@ -6,6 +6,11 @@ namespace PhotoMapStudio.Tiles.Vector.Pmtiles;
 /// <summary>
 /// HTTP Range Request を使用してリモート PMTiles アーカイブからバイト範囲を読み取るバイトソース。
 /// </summary>
+/// <remarks>
+/// 配信元へ表明する User-Agent は、渡した <see cref="HttpClient"/> の <see cref="HttpClient.DefaultRequestHeaders"/> の <c>UserAgent</c> が
+/// 設定されていればそれを使い、設定されていなければ <c>PhotoMapStudio/&lt;版&gt;</c> を表明する。このライブラリを使う他のアプリは、
+/// 自分の名称と連絡先を設定する。
+/// </remarks>
 public sealed class HttpPmtilesByteSource : IPmtilesByteSource
 {
     private readonly HttpClient httpClient;

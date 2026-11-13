@@ -107,6 +107,12 @@ PhotoMapStudio/
 └── docs/                       # ユーザーガイド・プライバシーポリシー（設計・検証の記録は development/）
 ```
 
+### NuGet パッケージ
+
+[![NuGet](https://img.shields.io/nuget/v/PhotoMapStudio.Tiles.svg)](https://www.nuget.org/packages/PhotoMapStudio.Tiles/)
+
+タイルの取得・キャッシュ・レート制御・デコードは、NuGet パッケージ [`PhotoMapStudio.Tiles`](https://www.nuget.org/packages/PhotoMapStudio.Tiles/) として公開しています（SkiaSharp・WinUI に依存しません）。使い方は [パッケージの README](src/PhotoMapStudio.Tiles/README.md)、公開手順は [releasing-tiles.md](docs/development/releasing-tiles.md) を参照してください。
+
 ## ライセンス
 
 本プロジェクトは [MIT License](LICENSE) の下で公開されています。

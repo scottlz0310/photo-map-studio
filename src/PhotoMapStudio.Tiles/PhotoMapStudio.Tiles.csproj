@@ -19,7 +19,13 @@
     <PackageProjectUrl>https://github.com/scottlz0310/photo-map-studio</PackageProjectUrl>
     <RepositoryUrl>https://github.com/scottlz0310/photo-map-studio</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <!-- nuget.org のパッケージのページに表示する README -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- タイル取得の HttpClient 管理（IHttpClientFactory） -->

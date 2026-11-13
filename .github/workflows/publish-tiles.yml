@@ -1,0 +1,126 @@
+name: Publish Tiles Package
+
+# PhotoMapStudio.Tiles（タイルの取得・キャッシュ・デコード）を nuget.org へ公開する。
+# `tiles-vX.Y.Z` のタグを push したときだけ動く。アプリ（MSIX）のリリース（`vX.Y.Z`、publish-release.yml）とは独立している。
+# 公開は nuget.org の Trusted Publishing（OIDC）で行い、長期の API キーは使わない。
+# 事前設定と手順は docs/development/releasing-tiles.md を参照する。
+#
+#   pack    : タグを検証し、テスト・依存の検査をして、タグの版で nupkg を作る
+#   publish : 環境 `nuget`（承認者を設定できる）で、OIDC で一時 API キーを得て nuget.org へ push する
+
+on:
+  push:
+    tags: ['tiles-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # タグのコミットが main にあることの検証に、main の履歴が要る
+          fetch-depth: 0
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ($env:TAG -notmatch '^tiles-v\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw "タグは tiles-v<major>.<minor>.<patch>（先行版は -<識別子> を付ける）の形式である必要があります: $env:TAG"
+          }
+          $version = $env:TAG.Substring('tiles-v'.Length)
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Verify the tagged commit is on main
+        shell: pwsh
+        run: |
+          git fetch origin main
+          if ($LASTEXITCODE -ne 0) { throw 'main の取得に失敗しました。' }
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "タグのコミット $env:GITHUB_SHA は main に含まれていません。main にマージしたコミットへタグを付けてください。"
+          }
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.404
+
+      # アプリ（WinUI）は公開に関係しないため、Tiles とそのテストだけを復元する
+      - name: Restore
+        run: dotnet restore tests/PhotoMapStudio.Tiles.Tests/PhotoMapStudio.Tiles.Tests.csproj
+
+      - name: Test (Tiles)
+        run: dotnet test tests/PhotoMapStudio.Tiles.Tests -c Release --no-restore
+
+      - name: Pack
+        run: >
+          dotnet pack src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj
+          -c Release
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:ContinuousIntegrationBuild=true
+          -o "${{ runner.temp }}/nupkg"
+
+      # 描画（SkiaSharp）・WinUI・Windows App SDK へ依存するパッケージを公開しない（ci.yml と同じ検査）
+      - name: Verify package dependencies
+        shell: pwsh
+        run: |
+          $packages = dotnet list src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj package --include-transitive
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet list package failed' }
+          $forbidden = $packages | Select-String -Pattern 'SkiaSharp|WindowsAppSDK|Microsoft\.WinUI|Microsoft\.Windows\.SDK'
+          if ($forbidden) { $forbidden | ForEach-Object { Write-Error $_.Line }; throw 'PhotoMapStudio.Tiles must not depend on rendering or UI packages' }
+          $nupkg = Get-ChildItem "${{ runner.temp }}/nupkg" -Filter '*.nupkg'
+          if ($nupkg.Count -ne 1) { throw "nupkg が 1 つではありません: $($nupkg.Name -join ', ')" }
+          $expected = "PhotoMapStudio.Tiles.${{ steps.version.outputs.version }}.nupkg"
+          if ($nupkg[0].Name -ne $expected) { throw "nupkg の名前が想定と違います: $($nupkg[0].Name)（想定: $expected）" }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nupkg
+          path: ${{ runner.temp }}/nupkg/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    # 承認者（Required reviewers）を設定すると、タグを push しても承認するまで公開されない
+    environment: nuget
+    permissions:
+      contents: read
+      # nuget.org へ渡す OIDC トークンの発行に必要
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nupkg
+          path: nupkg
+
+      - name: Check NuGet user
+        shell: pwsh
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_USER)) {
+            throw 'Actions の変数 NUGET_USER（nuget.org のプロフィール名。メールアドレスではない）が未設定です。docs/development/releasing-tiles.md を参照してください。'
+          }
+
+      # 一時 API キーの有効期間は 1 時間で、トークン 1 つにつき 1 つしか取得できないため、push の直前に取得する
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      # 同じ版が既にあるときは失敗させる（--skip-duplicate は、公開済みの版を見落とすため使わない）
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "nupkg/PhotoMapStudio.Tiles.${{ needs.pack.outputs.version }}.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json

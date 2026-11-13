@@ -8,7 +8,8 @@
 
 ### Added
 
-- タイルの取得・キャッシュ・レート制御・デコードを、NuGet パッケージ `PhotoMapStudio.Tiles`（`src/PhotoMapStudio.Tiles`）として切り出した。SkiaSharp・WinUI・Windows App SDK に依存せず、他のアプリ（PhotoGeoExplorer の最寄り道路名など）から使える。取得元の組み立て（キャッシュ・要求間隔・共有）は `VectorTileSourceFactory` が担い、`CustomVectorSourceFactory` は取得元に描画スタイルを組み合わせる。CI で、Tiles が描画・UI のパッケージへ依存していないことと `dotnet pack` の成功を確認する。公開先・版の運用は別途決める。
+- タイルの取得・キャッシュ・レート制御・デコードを、NuGet パッケージ `PhotoMapStudio.Tiles`（`src/PhotoMapStudio.Tiles`）として切り出した。SkiaSharp・WinUI・Windows App SDK に依存せず、他のアプリ（PhotoGeoExplorer の最寄り道路名など）から使える。取得元の組み立て（キャッシュ・要求間隔・共有）は `VectorTileSourceFactory` が担い、`CustomVectorSourceFactory` は取得元に描画スタイルを組み合わせる。CI で、Tiles が描画・UI のパッケージへ依存していないことと `dotnet pack` の成功を確認する。
+- `PhotoMapStudio.Tiles` を nuget.org へ公開するワークフロー `.github/workflows/publish-tiles.yml` と、手順書 `docs/development/releasing-tiles.md` を追加した。`tiles-vX.Y.Z` のタグの push で起動し（アプリのリリース `vX.Y.Z` とは独立）、タグが `main` のコミットであることの検証・テスト・依存の検査をしたうえで、環境 `nuget`（承認者を設定できる）の承認を待ち、Trusted Publishing（OIDC。長期の API キーなし）で push する。事前設定（環境・変数 `NUGET_USER`・nuget.org のポリシー）が済むまでは公開されない。
 
 ### Changed
 

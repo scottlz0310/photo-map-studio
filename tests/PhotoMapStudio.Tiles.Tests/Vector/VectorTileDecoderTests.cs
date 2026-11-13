@@ -112,6 +112,125 @@ public class VectorTileDecoderTests
         Assert.Equal(new VectorPoint(500, 600), feature.GeometryParts[0][0]);
     }
 
+    // 道路名の取得（OpenMapTiles の transportation_name レイヤー）で読む属性。
+    // 国道（名称と、複数の路線番号を ';' で連結した ref）、名称と name:ja がある通り、名称のない路線（ref だけ）
+    [Theory]
+    [InlineData(0, "国道53号", null, "53;373", "trunk", "road")]
+    [InlineData(1, "Marunouchi Naka-dori", "丸の内仲通り", null, "tertiary", null)]
+    [InlineData(2, null, null, "203", "secondary", "road")]
+    public void 道路名レイヤーの線と道路名の属性を読める(
+        int index,
+        string? name,
+        string? nameJa,
+        string? route,
+        string? roadClass,
+        string? network)
+    {
+        VectorTile tile = VectorTileDecoder.Decode(CreateSampleRoadNameTile());
+
+        VectorTileLayer? layer = tile.GetLayer("transportation_name");
+        Assert.NotNull(layer);
+        Assert.Equal(3, layer.Features.Count);
+        VectorTileFeature feature = layer.Features[index];
+        Assert.Equal(VectorGeometryType.LineString, feature.GeometryType);
+        Assert.Equal(name, feature.GetString("name"));
+        Assert.Equal(nameJa, feature.GetString("name:ja"));
+        Assert.Equal(route, feature.GetString("ref"));
+        Assert.Equal(roadClass, feature.GetString("class"));
+        Assert.Equal(network, feature.GetString("network"));
+    }
+
+    [Fact]
+    public void 道路名レイヤーの線のジオメトリをタイル座標で読める()
+    {
+        VectorTile tile = VectorTileDecoder.Decode(CreateSampleRoadNameTile());
+
+        VectorTileFeature feature = tile.GetLayer("transportation_name")!.Features[0];
+
+        // 1 本の線（折れ線）で、頂点がタイル座標（0〜4096）のまま読める
+        IReadOnlyList<VectorPoint> line = Assert.Single(feature.GeometryParts);
+        Assert.Equal([new VectorPoint(100, 200), new VectorPoint(300, 200), new VectorPoint(300, 500)], line);
+    }
+
+    // 名称・ref・class・network は、地物ごとに有無が違う（ref だけの道路、network のない道路がある）
+    private static byte[] CreateSampleRoadNameTile()
+    {
+        (string Key, string Value)[][] features =
+        [
+            [("name", "国道53号"), ("ref", "53;373"), ("class", "trunk"), ("network", "road")],
+            [("name", "Marunouchi Naka-dori"), ("name:ja", "丸の内仲通り"), ("class", "tertiary")],
+            [("ref", "203"), ("class", "secondary"), ("network", "road")],
+        ];
+
+        string[] keys = [.. features.SelectMany(f => f.Select(p => p.Key)).Distinct(StringComparer.Ordinal)];
+        string[] values = [.. features.SelectMany(f => f.Select(p => p.Value)).Distinct(StringComparer.Ordinal)];
+
+        using var stream = new MemoryStream();
+        using var layerStream = new MemoryStream();
+
+        WriteTag(layerStream, 1, 2);
+        WriteString(layerStream, "transportation_name");
+
+        foreach (string key in keys)
+        {
+            WriteTag(layerStream, 3, 2);
+            WriteString(layerStream, key);
+        }
+
+        foreach (string value in values)
+        {
+            using var valueStream = new MemoryStream();
+            WriteTag(valueStream, 1, 2);
+            WriteString(valueStream, value);
+            WriteTag(layerStream, 4, 2);
+            WriteBytes(layerStream, valueStream.ToArray());
+        }
+
+        WriteTag(layerStream, 5, 0);
+        WriteVarint(layerStream, 4096);
+        WriteTag(layerStream, 15, 0);
+        WriteVarint(layerStream, 2);
+
+        foreach ((string Key, string Value)[] properties in features)
+        {
+            using var featStream = new MemoryStream();
+            using var tagStream = new MemoryStream();
+            foreach ((string key, string value) in properties)
+            {
+                WriteVarint(tagStream, (ulong)Array.IndexOf(keys, key));
+                WriteVarint(tagStream, (ulong)Array.IndexOf(values, value));
+            }
+
+            WriteTag(featStream, 2, 2);
+            WriteBytes(featStream, tagStream.ToArray());
+
+            // type = 2 (LineString)
+            WriteTag(featStream, 3, 0);
+            WriteVarint(featStream, 2);
+
+            // geometry = MoveTo(1, 100, 200), LineTo(2, +200, 0, 0, +300) → (100,200) (300,200) (300,500)
+            using var geomStream = new MemoryStream();
+            WriteVarint(geomStream, (1 << 3) | 1);
+            WriteVarint(geomStream, EncodeZigzag32(100));
+            WriteVarint(geomStream, EncodeZigzag32(200));
+            WriteVarint(geomStream, (2 << 3) | 2);
+            WriteVarint(geomStream, EncodeZigzag32(200));
+            WriteVarint(geomStream, EncodeZigzag32(0));
+            WriteVarint(geomStream, EncodeZigzag32(0));
+            WriteVarint(geomStream, EncodeZigzag32(300));
+            WriteTag(featStream, 4, 2);
+            WriteBytes(featStream, geomStream.ToArray());
+
+            WriteTag(layerStream, 2, 2);
+            WriteBytes(layerStream, featStream.ToArray());
+        }
+
+        WriteTag(stream, 3, 2);
+        WriteBytes(stream, layerStream.ToArray());
+
+        return stream.ToArray();
+    }
+
     private static byte[] CreateSampleWaterPolygonTile()
     {
         using var stream = new MemoryStream();

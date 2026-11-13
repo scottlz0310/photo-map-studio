@@ -31,7 +31,7 @@ public sealed record BatchGenerationProgress(
     /// <summary>開始からの経過時間。</summary>
     public TimeSpan Elapsed { get; init; }
     /// <summary>一括取得の統計。</summary>
-    public PhotoMapStudio.Core.Tiles.TileFetchStatistics? Tiles { get; init; }
+    public PhotoMapStudio.Tiles.TileFetchStatistics? Tiles { get; init; }
 
     /// <summary>UI に表示するステータス名。</summary>
     public string StatusText => this.Status switch

@@ -2,8 +2,9 @@ using System.Net;
 
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
-using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
 
 namespace PhotoMapStudio.Core.Tests.Maps;
 

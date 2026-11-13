@@ -1,7 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 
-using PhotoMapStudio.Core.Tiles;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Models;
 

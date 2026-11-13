@@ -15,4 +15,8 @@
     <PackageReference Include="SkiaSharp" Version="4.155.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj" />
+  </ItemGroup>
+
 </Project>

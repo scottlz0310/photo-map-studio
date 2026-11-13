@@ -37,20 +37,24 @@ flowchart TD
         BatchService["一括生成オーケストレーター"]
     end
 
-    subgraph Core ["PhotoMapStudio.Core (ドメイン・描画層)"]
+    subgraph Core ["PhotoMapStudio.Core (ドメイン・描画層。SkiaSharp 依存)"]
         Composer["SkiaMapImageComposer (合成エンジン)"]
         Renderer["VectorMapRenderer (直接ベクター描画)"]
 
+        subgraph Styles ["スタイル・スキーマ解釈層 (IVectorMapStyle)"]
+            OFMStyle["OpenMapTilesStyle<br>(道路階層・盾・日本語地名・店舗POI)"]
+            GsiStyle["GsiVectorStyle<br>(公的測量記号・RdEdg・RdCL・等高線・注記)"]
+        end
+    end
+
+    subgraph Tiles ["PhotoMapStudio.Tiles (取得・キャッシュ・デコード層。NuGet パッケージ。SkiaSharp・WinUI 非依存)"]
         subgraph Sources ["取得・キャッシュ層 (IVectorTileSource)"]
             OFMSource["OpenFreeMapTileSource<br>(HTTP PBF + ローカルキャッシュ)"]
             GsiSource["GsiVectorTileSource<br>(最適化ベクトルPMTiles HTTP Range + ローカルキャッシュ)"]
             PmtilesSource["PmtilesVectorTileSource<br>(ローカルファイル / リモートPMTiles BYO)"]
         end
 
-        subgraph Styles ["スタイル・スキーマ解釈層 (IVectorMapStyle)"]
-            OFMStyle["OpenMapTilesStyle<br>(道路階層・盾・日本語地名・店舗POI)"]
-            GsiStyle["GsiVectorStyle<br>(公的測量記号・RdEdg・RdCL・等高線・注記)"]
-        end
+        Decoder["VectorTileDecoder<br>(MVT / PBF → VectorTile)"]
     end
 
     BatchService --> Composer

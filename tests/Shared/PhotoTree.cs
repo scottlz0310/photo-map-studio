@@ -49,6 +49,7 @@ internal sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
     public void Report(T value) => report(value);
 }
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Core/App両方にリンクする共有ヘルパー。App.Testsで使用する。")]
 internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
 {
     private DateTimeOffset current = now;

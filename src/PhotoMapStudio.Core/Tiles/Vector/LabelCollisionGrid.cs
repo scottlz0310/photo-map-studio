@@ -1,3 +1,6 @@
+using PhotoMapStudio.Tiles;
+using PhotoMapStudio.Tiles.Vector;
+
 using SkiaSharp;
 
 namespace PhotoMapStudio.Core.Tiles.Vector;

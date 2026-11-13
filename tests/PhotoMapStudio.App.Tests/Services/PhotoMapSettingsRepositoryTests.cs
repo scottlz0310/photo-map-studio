@@ -2,6 +2,7 @@ using PhotoMapStudio.App.Models;
 using PhotoMapStudio.App.Services;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Tests.Services;
 

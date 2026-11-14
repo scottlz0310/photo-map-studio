@@ -92,7 +92,7 @@ flowchart TD
 - **`OpenMapTilesStyle` (OSM系)**:
   - レイヤー: `transportation`, `transportation_name`, `place`, `poi`, `water`, `landcover`, `building` 等。
   - 道路階層判定: `class`（`motorway`, `trunk`, `primary`, `secondary`, `tertiary`, `minor`, `service`, `path` 等）に基づく色分け・線幅。
-  - 経路番号の盾: 高速（緑の角丸）・国道（青の逆三角）・都道府県道（白の五角形）。`network` が日本の経路網（`jp-expressway`・`jp-national`・`jp-prefectural`）ならそれを使い、持たない場合（OpenFreeMap の日本の道路は `road` が多い）は `class` から推定します（`motorway` は高速、`trunk`・`primary` は国道、`secondary`・`tertiary` は都道府県道）。経路番号を盾として優先配置します。道路が過拡大で画面外へ延びる場合も、可視区間の中点に置きます。
+  - 経路番号の盾: 高速（緑の角丸）・国道（青の逆三角）・都道府県道（白の五角形）。種別は、道路が属する路線関係の経路網で決めます。OpenFreeMap は `route_1_network`〜`route_4_network`・`route_N_ref` に OSM の路線関係を持ち（`JP:national` は国道、`JP:prefectural` は都道府県道、`JP:E`・`JP:expressway*` は高速）、Protomaps 系のタイルは `network`（`jp-national` など）に持ちます。複数の路線を持つ道路は高速、国道、都道府県道の順に優先し、番号は選んだ路線の `ref` を使います。路線関係を持たない道路には、`class` からの推定は行わず盾を描きません（推定は国道の盾を取り違えるため。根拠は [road-class-validation.md](road-class-validation.md)）。経路番号を盾として優先配置します。道路が過拡大で画面外へ延びる場合も、可視区間の中点に置きます。
   - ラベル: `name:ja` 優先、次いで `name`。道路沿いの傾き配置および施設アイコン。
 - **`GsiVectorStyle` (国土地理院系)**:
   - レイヤー: `RdEdg`（道路縁）, `RdCL`（道路中心線）, `BldA`（建物）, `WA`（水域）, `Anno`（注記・地名）, 等高線。

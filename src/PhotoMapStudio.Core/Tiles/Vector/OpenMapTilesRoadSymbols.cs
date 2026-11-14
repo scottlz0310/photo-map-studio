@@ -37,47 +37,92 @@ internal static class OpenMapTilesRoadSymbols
     private const float ShieldMinWidth = 16f;
     private const float ShieldPadding = 4f;
 
+    /// <summary>OpenMapTiles が路線関係ごとに持つ属性 <c>route_N_network</c>・<c>route_N_ref</c> の N の最大。</summary>
+    private const int MaxRouteCount = 4;
+
     /// <summary>
-    /// 道路種別と経路網から盾の種別を決める。
+    /// 経路網の名前から盾の種別を決める。
     /// </summary>
     /// <remarks>
-    /// OpenFreeMap の日本の道路は経路網（<c>network</c>）が地域区分を持たない <c>road</c> であることが多いため、
-    /// 経路網が <c>jp-*</c> のときはそれを使い、それ以外は道路種別（class）で判定する
-    /// （幹線・主要道路は国道、二次・三次道路は都道府県道とみなす。実際の路線種別と異なる場合がある）。
+    /// OSM の路線関係（route=road）の <c>network</c> で決める。国道は <c>JP:national</c>、都道府県道は <c>JP:prefectural</c>
+    /// （<c>JP:prefectural:tottori</c> のように地域名が続くものを含む）、高速は <c>JP:E</c> と <c>JP:expressway*</c>。
+    /// 市道（<c>JP:municipal*</c>・<c>JP:city*</c>）や旧街道などは盾の対象にしない。
+    /// Protomaps 系のタイルが <c>network</c> に持つ <c>jp-expressway</c>・<c>jp-national</c>・<c>jp-prefectural</c> も同じ種別として扱う。
     /// </remarks>
-    /// <param name="roadClass">道路種別（<c>class</c>）。</param>
-    /// <param name="network">経路網（<c>network</c>）。</param>
-    /// <returns>盾の種別。</returns>
-    internal static RouteShieldKind GetShieldKind(string? roadClass, string? network)
+    /// <param name="network">経路網の名前（<c>network</c> または <c>route_N_network</c>）。</param>
+    /// <returns>盾の種別。対象外は <see cref="RouteShieldKind.None"/>。</returns>
+    internal static RouteShieldKind GetShieldKind(string? network)
     {
-        if (string.Equals(network, "jp-expressway", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(network))
+        {
+            return RouteShieldKind.None;
+        }
+
+        if (network.Equals("JP:E", StringComparison.OrdinalIgnoreCase)
+            || network.Equals("jp-expressway", StringComparison.OrdinalIgnoreCase)
+            || IsNetwork(network, "JP:expressway"))
         {
             return RouteShieldKind.Expressway;
         }
 
-        if (string.Equals(network, "jp-national", StringComparison.OrdinalIgnoreCase))
+        if (network.Equals("jp-national", StringComparison.OrdinalIgnoreCase) || IsNetwork(network, "JP:national"))
         {
             return RouteShieldKind.National;
         }
 
-        if (string.Equals(network, "jp-prefectural", StringComparison.OrdinalIgnoreCase))
+        if (network.Equals("jp-prefectural", StringComparison.OrdinalIgnoreCase) || IsNetwork(network, "JP:prefectural"))
         {
             return RouteShieldKind.Prefectural;
         }
 
-        return roadClass switch
-        {
-            "motorway" => RouteShieldKind.Expressway,
-            "trunk" or "primary" => RouteShieldKind.National,
-            "secondary" or "tertiary" => RouteShieldKind.Prefectural,
-            _ => RouteShieldKind.None,
-        };
+        return RouteShieldKind.None;
     }
+
+    /// <summary>
+    /// 道路が属する路線から、盾の種別と表示する番号を決める。
+    /// </summary>
+    /// <remarks>
+    /// OpenFreeMap の日本の道路は <c>network</c> が <c>road</c> で、国道・都道府県道の区別は路線関係ごとの
+    /// <c>route_N_network</c>・<c>route_N_ref</c> に入る。道路種別（<c>class</c>）からの推定は、国道の精度が低く
+    /// （<c>primary</c> の多くは都道府県道、大都市では市道）誤った盾が付くため行わない。路線関係を持たない道路には盾を描かない。
+    /// 複数の路線を持つ道路は、高速、国道、都道府県道の順に優先し、同じ種別では先の路線を使う。
+    /// 番号は、選んだ路線の <c>route_N_ref</c> から取り出す（<c>network</c>・<c>ref</c> の組も同様に候補にする）。
+    /// </remarks>
+    /// <param name="feature"><c>transportation_name</c> レイヤーの地物。</param>
+    /// <returns>盾の種別と番号。盾を描かない場合は <see cref="RouteShieldKind.None"/> と <see langword="null"/>。</returns>
+    internal static (RouteShieldKind Kind, string? Text) GetRouteShield(VectorTileFeature feature)
+    {
+        (RouteShieldKind Kind, string? Text) best = (RouteShieldKind.None, null);
+        Consider(feature.GetString("network"), feature.GetString("ref"));
+        for (int i = 1; i <= MaxRouteCount; i++)
+        {
+            Consider(feature.GetString($"route_{i}_network"), feature.GetString($"route_{i}_ref"));
+        }
+
+        return best;
+
+        void Consider(string? network, string? reference)
+        {
+            RouteShieldKind kind = GetShieldKind(network);
+            string? text = GetShieldText(reference);
+
+            // 列挙値は高速 < 国道 < 都道府県道 の優先順。同順位では先に見つけた路線を残す
+            if (kind != RouteShieldKind.None && text is not null && (best.Kind == RouteShieldKind.None || kind < best.Kind))
+            {
+                best = (kind, text);
+            }
+        }
+    }
+
+    /// <summary>経路網の名前が、指定した名前そのもの、またはその下位（<c>名前:地域</c>）か。</summary>
+    private static bool IsNetwork(string network, string name)
+        => network.Equals(name, StringComparison.OrdinalIgnoreCase)
+        || network.StartsWith(name + ":", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// 盾に表示する経路番号を取り出す。複数の路線が重なる道路（例: "1;8"）は先頭の番号を使う。
     /// </summary>
-    /// <param name="reference">属性 <c>ref</c> の値。</param>
+    /// <param name="reference">属性 <c>ref</c> または <c>route_N_ref</c> の値。</param>
     /// <returns>表示する番号。表示できない場合は <see langword="null"/>。</returns>
     internal static string? GetShieldText(string? reference)
     {
@@ -118,8 +163,7 @@ internal static class OpenMapTilesRoadSymbols
                 continue;
             }
 
-            RouteShieldKind kind = GetShieldKind(feature.GetString("class"), feature.GetString("network"));
-            string? text = GetShieldText(feature.GetString("ref"));
+            (RouteShieldKind kind, string? text) = GetRouteShield(feature);
             if (kind == RouteShieldKind.None || text is null)
             {
                 continue;

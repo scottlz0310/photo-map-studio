@@ -13,7 +13,7 @@ public class PreviewGenerationServiceTests
     [Fact]
     public async Task GPS情報を持つ写真だけを一覧にする()
     {
-        var enumerator = new StubPhotoFileEnumerator(["gps.jpg", "without-gps.jpg"]);
+        var enumerator = new StubPhotoFileEnumerator((string[])["gps.jpg", "without-gps.jpg"]);
         var reader = new StubExifGpsReader(new Dictionary<string, GeoCoordinate?>
         {
             ["gps.jpg"] = new(35.68123, 139.76712),
@@ -43,7 +43,7 @@ public class PreviewGenerationServiceTests
         {
             var composer = new BlockingMapImageComposer();
             var service = new PreviewGenerationService(
-                new StubPhotoFileEnumerator([filePath]),
+                new StubPhotoFileEnumerator((string[])[filePath]),
                 new StubExifGpsReader(new Dictionary<string, GeoCoordinate?>
                 {
                     [filePath] = new(35.68123, 139.76712),

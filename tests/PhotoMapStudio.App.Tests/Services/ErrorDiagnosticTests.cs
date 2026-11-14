@@ -43,7 +43,7 @@ public class ErrorDiagnosticTests
         Assert.Equal("0x80070020", cause.GetProperty("HResult").GetString());
         Assert.NotEmpty(cause.GetProperty("Calls").EnumerateArray());
         Assert.Equal(aggregate ? 3 : 2, root.GetProperty("Exceptions").GetArrayLength());
-        Assert.Equal(["SchemaVersion", "Timestamp", "AppVersion", "Stage", "ItemIndex", "Exceptions"], root.EnumerateObject().Select(property => property.Name));
+        Assert.Equal((string[])["SchemaVersion", "Timestamp", "AppVersion", "Stage", "ItemIndex", "Exceptions"], root.EnumerateObject().Select(property => property.Name));
     }
 
     [Theory]

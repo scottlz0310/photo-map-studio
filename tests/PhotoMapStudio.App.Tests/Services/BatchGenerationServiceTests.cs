@@ -47,9 +47,9 @@ public class BatchGenerationServiceTests
         Assert.Equal(1, summary.SkippedCount);
         Assert.Equal(3, summary.TotalCount);
         Assert.False(summary.IsCancelled);
-        Assert.Equal(["a.jpg", "no-gps.jpg", "z.jpg"], progress.Where(item => !item.IsActivity).Select(item => item.FileName));
+        Assert.Equal((string[])["a.jpg", "no-gps.jpg", "z.jpg"], progress.Where(item => !item.IsActivity).Select(item => item.FileName));
         Assert.Equal(
-            [BatchGenerationStatus.Success, BatchGenerationStatus.Skip, BatchGenerationStatus.Success],
+            (BatchGenerationStatus[])[BatchGenerationStatus.Success, BatchGenerationStatus.Skip, BatchGenerationStatus.Success],
             progress.Where(item => !item.IsActivity).Select(item => item.Status));
         Assert.True(File.Exists(Path.Combine(fixture.OutputPath, "a_map.png")));
         Assert.True(File.Exists(Path.Combine(fixture.OutputPath, "z_map.png")));
@@ -69,7 +69,7 @@ public class BatchGenerationServiceTests
         string first = fixture.AddInputFile("photo.jpg");
         string second = fixture.AddInputFile("photo.heic");
         var service = new BatchGenerationService(
-            new StubPhotoFileEnumerator([first, second]),
+            new StubPhotoFileEnumerator((string[])[first, second]),
             new StubExifGpsReader(new Dictionary<string, GeoCoordinate?>()),
             new RecordingMapImageComposer());
 
@@ -93,7 +93,7 @@ public class BatchGenerationServiceTests
         string file = fixture.AddInputFile("outside.jpg");
         var progress = new List<BatchGenerationProgress>();
         var service = new BatchGenerationService(
-            new StubPhotoFileEnumerator([file]),
+            new StubPhotoFileEnumerator((string[])[file]),
             new StubExifGpsReader(new Dictionary<string, GeoCoordinate?>
             {
                 [file] = new(40.7128, -74.0060),
@@ -126,7 +126,7 @@ public class BatchGenerationServiceTests
         string file = fixture.AddInputFile("photo.jpg");
         var composer = new BlockingMapImageComposer();
         var service = new BatchGenerationService(
-            new StubPhotoFileEnumerator([file]),
+            new StubPhotoFileEnumerator((string[])[file]),
             new StubExifGpsReader(new Dictionary<string, GeoCoordinate?>
             {
                 [file] = new(35.68123, 139.76712),

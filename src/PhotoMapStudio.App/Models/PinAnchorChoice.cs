@@ -16,7 +16,7 @@ public sealed record PinAnchorChoice(PinAnchor Anchor, string DisplayName)
     /// <summary>
     /// 利用可能なすべてのアンカー基準点選択肢。
     /// </summary>
-    public static readonly IReadOnlyList<PinAnchorChoice> All =
+    public static readonly IReadOnlyList<PinAnchorChoice> All = (PinAnchorChoice[])
     [
         new(PinAnchor.BottomCenter, "下端中央 (ピン先端が地点)"),
         new(PinAnchor.Center, "中央 (図心・ターゲット中心が地点)"),

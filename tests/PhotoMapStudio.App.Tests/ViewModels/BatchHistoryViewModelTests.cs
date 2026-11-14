@@ -14,7 +14,7 @@ public class BatchHistoryViewModelTests
         using var tree = new PhotoTree();
         var summary = new BatchGenerationSummary(1, 0, 1, false)
         {
-            Issues = [new(1, "写真.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Warning, BatchIssueReason.IncompleteMap)
+            Issues = (BatchGenerationIssue[])[new(1, "写真.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Warning, BatchIssueReason.IncompleteMap)
             { MissingTileCount = 2, RequestedTileCount = 4, NetworkSuspended = true }],
         };
         var store = new Store();
@@ -41,7 +41,7 @@ public class BatchHistoryViewModelTests
         {
             ErrorCount = 1,
             StopReason = stopped || setupFailure ? "secret-key-を含む停止メッセージ" : null,
-            Issues = [new(3, "下位\\同名.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.MissingGps)],
+            Issues = (BatchGenerationIssue[])[new(3, "下位\\同名.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.MissingGps)],
         };
         var store = new Store();
         var model = new MainViewModel(new Settings(), batchGenerationService: new Batch(summary, setupFailure), historyStore: store)
@@ -89,7 +89,7 @@ public class BatchHistoryViewModelTests
         var store = new Store();
         store.Entries.Add(BatchIssueHistoryTests.History(new(1, 0, 1, false), "C:\\以前"));
         store.Entries.Add(BatchIssueHistoryTests.History(new(0, 1, 1, false)
-        { Issues = [new(1, "別\\photo.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.TileNotFound, 404)] }, "C:\\今回"));
+        { Issues = (BatchGenerationIssue[])[new(1, "別\\photo.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.TileNotFound, 404)] }, "C:\\今回"));
         var model = new MainViewModel(new Settings(), historyStore: store);
         await model.LoadBatchHistoryCommand.ExecuteAsync(null);
         model.SelectedBatchHistory = model.BatchHistories[1];

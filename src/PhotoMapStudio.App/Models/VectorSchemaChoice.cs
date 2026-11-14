@@ -17,7 +17,7 @@ public sealed record VectorSchemaChoice(VectorStyleSchema Schema, string Display
     /// <summary>
     /// 利用可能なすべてのスキーマの選択肢。
     /// </summary>
-    public static readonly IReadOnlyList<VectorSchemaChoice> All =
+    public static readonly IReadOnlyList<VectorSchemaChoice> All = (VectorSchemaChoice[])
     [
         new(VectorStyleSchema.OpenMapTiles, "OpenMapTiles（OpenStreetMap 系）"),
         new(VectorStyleSchema.GsiOptimalBvmap, "国土地理院 最適化ベクトル"),

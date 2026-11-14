@@ -13,6 +13,7 @@
 - `PhotoMapStudio.Tiles` の公開 API の XML ドキュメントを、未記載だった 45 メンバー（PMTiles のヘッダー・エントリー・列挙値、`VectorGeometryType`、`FilePmtilesByteSource` のコンストラクターなど）に追加し、`GenerateDocumentationFile` を有効にした。パッケージに XML ドキュメントが含まれ、未記載の公開メンバーはビルドエラーになる。
 - `PhotoMapStudio.Tiles` のパッケージに README（`src/PhotoMapStudio.Tiles/README.md`。概要・使い方・User-Agent の設定）を含め、nuget.org のパッケージのページに表示されるようにした。使い方のサンプルコードは、パッケージを参照する別のプロジェクトでコンパイルできることを確認した。
 - リポジトリの README に、`PhotoMapStudio.Tiles` の NuGet バッジ（最新の安定版）と、パッケージの README・公開手順へのリンクを追加した。
+- OSM の道路種別（`highway` / `class`）が実際の路線種別（国道・都道府県道・市町村道）と合っているかを、PLATEAU（3D都市モデル）の道路の機能を正解として照合する検証スクリプト `scripts/road-class-validation/`（bun または Node。外部パッケージなし）と、その手順と 8 都市の結果の記録 `docs/development/road-class-validation.md` を追加した（#120 の調査）。盾の種別を決める `GetShieldKind` は変更していない。
 
 ### Changed
 

@@ -52,7 +52,7 @@ jobs:
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: 10.0.404
+          dotnet-version: 11.0.100
 
       # アプリ（WinUI）は公開に関係しないため、Tiles とそのテストだけを復元する
       - name: Restore

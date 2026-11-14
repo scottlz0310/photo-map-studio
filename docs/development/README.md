@@ -10,5 +10,6 @@
 | [photo-map-studio-migration-spec.md](photo-map-studio-migration-spec.md) | auto-map-generator からの移行仕様（引き継いだ要件と処理アルゴリズム） |
 | [issue-34-validation.md](issue-34-validation.md) | ローカル実写真による段階検証の記録 |
 | [v0.3.0-validation.md](v0.3.0-validation.md) | v0.3.0 リリース前修正後の最終実機検証と未実施項目 |
+| [road-class-validation.md](road-class-validation.md) | OSM の道路種別（`class`）と実際の路線種別（国道・都道府県道）の対応を、PLATEAU を正解として照合した手順と結果（Issue #120） |
 
 プライバシーポリシー（[privacy-policy.html](../privacy-policy.html)）は、公開 URL を維持するため `docs/` 直下に置いています。

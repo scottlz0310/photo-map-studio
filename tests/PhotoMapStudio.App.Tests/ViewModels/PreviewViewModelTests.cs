@@ -11,7 +11,7 @@ public class PreviewViewModelTests
     public async Task 設定変更時に旧世代をキャンセルして最新結果だけを反映する()
     {
         var service = new ControlledPreviewGenerationService(
-            [new PreviewPhoto("photo.jpg")]);
+            (PreviewPhoto[])[new PreviewPhoto("photo.jpg")]);
         using var viewModel = new PreviewViewModel(service);
 
         viewModel.UpdateSettings(
@@ -57,7 +57,7 @@ public class PreviewViewModelTests
     public async Task キャンセル後は生成結果を反映しない()
     {
         var service = new ControlledPreviewGenerationService(
-            [new PreviewPhoto("photo.jpg")]);
+            (PreviewPhoto[])[new PreviewPhoto("photo.jpg")]);
         using var viewModel = new PreviewViewModel(service);
 
         viewModel.UpdateSettings(

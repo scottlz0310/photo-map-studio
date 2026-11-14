@@ -59,7 +59,7 @@ public sealed class IncompleteMapGenerationTests
         var warning = new IncompleteMapWarning(3, 4, suspended);
         var composer = new Composer(warning);
         var progress = new List<BatchGenerationProgress>();
-        var service = new BatchGenerationService(new StubPhotoFileEnumerator([photo]), new Reader(), composer);
+        var service = new BatchGenerationService(new StubPhotoFileEnumerator((string[])[photo]), new Reader(), composer);
 
         BatchGenerationSummary summary = await service.GenerateAsync(new()
         {
@@ -105,7 +105,7 @@ public sealed class IncompleteMapGenerationTests
         string photo = tree.Add("写真.jpg");
         var warning = allow ? new IncompleteMapWarning(2, 4, false) : null;
         var composer = new Composer(warning);
-        var service = new PreviewGenerationService(new StubPhotoFileEnumerator([photo]), new Reader(), composer);
+        var service = new PreviewGenerationService(new StubPhotoFileEnumerator((string[])[photo]), new Reader(), composer);
         PreviewGenerationResult result = await service.GenerateAsync(new PreviewPhoto(photo), new()
         {
             AllowIncompleteVectorMaps = allow,

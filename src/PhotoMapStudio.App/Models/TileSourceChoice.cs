@@ -153,7 +153,7 @@ public static class TileSourceChoices
     public static TileSourceChoice CustomVector { get; } = new(CustomVectorKey, "カスタム（ベクター）", null, isCustomVector: true);
 
     /// <summary>表示順に並べた選択肢。</summary>
-    public static IReadOnlyList<TileSourceChoice> All { get; } = [GsiPale, GsiStandard, GsiVector, OpenFreeMap, OpenStreetMap, Custom, CustomVector];
+    public static IReadOnlyList<TileSourceChoice> All { get; } = (TileSourceChoice[])[GsiPale, GsiStandard, GsiVector, OpenFreeMap, OpenStreetMap, Custom, CustomVector];
 
     /// <summary>
     /// 永続化されたキーから選択肢を取得する。未知のキーは既定値へ戻す。

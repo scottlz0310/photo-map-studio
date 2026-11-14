@@ -18,7 +18,7 @@ public class BatchIssueHistoryTests
     {
         using var tree = new PhotoTree();
         var summary = new BatchGenerationSummary(0, 1, 1, false)
-        { Issues = [new(1, "写真.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.MissingGps)] };
+        { Issues = (BatchGenerationIssue[])[new(1, "写真.jpg", BatchIssueTarget.Photo, BatchGenerationStatus.Skip, BatchIssueReason.MissingGps)] };
         var store = new BatchGenerationHistoryStore(tree.Root);
         await store.SaveAsync(History(summary, tree.Root));
         string path = Assert.Single(Directory.GetFiles(tree.Root, "batch-*.json"));
@@ -48,7 +48,7 @@ public class BatchIssueHistoryTests
         if (scenario == "出力") { Directory.CreateDirectory(Path.Combine(tree.Root, "地区", "maps", "同名_map.png")); }
         Exception? mapFailure = http is int code ? new TileFetchException("secret-key-含有メッセージ",
             new Uri("https://example.com/tile?token=secret-key"), (HttpStatusCode)code, null) : null;
-        var service = new BatchGenerationService(new StubPhotoFileEnumerator([file]),
+        var service = new BatchGenerationService(new StubPhotoFileEnumerator((string[])[file]),
             new Reader(_ => scenario switch
             {
                 "gpsなし" => null,
@@ -102,7 +102,7 @@ public class BatchIssueHistoryTests
         using var tree = new PhotoTree();
         string missing = tree.Add("a.jpg"), waiting = tree.Add("b.jpg");
         var composer = new BlockingComposer();
-        var service = new BatchGenerationService(new StubPhotoFileEnumerator([missing, waiting]),
+        var service = new BatchGenerationService(new StubPhotoFileEnumerator((string[])[missing, waiting]),
             new Reader(path => path == missing ? null : new(35, 139)), composer);
         using var cancellation = new CancellationTokenSource();
         Task<BatchGenerationSummary> run = service.GenerateAsync(new() { InputFolderPath = tree.Root, OutputFolderPath = "maps" }, null, cancellation.Token);

@@ -16,7 +16,7 @@ public sealed record PinKindChoice(PinKind Kind, string DisplayName)
     /// <summary>
     /// 利用可能なすべてのピン形状選択肢。
     /// </summary>
-    public static readonly IReadOnlyList<PinKindChoice> All =
+    public static readonly IReadOnlyList<PinKindChoice> All = (PinKindChoice[])
     [
         new(PinKind.GreenPin, "緑ピン (同梱)"),
         new(PinKind.RedPin, "赤ピン (同梱)"),

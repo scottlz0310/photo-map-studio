@@ -40,7 +40,7 @@ internal sealed class StubPhotoFileEnumerator(IReadOnlyList<string> files) : IPh
         IProgress<PhotoEnumerationProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return [.. files.OrderBy(file => Path.GetRelativePath(folderPath, file), StringComparer.Ordinal)];
+        return (string[])[.. files.OrderBy(file => Path.GetRelativePath(folderPath, file), StringComparer.Ordinal)];
     }
 }
 

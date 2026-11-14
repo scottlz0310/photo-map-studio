@@ -3,8 +3,8 @@ import { buildQuery, fetchRoadWays, splitBbox } from './overpass.mjs';
 
 const BBOX = { south: 35.0, west: 135.0, north: 35.1, east: 135.1 };
 
-function response(status, elements = []) {
-  return { ok: status >= 200 && status < 300, status, json: async () => ({ elements }) };
+function response(status, elements = [], remark) {
+  return { ok: status >= 200 && status < 300, status, json: async () => ({ elements, remark }) };
 }
 
 describe('splitBbox', () => {
@@ -53,6 +53,26 @@ describe('fetchRoadWays', () => {
     expect(ways.map((w) => w.id)).toEqual([1, 2]);
     expect(calls.length).toBe(3);
     expect(sleeps).toEqual([5]);
+  });
+
+  test.each([
+    ['タイムアウト', 'runtime error: Query timed out in "query" at line 1 after 181 seconds.'],
+    ['メモリ不足', 'runtime error: Query run out of memory using about 2048 MB of RAM.'],
+  ])('HTTP 200 でも remark の実行時エラー（%s）は失敗にする。分割した問い合わせの一部だけでも全体を失敗にする', async (_name, remark) => {
+    const fetchImpl = async (_url, init) => {
+      const failing = init.body.get('data').includes('(0.25,0,0.5,0.2)');
+      return failing ? response(200, [], remark) : response(200, [{ id: 1 }]);
+    };
+
+    await expect(
+      fetchRoadWays({ south: 0, west: 0, north: 0.5, east: 0.2 }, { fetchImpl, sleep: noSleep, maxSpanDegrees: 0.25 }),
+    ).rejects.toThrow('Overpass の実行時エラー');
+  });
+
+  test('実行時エラーではない remark（注記）は受け入れる', async () => {
+    const fetchImpl = async () => response(200, [{ id: 1 }], 'attribution notice');
+
+    expect((await fetchRoadWays(BBOX, { fetchImpl, sleep: noSleep })).map((w) => w.id)).toEqual([1]);
   });
 
   test.each([

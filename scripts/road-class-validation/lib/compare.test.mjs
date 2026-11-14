@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { categorize, compare, formatTable } from './compare.mjs';
+import { categorize, compare, determinateTotal, formatTable } from './compare.mjs';
 
 describe('categorize', () => {
   test.each([
@@ -53,22 +53,32 @@ describe('compare', () => {
 describe('formatTable', () => {
   const codelist = { 2: '一般国道', 3: '都道府県道', 9020: '不明' };
 
-  test('割合は面なしを除いた合計で求め、面なしは件数だけを末尾に示す', () => {
-    const table = formatTable({ primary: { 3: 3, 2: 1, none: 6 } }, codelist);
+  test('割合の分母は分類が決まった点だけ。面なし・面が重なるは分母に含めず、件数だけを示す', () => {
+    const table = formatTable({ primary: { 3: 3, 2: 1, overlap: 5, none: 6 } }, codelist);
 
     expect(table.split('\n')).toEqual([
-      '| OSM の highway | 一般国道 | 都道府県道 | 合計 | 面なし |',
-      '| --- | --- | --- | --- | --- |',
-      '| primary | 1（25.0%） | 3（75.0%） | 4 | 6 |',
+      '| OSM の highway | 一般国道 | 都道府県道 | 合計 | 面が重なる | 面なし |',
+      '| --- | --- | --- | --- | --- | --- |',
+      '| primary | 1（25.0%） | 3（75.0%） | 4 | 5 | 6 |',
     ]);
   });
 
-  test('コードリストにない値も落とさず、その旨を見出しに示す。重なりは最後の列', () => {
+  test('コードリストにない値も落とさず、その旨を見出しに示す', () => {
     const table = formatTable({ trunk: { 2: 1, 9: 2, overlap: 1 }, tertiary: { 9020: 4 } }, codelist);
 
     expect(table.split('\n')[0]).toBe(
-      '| OSM の highway | 一般国道 | コード 9（コードリスト外） | 不明 | 面が重なる | 合計 | 面なし |',
+      '| OSM の highway | 一般国道 | コード 9（コードリスト外） | 不明 | 合計 | 面が重なる | 面なし |',
     );
-    expect(table.split('\n')[2]).toBe('| trunk | 1（25.0%） | 2（50.0%） | - | 1（25.0%） | 4 | 0 |');
+    expect(table.split('\n')[2]).toBe('| trunk | 1（33.3%） | 2（66.7%） | - | 3 | 1 | 0 |');
+  });
+});
+
+describe('determinateTotal', () => {
+  test.each([
+    ['機能コードだけ', { 2: 3, 3: 1 }, 4],
+    ['面なしと重なりは除く', { 2: 3, overlap: 10, none: 20 }, 3],
+    ['空', {}, 0],
+  ])('%s', (_name, row, expected) => {
+    expect(determinateTotal(row)).toBe(expected);
   });
 });

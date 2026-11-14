@@ -64,24 +64,39 @@ function columnLabel(code, codelist) {
 }
 
 /**
- * 集計を Markdown の表にする。各セルは「件数（割合）」。列の見出しはコードリストの説明を使い、
+ * 割合の分母にする、分類が決まった点の数。
+ * 「面なし」（PLATEAU の整備範囲の外）と「面が重なる」（どちらの道路か決められない）は、分類が決まらないため含めない。
+ * @param {Record<string, number>} row 区分 → 件数
+ */
+export function determinateTotal(row) {
+  return Object.entries(row)
+    .filter(([category]) => category !== NONE && category !== OVERLAP)
+    .reduce((sum, [, count]) => sum + count, 0);
+}
+
+/**
+ * 集計を Markdown の表にする。機能コードの列は「件数（割合）」で、割合の分母は {@link determinateTotal}。
+ * 「面が重なる」「面なし」は分母に含めず、件数だけを示す。列の見出しはコードリストの説明を使い、
  * コードリストにない値も落とさずに示す（配布物のデータの不備を見逃さないため）。
- * 「面なし」は PLATEAU の整備範囲の外で、判定できないため、割合の分母（合計）に含めず件数だけを末尾に示す。
  * @param {Record<string, Record<string, number>>} tally
  * @param {Record<string, string>} codelist 機能コード → 説明
  */
 export function formatTable(tally, codelist) {
   const present = new Set(Object.values(tally).flatMap((row) => Object.keys(row)));
-  present.delete(NONE);
-  const codes = [...present].filter((c) => c !== OVERLAP).sort((a, b) => Number(a) - Number(b));
-  const columns = present.has(OVERLAP) ? [...codes, OVERLAP] : codes;
-  const header = ['OSM の highway', ...columns.map((c) => columnLabel(c, codelist)), '合計', NONE_LABEL];
+  const codes = [...present].filter((c) => c !== NONE && c !== OVERLAP).sort((a, b) => Number(a) - Number(b));
+  const header = [
+    'OSM の highway',
+    ...codes.map((c) => columnLabel(c, codelist)),
+    '合計',
+    OVERLAP_LABEL,
+    NONE_LABEL,
+  ];
   const lines = [`| ${header.join(' | ')} |`, `| ${header.map(() => '---').join(' | ')} |`];
   for (const highway of ROAD_CLASSES.filter((h) => tally[h])) {
     const row = tally[highway];
-    const total = columns.reduce((sum, c) => sum + (row[c] ?? 0), 0);
-    const cells = columns.map((c) => (row[c] ? `${row[c]}（${((row[c] / total) * 100).toFixed(1)}%）` : '-'));
-    lines.push(`| ${[highway, ...cells, total, row[NONE] ?? 0].join(' | ')} |`);
+    const total = determinateTotal(row);
+    const cells = codes.map((c) => (row[c] ? `${row[c]}（${((row[c] / total) * 100).toFixed(1)}%）` : '-'));
+    lines.push(`| ${[highway, ...cells, total, row[OVERLAP] ?? 0, row[NONE] ?? 0].join(' | ')} |`);
   }
   return lines.join('\n');
 }

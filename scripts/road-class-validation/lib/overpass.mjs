@@ -69,6 +69,11 @@ export async function fetchRoadWays(bbox, options = {}) {
       await sleep(retryDelayMs);
     }
     const json = await response.json();
+    // Overpass は、タイムアウトやメモリ不足などの実行時エラーを HTTP 200 の remark で返し、elements が不完全になる。
+    // 欠けた標本のまま集計・キャッシュしないよう、全体を失敗させる。
+    if (typeof json.remark === 'string' && /runtime error/i.test(json.remark)) {
+      throw new Error(`Overpass の実行時エラー: ${json.remark}`);
+    }
     for (const way of json.elements) {
       ways.set(way.id, way);
     }

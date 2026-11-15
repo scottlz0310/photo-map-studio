@@ -14,6 +14,7 @@
 - `PhotoMapStudio.Tiles` のパッケージに README（`src/PhotoMapStudio.Tiles/README.md`。概要・使い方・User-Agent の設定）を含め、nuget.org のパッケージのページに表示されるようにした。使い方のサンプルコードは、パッケージを参照する別のプロジェクトでコンパイルできることを確認した。
 - リポジトリの README に、`PhotoMapStudio.Tiles` の NuGet バッジ（最新の安定版）と、パッケージの README・公開手順へのリンクを追加した。
 - OSM の道路種別（`highway` / `class`）が実際の路線種別（国道・都道府県道・市町村道）と合っているかを、PLATEAU（3D都市モデル）の道路の機能を正解として照合する検証スクリプト `scripts/road-class-validation/`（bun または Node。外部パッケージなし）と、その手順と 8 都市の結果の記録 `docs/development/road-class-validation.md` を追加した（#120 の調査）。盾の種別を決める `GetShieldKind` は変更していない。
+- `docs/development/road-class-validation.md` に、道路名が `国道<番号>号` の形のとき国道と確定できるか（Issue #120 の 3 つ目の項目）の確認結果を追記した。精度は 89〜100% だが、路線関係に加えても国道の再現率は最大 7 ポイントしか上がらず、県道には使えないため採用しない。あわせて、鳥取市の国道の数値を、採用した優先順位（`JP:E` と `JP:national` の両方を持つ道路は高速）に揃えて訂正した。
 
 ### Changed
 

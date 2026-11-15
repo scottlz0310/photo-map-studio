@@ -26,6 +26,7 @@
 ### Fixed
 
 - .NET 11 SDK で `CsWinRT1032` エラーとなるコレクション式（`IReadOnlyList<T>` / `IEnumerable<T>` への暗黙変換）を明示的な配列式へ修正した（[#108](https://github.com/scottlz0310/photo-map-studio/pull/108) 対応）。
+- 経路番号の盾の種別を、道路種別（`class`）からの推定ではなく、道路が属する路線関係（OpenFreeMap の `route_N_network`: `JP:national` は国道、`JP:prefectural` は都道府県道、`JP:E`・`JP:expressway*` は高速）で決めるようにした（#120）。8 都市の PLATEAU との照合で、`primary` を国道とする推定が全都市で外れ（国道の精度 32〜54%）、`tertiary` が都道府県道とは限らないことが分かったため。路線関係を持たない道路には盾を描かない（路線関係で決めた国道・都道府県道の精度は 85〜100%、再現率は 71〜99%）。Protomaps 系の `network`（`jp-national` など）は従来どおり使う。根拠と手順は `docs/development/road-class-validation.md`。
 
 ## [0.3.2] - 2026-10-23
 

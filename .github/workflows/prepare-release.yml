@@ -19,6 +19,22 @@ permissions:
   contents: read
 
 jobs:
+  # アプリのリリース準備のたびに、PhotoMapStudio.Tiles の未公開の変更を知らせる（警告のみ。リリース準備は止めない）。
+  # パッケージの公開は tiles-vX.Y.Z のタグで別に行う（docs/development/releasing-tiles.md）。
+  tiles-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # 最新の tiles-v* タグからの差分を調べるため、履歴とタグが要る
+          fetch-depth: 0
+
+      - name: Check unpublished PhotoMapStudio.Tiles changes
+        shell: pwsh
+        run: ./scripts/Test-TilesUnpublishedChanges.ps1
+
   prepare:
     uses: scottlz0310/release-automate/.github/workflows/reusable-prepare-release.yml@3c860f1b178eb5b942d87c800153bc47887a7bfd # v3.2.1
     secrets: inherit

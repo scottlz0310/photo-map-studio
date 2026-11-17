@@ -15,6 +15,7 @@
 - **キャンセル**: 取得と描画の途中（スタイルの中を含む）で確認し、キャンセルされたら `OperationCanceledException` で終わります（画像を返しません）
 - **欠落タイルの判別**: オフライン・配信範囲外のタイルを、結果の集計（`UnavailableTileCount`・`AbsentTileCount`・`IsComplete`）で判別できます。失敗を黙って隠しません
 - **画像の所有権**: 描画のたびに新しい画像を返します。`VectorViewResult` が所有し、`TakeImage()` で引き取れます
+- **事前デコード**: 描画せずに、中心を囲む 2×2 枚のタイルを取得・デコードしてデコード済みキャッシュへ入れます（`IVectorMapPrefetcher.PrefetchAsync`。次の描画でデコードのコストを払わずに済みます）
 - **高速化**: 表示範囲外の地物を描かない最適化（常に有効）、帯の並列描画・注記の並列（`BandCount`・`ParallelLabels`。既定は無効）、デコード済みタイルのキャッシュ（`DecodedTileCache`）
 - **スタイル**: OpenMapTiles スキーマ（`OpenMapTilesStyle`）と国土地理院の最適化ベクトル（`GsiVectorStyle`）。`IVectorMapStyle` で差し替えられます
 
@@ -58,6 +59,21 @@ SKImage image = result.Image;           // この結果が所有する。引き�
 - ズームは、256px のタイルを物理ピクセルで数えた連続値です。画素密度の高い表示（例: 200% DPI）では、表示の物理ピクセルに合わせた寸法とズームを渡してください
 - `BandCount` の最良値はコア数に近く、コア数より多いと遅くなり得ます。並列にすると、線や注記の縁の半透明画素が、並列にしない場合と最大 20 程度（/255）ずれ得ます（見た目は同じ）
 - 描画の途中でキャンセルされたとき、画像は返りません。`OperationCanceledException` になります
+
+### 事前デコード
+
+```csharp
+// 同じレンダラー（DecodedTileCache を指定したもの）で、操作が止まったあとの地点を先に読んでおく
+IVectorMapPrefetcher prefetcher = renderer;
+await prefetcher.PrefetchAsync(new VectorPrefetchRequest(CenterLatitude: 35.681, CenterLongitude: 139.767, Zoom: 15.4), CancellationToken.None);
+```
+
+- 取得ズーム（連続ズームの切り捨て。取得元の最大ズームで頭打ち）で、中心を囲む 2×2 枚を取得・デコードします。範囲外（南北の外）は飛ばし、経度は折り返します。配信範囲外のタイルは入れるものがないので飛ばします
+- **`DecodedTileCache` を指定していないレンダラーでは、効果がないため `InvalidOperationException` になります**
+- 取得・デコードの失敗は握りつぶさず、`TileFetchException` で返します（最適化なので無視するかは呼び出し側が決めます）
+- キャンセルされたら `OperationCanceledException` で終わります。キャッシュへは、デコードが済んだタイルだけを 1 枚ずつ入れます
+- 描画と同時に呼んでも壊れません。同じタイルを同時に取得・デコードする場合は、二重にデコードすることがあります（結果は同じ）
+- いつ・どこへ事前デコードするかは、呼び出し側が決めます。`IVectorMapRenderer` は変えていないので、利用側の既存の実装は壊れません
 
 ## フォント
 

@@ -11,7 +11,7 @@ namespace PhotoMapStudio.Rendering;
 /// <summary>
 /// ベクタータイルから SkiaSharp キャンバスへ直接地図を描画するレンダラー。
 /// </summary>
-public sealed class VectorMapRenderer : IVectorMapRenderer
+public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
 {
     private readonly IVectorTileSource defaultTileSource;
     private readonly IVectorMapStyle defaultStyle;
@@ -87,6 +87,46 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         // 画像を不変にしてから SKImage へ渡す。画素は共有し、コピーしない
         bitmap.SetImmutable();
         return new VectorViewResult(SKImage.FromBitmap(bitmap), context.RequestedTileCount, context.UnavailableTileCount, context.AbsentTileCount);
+    }
+
+    /// <inheritdoc />
+    /// <exception cref="InvalidOperationException">デコード済みキャッシュを指定していない（入れる先がなく、効果がない）。</exception>
+    /// <exception cref="TileFetchException">取得できないタイルがある、または取得した内容をベクタータイルとして読めない。</exception>
+    public async Task PrefetchAsync(VectorPrefetchRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!double.IsFinite(request.Zoom) || request.Zoom < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), request.Zoom, "ズームは 0 以上の有限値で指定してください。");
+        }
+
+        if (this.decodedTileCache is null)
+        {
+            throw new InvalidOperationException("事前デコードには、デコード済みキャッシュ（DecodedTileCache）を指定した VectorMapRenderer が必要です。");
+        }
+
+        var (activeSource, _) = this.resolver != null
+            ? this.resolver(request.TileSource)
+            : (this.defaultTileSource, this.defaultStyle);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await activeSource.PrepareAsync(request.Session, cancellationToken).ConfigureAwait(false);
+        int tileZoom = Math.Min((int)Math.Floor(request.Zoom), activeSource.MaxZoom);
+
+        foreach ((int x, int y) in PrefetchTileSelector.Around(request.CenterLatitude, request.CenterLongitude, tileZoom))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // 欠落（配信範囲外）のタイルは、入れるものがないので飛ばす。取得の失敗・読めない内容は、最適化の失敗として呼び出し側へ返す
+            TileLoad load = await this.LoadTileAsync(activeSource, tileZoom, x, y, request.Session, allowIncompleteMaps: false, cancellationToken).ConfigureAwait(false);
+            if (load.Status == TileLoadStatus.Unreadable)
+            {
+                throw CreateUnreadableTileException(BuildRequestUri(activeSource, request.TileSource, tileZoom, x, y));
+            }
+        }
+
+        // 最後のタイルの処理中にキャンセルされた場合も、正常完了として返さない
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private async Task RenderCoreAsync(SKCanvas canvas, double latitude, double longitude, double zoom, int width, int height,
@@ -167,79 +207,22 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                 }
 
                 renderContext.RequestedTileCount++;
-                // 動的に版を解決する取得元（OpenFreeMap の TileJSON など）は、解決の前後で識別子が変わる。キャッシュの鍵の版と取得するタイルの版を
-                // 揃えるため、解決した識別子を鍵にし、同じ識別子でタイルを取得する（CachedVectorTileSource と同じ作法。通信を止めているときは解決しない）
-                string? effectiveSourceId = null;
-                DecodedTileCache.TileKey cacheKey = default;
-                if (this.decodedTileCache is not null)
+                TileLoad load = await this.LoadTileAsync(activeSource, tileZoom, fetchX, ty, session, renderContext.AllowIncompleteMaps, cancellationToken).ConfigureAwait(false);
+                switch (load.Status)
                 {
-                    effectiveSourceId = session?.IsCacheOnly == true
-                        ? activeSource.SourceId
-                        : await activeSource.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
-                    cacheKey = new DecodedTileCache.TileKey(effectiveSourceId, tileZoom, fetchX, ty);
-                    if (this.decodedTileCache.TryGet(cacheKey, out VectorTile? cachedTile))
-                    {
-                        loadedTiles.Add(Place(cachedTile, tx, ty));
-                        continue;
-                    }
+                    case TileLoadStatus.Loaded:
+                        loadedTiles.Add(Place(load.Tile!, tx, ty));
+                        break;
+                    case TileLoadStatus.Unavailable:
+                        renderContext.UnavailableTileCount++;
+                        break;
+                    case TileLoadStatus.Absent:
+                        renderContext.AbsentTileCount++;
+                        break;
+                    case TileLoadStatus.Unreadable:
+                        unreadableTiles++;
+                        break;
                 }
-
-
-                byte[]? tileData;
-                try
-                {
-                    tileData = effectiveSourceId is null
-                        ? await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false)
-                        : await activeSource.GetTileForSourceIdAsync(tileZoom, fetchX, ty, effectiveSourceId, session, cancellationToken).ConfigureAwait(false);
-                }
-                catch (TileFetchException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw new OperationCanceledException(cancellationToken);
-                }
-                catch (TileFetchException exception) when (renderContext.AllowIncompleteMaps == true
-                    && (exception.IsTransient || exception.IsCacheOnlyMiss) && !cancellationToken.IsCancellationRequested)
-                {
-                    renderContext.UnavailableTileCount++;
-                    continue;
-                }
-                if (tileData is null || tileData.Length == 0)
-                {
-                    renderContext.AbsentTileCount++;
-                    continue;
-                }
-
-                VectorTile tile;
-                bool readable;
-                // デコードは同期処理なので、同じスレッドの割り当て量の差を、キャッシュの容量に数えるタイルの大きさの見積もりにする
-                long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-                try
-                {
-                    readable = VectorTileDecoder.TryDecode(tileData, out tile);
-                }
-                catch (Exception ex) when (ex is InvalidDataException or FormatException or IndexOutOfRangeException or ArgumentException or OverflowException)
-                {
-                    // 利用者が指定した配信元が、タイルではない内容（エラーページなど）を返した場合
-                    unreadableTiles++;
-                    continue;
-                }
-
-                // レイヤーの項目を 1 つも読めない場合は、ベクタータイルとして読めていない（デコーダーは不正な内容でも例外にしない）
-                if (!readable)
-                {
-                    unreadableTiles++;
-                    continue;
-                }
-
-                long decodedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
-                if (effectiveSourceId is not null
-                    && (session?.IsCacheOnly == true
-                        || string.Equals(effectiveSourceId, await activeSource.GetSourceIdAsync(cancellationToken).ConfigureAwait(false), StringComparison.Ordinal)))
-                {
-                    // 取得の間に識別子（版）が変わっていたら、どの版のタイルか分からないので保存しない
-                    this.decodedTileCache!.Add(cacheKey, tile, decodedBytes);
-                }
-
-                loadedTiles.Add(Place(tile, tx, ty));
             }
         }
 
@@ -251,18 +234,13 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         if (unreadableTiles > 0 || (attemptedTiles > 0 && loadedTiles.Count == 0
             && !(renderContext.AllowIncompleteMaps == true && renderContext.UnavailableTileCount > 0)))
         {
-            Uri requestUri = tileSource?.BuildTileUri(tileZoom, firstFetchX, firstFetchY)
-                ?? new Uri(string.Create(CultureInfo.InvariantCulture, $"vector-tile:{activeSource.SourceId}/{tileZoom}/{firstFetchX}/{firstFetchY}"), UriKind.Absolute);
+            Uri requestUri = BuildRequestUri(activeSource, tileSource, tileZoom, firstFetchX, firstFetchY);
 
             // 内容を受け取れたのに読めなかった場合は、配信範囲外ではなく指定の誤りである。
             // 404 にすると配信範囲外の切り替え（代替ソース）に隠れてしまうため、ステータスなしの失敗として報告する
             if (unreadableTiles > 0)
             {
-                throw new TileFetchException(
-                    "配信元の応答をベクタータイル（MVT / PBF）として読み取れません。URL・ファイルとレイヤー構成（スキーマ）の指定を確認してください。",
-                    requestUri,
-                    null,
-                    null);
+                throw CreateUnreadableTileException(requestUri);
             }
 
             throw new TileFetchException(
@@ -348,6 +326,104 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         // 最後のパスの途中でキャンセルされた場合も、完成した画像として返さない
         cancellationToken.ThrowIfCancellationRequested();
     }
+
+    /// <summary>
+    /// 1 枚のタイルを、デコード済みキャッシュ、なければ取得とデコードで得る。描画と事前デコードで共有する。
+    /// キャッシュへは、デコードが済んだタイルだけを 1 枚ずつ入れる（途中の状態は入れない）。
+    /// </summary>
+    private async Task<TileLoad> LoadTileAsync(IVectorTileSource source, int zoom, int x, int y,
+        TileFetchSession? session, bool allowIncompleteMaps, CancellationToken cancellationToken)
+    {
+        // 動的に版を解決する取得元（OpenFreeMap の TileJSON など）は、解決の前後で識別子が変わる。キャッシュの鍵の版と取得するタイルの版を
+        // 揃えるため、解決した識別子を鍵にし、同じ識別子でタイルを取得する（CachedVectorTileSource と同じ作法。通信を止めているときは解決しない）
+        string? effectiveSourceId = null;
+        DecodedTileCache.TileKey cacheKey = default;
+        if (this.decodedTileCache is not null)
+        {
+            effectiveSourceId = session?.IsCacheOnly == true
+                ? source.SourceId
+                : await source.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
+            cacheKey = new DecodedTileCache.TileKey(effectiveSourceId, zoom, x, y);
+            if (this.decodedTileCache.TryGet(cacheKey, out VectorTile? cachedTile))
+            {
+                return new TileLoad(TileLoadStatus.Loaded, cachedTile);
+            }
+        }
+
+        byte[]? tileData;
+        try
+        {
+            tileData = effectiveSourceId is null
+                ? await source.GetTileAsync(zoom, x, y, session, cancellationToken).ConfigureAwait(false)
+                : await source.GetTileForSourceIdAsync(zoom, x, y, effectiveSourceId, session, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TileFetchException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (TileFetchException exception) when (allowIncompleteMaps
+            && (exception.IsTransient || exception.IsCacheOnlyMiss) && !cancellationToken.IsCancellationRequested)
+        {
+            return new TileLoad(TileLoadStatus.Unavailable, null);
+        }
+
+        if (tileData is null || tileData.Length == 0)
+        {
+            return new TileLoad(TileLoadStatus.Absent, null);
+        }
+
+        VectorTile tile;
+        bool readable;
+        // デコードは同期処理なので、同じスレッドの割り当て量の差を、キャッシュの容量に数えるタイルの大きさの見積もりにする
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        try
+        {
+            readable = VectorTileDecoder.TryDecode(tileData, out tile);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or FormatException or IndexOutOfRangeException or ArgumentException or OverflowException)
+        {
+            // 利用者が指定した配信元が、タイルではない内容（エラーページなど）を返した場合
+            return new TileLoad(TileLoadStatus.Unreadable, null);
+        }
+
+        // レイヤーの項目を 1 つも読めない場合は、ベクタータイルとして読めていない（デコーダーは不正な内容でも例外にしない）
+        if (!readable)
+        {
+            return new TileLoad(TileLoadStatus.Unreadable, null);
+        }
+
+        long decodedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        if (effectiveSourceId is not null
+            && (session?.IsCacheOnly == true
+                || string.Equals(effectiveSourceId, await source.GetSourceIdAsync(cancellationToken).ConfigureAwait(false), StringComparison.Ordinal)))
+        {
+            // 取得の間に識別子（版）が変わっていたら、どの版のタイルか分からないので保存しない
+            this.decodedTileCache!.Add(cacheKey, tile, decodedBytes);
+        }
+
+        return new TileLoad(TileLoadStatus.Loaded, tile);
+    }
+
+    private static Uri BuildRequestUri(IVectorTileSource activeSource, TileSource? tileSource, int zoom, int x, int y)
+        => tileSource?.BuildTileUri(zoom, x, y)
+            ?? new Uri(string.Create(CultureInfo.InvariantCulture, $"vector-tile:{activeSource.SourceId}/{zoom}/{x}/{y}"), UriKind.Absolute);
+
+    private static TileFetchException CreateUnreadableTileException(Uri requestUri)
+        => new(
+            "配信元の応答をベクタータイル（MVT / PBF）として読み取れません。URL・ファイルとレイヤー構成（スキーマ）の指定を確認してください。",
+            requestUri,
+            null,
+            null);
+
+    private enum TileLoadStatus
+    {
+        Loaded,
+        Unavailable,
+        Absent,
+        Unreadable,
+    }
+
+    private readonly record struct TileLoad(TileLoadStatus Status, VectorTile? Tile);
 
     /// <summary>
     /// 面・線を、画像を横に分けた帯ごとに並列で描く（帯は連続した行なので、同じ画素メモリの別範囲を別のサーフェスで描ける）。

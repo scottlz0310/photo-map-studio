@@ -129,6 +129,16 @@ SkiaSharp（4.153.1、既存依存）を活用し、出力サイズ（幅 $W$ ×
    - 撮影地点へのピン画像（`green_pin.png` 等）の合成。
    - ODbL 帰属表示（`© OpenStreetMap contributors` 等）または国土地理院コンテンツ利用規約に基づく出典焼き込み。
 
+### 3.4 表示範囲の描画 API (`VectorMapRenderer.RenderViewAsync`)
+
+PhotoGeoExplorer など、表示範囲全体を 1 枚の画像として描く利用者向けの API（#130 の PR B1）。要求（`VectorViewRequest`）を受け、結果（`VectorViewResult`）を返す。
+
+- **連続ズーム**: `Zoom` は `double`。取得するタイルのズームは `min(floor(Zoom), 取得元の最大ズーム)`、表示倍率は `2^(Zoom − 取得ズーム)`、スタイルへ渡すズームは `floor(Zoom)`。整数ズームでは従来の `RenderMapAsync` / `RenderToCanvasAsync` と同じ描き方になる（色形式の違いによる境界画素の ±1 を除く）。
+- **物理ピクセル寸法**: 画像の寸法は物理ピクセルで指定する。描画側は画素密度を持たない（ウィンドウの DPI との丸めの差を避けるため、呼び出し側が表示の物理ピクセルに合わせた寸法とズームを渡す）。
+- **画像の所有**: 描画のたびに新しい画像を作り、共有・再利用しない。画像は `VectorViewResult`（`IDisposable`）が所有し、`Dispose` で破棄する。呼び出し側が引き取るときは `TakeImage()` を使う（以後、結果は画像を破棄しない）。
+- **キャンセル**: 取得と描画のパスの境界で確認し、キャンセルされたら `OperationCanceledException` で終わる（画像を返さない）。
+- **欠落の判別**: `AllowIncompleteMaps` を指定すると、一時的な通信失敗・通信停止中のキャッシュ未命中のタイルを欠落として許し、`UnavailableTileCount`（通信失敗）・`AbsentTileCount`（配信範囲外）・`IsComplete` で判別できる。既定では許さず、失敗は `TileFetchException` になる。
+
 ---
 
 ## 4. スパイク検証（M0 / M0.5）の実績

@@ -118,23 +118,70 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, new VectorMapRenderContext(false), cancellationToken);
 
     /// <inheritdoc />
-    public async Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
+    public Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
         TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(zoom);
+        return this.RenderCoreAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, renderContext, cancellationToken);
+    }
+
+    /// <summary>
+    /// 表示範囲全体を 1 枚の画像として描く。ズームは連続値で、位置・拡大率は連続値のまま描き、
+    /// 取得するタイルのズームだけを整数にする。画像は呼び出し側へ所有権を渡す（共有・再利用しない）。
+    /// </summary>
+    /// <param name="request">描画要求（中心・連続ズーム・物理ピクセル寸法など）。</param>
+    /// <param name="cancellationToken">
+    /// キャンセルトークン。取得・描画の途中で確認し、キャンセルされたときは画像を返さず
+    /// <see cref="OperationCanceledException"/> で終わる。
+    /// </param>
+    /// <returns>画像と欠落タイルの集計。使い終わったら <see cref="VectorViewResult.Dispose"/> する（画像を取り出したときは不要）。</returns>
+    /// <exception cref="TileFetchException">
+    /// 描画できるタイルが 1 枚もない、または欠落を許可していないときに取得できないタイルがある。
+    /// </exception>
+    public async Task<VectorViewResult> RenderViewAsync(VectorViewRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.PixelWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.PixelHeight);
+        if (!double.IsFinite(request.Zoom) || request.Zoom < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), request.Zoom, "ズームは 0 以上の有限値で指定してください。");
+        }
+
+        var context = new VectorMapRenderContext(request.AllowIncompleteMaps);
+        using var bitmap = new SKBitmap(request.PixelWidth, request.PixelHeight, SKImageInfo.PlatformColorType, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            await this.RenderCoreAsync(
+                canvas, request.CenterLatitude, request.CenterLongitude, request.Zoom, request.PixelWidth, request.PixelHeight,
+                request.Session, request.TileSource, context, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 画像を不変にしてから SKImage へ渡す。画素は共有し、コピーしない
+        bitmap.SetImmutable();
+        return new VectorViewResult(SKImage.FromBitmap(bitmap), context.RequestedTileCount, context.UnavailableTileCount, context.AbsentTileCount);
+    }
+
+    private async Task RenderCoreAsync(SKCanvas canvas, double latitude, double longitude, double zoom, int width, int height,
+        TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(renderContext);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
-        ArgumentOutOfRangeException.ThrowIfNegative(zoom);
 
         var (activeSource, activeStyle) = this.resolver != null
             ? this.resolver(tileSource)
             : (this.defaultTileSource, this.defaultStyle);
 
-        // 1. タイル取得用ズームとスケール比の決定（過拡大対応）。最大ズームを確定してから求める
+        // 1. タイル取得用ズームとスケール比の決定（過拡大対応）。最大ズームを確定してから求める。
+        // 取得ズームは整数、表示倍率は連続値。スタイルの判定には切り捨てた整数のズームを使う
+        cancellationToken.ThrowIfCancellationRequested();
         await activeSource.PrepareAsync(session, cancellationToken).ConfigureAwait(false);
-        int tileZoom = Math.Min(zoom, activeSource.MaxZoom);
+        int styleZoom = (int)Math.Floor(zoom);
+        int tileZoom = Math.Min(styleZoom, activeSource.MaxZoom);
         double scaleRatio = Math.Pow(2.0, zoom - tileZoom);
         int maxTiles = 1 << tileZoom;
 
@@ -238,6 +285,9 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             }
         }
 
+        // キャンセルされた場合は、取得元が取得失敗として返した結果より先に、キャンセルとして終わる
+        cancellationToken.ThrowIfCancellationRequested();
+
         // 描画できるタイルが 1 枚もない場合は配信範囲外として扱う。白紙の地図を成功として返すと、
         // 国外への切替（404 のみが契機）が働かず、一括生成でも異常に気付けない。
         if (unreadableTiles > 0 || (attemptedTiles > 0 && loadedTiles.Count == 0
@@ -264,8 +314,6 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                 null);
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-
         // 5. SkiaSharp によるキャンバス描画
         // 背景クリア
         canvas.Clear(activeStyle.BackgroundColor);
@@ -276,12 +324,13 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         // パス 1: 全タイルの面（ポリゴン）
         for (int i = 0; i < loadedTiles.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             canvas.Save();
             canvas.Translate(item.dx, item.dy);
             canvas.Scale(item.scale, item.scale);
 
-            activeStyle.RenderPolygons(canvas, item.tile, item.scale, zoom);
+            activeStyle.RenderPolygons(canvas, item.tile, item.scale, styleZoom);
 
             canvas.Restore();
         }
@@ -289,12 +338,13 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         // パス 2: 全タイルの線（道路・鉄道・ライン）
         for (int i = 0; i < loadedTiles.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             canvas.Save();
             canvas.Translate(item.dx, item.dy);
             canvas.Scale(item.scale, item.scale);
 
-            activeStyle.RenderLines(canvas, item.tile, item.scale, zoom);
+            activeStyle.RenderLines(canvas, item.tile, item.scale, styleZoom);
 
             canvas.Restore();
         }
@@ -302,29 +352,35 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         // パス 3a: 全タイルのシンボル（経路番号の盾など）。注記より優先して配置する
         for (int i = 0; i < loadedTiles.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
             tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
 
-            activeStyle.RenderSymbols(canvas, item.tile, tileToCanvasMatrix, zoom, collisionGrid, viewport);
+            activeStyle.RenderSymbols(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport);
         }
 
         // 道路名を全タイルの地名・施設名より先に配置する。
         for (int i = 0; i < loadedTiles.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             SKMatrix matrix = SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy);
-            activeStyle.RenderLineLabels(canvas, item.tile, matrix, zoom, collisionGrid, viewport);
+            activeStyle.RenderLineLabels(canvas, item.tile, matrix, styleZoom, collisionGrid, viewport);
         }
 
         // パス 3b: 全タイルの注記・ラベル（画面座標系で直接描画）
         for (int i = 0; i < loadedTiles.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
             tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
 
-            activeStyle.RenderLabels(canvas, item.tile, tileToCanvasMatrix, zoom, collisionGrid, viewport);
+            activeStyle.RenderLabels(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport);
         }
+
+        // 最後のパスの途中でキャンセルされた場合も、完成した画像として返さない
+        cancellationToken.ThrowIfCancellationRequested();
     }
 }

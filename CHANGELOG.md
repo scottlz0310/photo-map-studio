@@ -8,6 +8,7 @@
 
 ### Added
 
+- `PhotoMapStudio.Rendering` に、表示範囲全体を 1 枚の画像として描く API `VectorMapRenderer.RenderViewAsync` を追加した（#130 の PR B1）。連続ズーム（`double`。取得ズームは整数、表示倍率は連続値）、物理ピクセルの画像寸法、キャンセル（途中でキャンセルされたら `OperationCanceledException` で終わり、画像を返さない）、欠落タイルの判別（`AllowIncompleteMaps` と `UnavailableTileCount`・`AbsentTileCount`・`IsComplete`）、画像の所有権（結果は `IDisposable`。`TakeImage()` で引き取れる）に対応する。既存の API の出力は変わらない（保存済みタイルの比較で、ズーム 16〜19 の 4 枚が移行前と完全に一致）。アプリの動作は変わらない。
 - `Prepare Release` に、`PhotoMapStudio.Tiles` の未公開の変更を確認するジョブ `tiles-check`（`scripts/Test-TilesUnpublishedChanges.ps1`）を追加した。最新の正式版のタグ（`tiles-vX.Y.Z`）からの `src/PhotoMapStudio.Tiles` の差分を「変更なし」「依存の更新だけ」「変更あり」に分類し、公開が要りそうなときは警告を出す。警告だけで、リリース準備は止めず、パッケージの公開も自動では行わない（公開は従来どおり `tiles-vX.Y.Z` のタグで行う）。判断の基準は `docs/development/releasing-tiles.md` に追記した。
 
 ### Changed

@@ -10,9 +10,9 @@ internal static class MercatorProjection
     public const int TileSize = 256;
 
     /// <summary>
-    /// 緯度経度を、指定ズームのワールドピクセル座標へ変換する。
+    /// 緯度経度を、指定ズーム（連続値）のワールドピクセル座標へ変換する。
     /// </summary>
-    public static (double X, double Y) ToWorldPixel(double latitude, double longitude, int zoom)
+    public static (double X, double Y) ToWorldPixel(double latitude, double longitude, double zoom)
     {
         double n = Math.Pow(2.0, zoom);
         double x = ((longitude + 180.0) / 360.0) * n;

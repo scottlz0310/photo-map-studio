@@ -379,5 +379,8 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
             activeStyle.RenderLabels(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport);
         }
+
+        // 最後のパスの途中でキャンセルされた場合も、完成した画像として返さない
+        cancellationToken.ThrowIfCancellationRequested();
     }
 }

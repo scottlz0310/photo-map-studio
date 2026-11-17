@@ -126,6 +126,20 @@ public class VectorViewRenderingTests
     }
 
     [Fact]
+    public async Task 最後のパスの描画中にキャンセルされても画像を返さない()
+    {
+        using var cts = new CancellationTokenSource();
+        var style = new RecordingStyle { OnCall = pass => { if (pass == "labels") { cts.Cancel(); } } };
+        var renderer = new VectorMapRenderer(SingleTileSource(MvtTestTile.CreateWater()), style);
+        (double latitude, double longitude) = TileToLatLon(TileX + 0.5, TileY + 0.5, BaseZoom);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => renderer.RenderViewAsync(new VectorViewRequest(latitude, longitude, 14, 64, 64), cts.Token));
+
+        Assert.Equal("labels", style.Calls[^1]);
+    }
+
+    [Fact]
     public async Task 全てのタイルを取得できれば欠落はない()
     {
         (double latitude, double longitude) = TileToLatLon(TileX, TileY, BaseZoom);

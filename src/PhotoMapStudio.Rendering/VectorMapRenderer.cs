@@ -124,6 +124,9 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
                 throw CreateUnreadableTileException(BuildRequestUri(activeSource, request.TileSource, tileZoom, x, y));
             }
         }
+
+        // 最後のタイルの処理中にキャンセルされた場合も、正常完了として返さない
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private async Task RenderCoreAsync(SKCanvas canvas, double latitude, double longitude, double zoom, int width, int height,

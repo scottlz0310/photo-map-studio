@@ -169,6 +169,33 @@ public class VectorPrefetchTests
         Assert.Equal(1, cache.Count);
     }
 
+    [Theory]
+    [InlineData(1)] // 4 枚のうち最後の 1 枚の処理中
+    [InlineData(4)]
+    public async Task 最後のタイルの処理中にキャンセルされても正常完了にしない(int cancelAtFetch)
+    {
+        int fetches = 0;
+        using var cts = new CancellationTokenSource();
+        using var style = new OpenMapTilesStyle();
+        // cancelAtFetch 番目の取得で取り消し、有効なタイルを返す（1 を指定した場合は、対象が 1 枚の地点を使う）
+        var source = new MockVectorTileSource(cancelAtFetch == 1 ? 0 : BaseZoom, (_, _, _) =>
+        {
+            if (Interlocked.Increment(ref fetches) == cancelAtFetch)
+            {
+                cts.Cancel();
+            }
+
+            return MvtTestTile.CreateWater();
+        });
+        var renderer = new VectorMapRenderer(source, style, new DecodedTileCache(10_000_000));
+        // ズーム 0 は対象が 1 枚、それ以外は 4 枚
+        VectorPrefetchRequest request = cancelAtFetch == 1 ? new VectorPrefetchRequest(0, 0, 0) : PrefetchRequest();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => renderer.PrefetchAsync(request, cts.Token));
+
+        Assert.Equal(cancelAtFetch, fetches);
+    }
+
     [Fact]
     public async Task 取得の失敗は握りつぶさず例外で返す()
     {

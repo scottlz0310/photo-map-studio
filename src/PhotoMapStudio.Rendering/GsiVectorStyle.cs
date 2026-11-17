@@ -16,7 +16,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
     /// <summary>
     /// 国土地理院の道路分類。
     /// </summary>
-    public enum GsiRoadKind
+    internal enum GsiRoadKind
     {
         /// <summary>高速自動車国道等。</summary>
         Highway,
@@ -362,7 +362,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
     /// </summary>
     /// <param name="feature">道路フィーチャー。</param>
     /// <returns>道路種別と描画基準幅。</returns>
-    public static (GsiRoadKind Kind, float Width) GetRoadCategory(VectorTileFeature feature)
+    internal static (GsiRoadKind Kind, float Width) GetRoadCategory(VectorTileFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
 

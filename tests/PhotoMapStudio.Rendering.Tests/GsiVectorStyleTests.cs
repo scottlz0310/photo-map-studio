@@ -166,23 +166,23 @@ public sealed class GsiVectorStyleTests
     }
 
     [Theory]
-    [InlineData("高速自動車国道等", "19.5m以上", GsiVectorStyle.GsiRoadKind.Highway, 5.2f)]
-    [InlineData("国道", "5.5m-13m未満", GsiVectorStyle.GsiRoadKind.National, 3.2f)]
-    [InlineData("主要道路", "3m-5.5m未満", GsiVectorStyle.GsiRoadKind.National, 3.2f)]
-    [InlineData("都道府県道", "3m-5.5m未満", GsiVectorStyle.GsiRoadKind.Prefectural, 2.8f)]
-    [InlineData("都道府県道", "5.5m-13m未満", GsiVectorStyle.GsiRoadKind.Prefectural, 3.2f)]
-    [InlineData("市区町村道等", "3m未満", GsiVectorStyle.GsiRoadKind.Minor, 1.5f)]
-    [InlineData("市区町村道等", "3m-5.5m未満", GsiVectorStyle.GsiRoadKind.Minor, 2.2f)]
-    [InlineData("市区町村道等", "5.5m-13m未満", GsiVectorStyle.GsiRoadKind.Minor, 3.2f)]
-    [InlineData("市区町村道等", "13m-19.5m未満", GsiVectorStyle.GsiRoadKind.Minor, 4.2f)]
-    [InlineData("市区町村道等", "19.5m以上", GsiVectorStyle.GsiRoadKind.Minor, 5.2f)]
-    [InlineData("市区町村道等", "不明", GsiVectorStyle.GsiRoadKind.Minor, 2.2f)]
-    [InlineData("その他", "不明", GsiVectorStyle.GsiRoadKind.Minor, 2.2f)]
-    [InlineData("0", "2", GsiVectorStyle.GsiRoadKind.National, 3.2f)]
+    [InlineData("高速自動車国道等", "19.5m以上", "Highway", 5.2f)]
+    [InlineData("国道", "5.5m-13m未満", "National", 3.2f)]
+    [InlineData("主要道路", "3m-5.5m未満", "National", 3.2f)]
+    [InlineData("都道府県道", "3m-5.5m未満", "Prefectural", 2.8f)]
+    [InlineData("都道府県道", "5.5m-13m未満", "Prefectural", 3.2f)]
+    [InlineData("市区町村道等", "3m未満", "Minor", 1.5f)]
+    [InlineData("市区町村道等", "3m-5.5m未満", "Minor", 2.2f)]
+    [InlineData("市区町村道等", "5.5m-13m未満", "Minor", 3.2f)]
+    [InlineData("市区町村道等", "13m-19.5m未満", "Minor", 4.2f)]
+    [InlineData("市区町村道等", "19.5m以上", "Minor", 5.2f)]
+    [InlineData("市区町村道等", "不明", "Minor", 2.2f)]
+    [InlineData("その他", "不明", "Minor", 2.2f)]
+    [InlineData("0", "2", "National", 3.2f)]
     public void 実スキーマ文字列属性による道路分類と幅員が正確に解決される(
         string rdCtg,
         string rnkWidth,
-        GsiVectorStyle.GsiRoadKind expectedKind,
+        string expectedKind,
         float expectedWidth)
     {
         var feature = new VectorTileFeature
@@ -197,7 +197,7 @@ public sealed class GsiVectorStyleTests
 
         var (kind, width) = GsiVectorStyle.GetRoadCategory(feature);
 
-        Assert.Equal(expectedKind, kind);
+        Assert.Equal(expectedKind, kind.ToString());
         Assert.Equal(expectedWidth, width);
     }
 

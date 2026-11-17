@@ -13,8 +13,17 @@ public sealed class VectorViewResult : IDisposable
 {
     private SKImage? image;
 
-    internal VectorViewResult(SKImage image, int requestedTileCount, int unavailableTileCount, int absentTileCount)
+    /// <summary>結果を作る。<see cref="IVectorMapRenderer"/> の実装（テスト用の偽物を含む）が使う。画像の所有権は、この結果へ移る。</summary>
+    /// <param name="image">描いた画像。この結果が所有し、<see cref="Dispose"/> で破棄する。</param>
+    /// <param name="requestedTileCount">要求したタイルの数。</param>
+    /// <param name="unavailableTileCount">通信の失敗または停止で取得できなかったタイルの数。</param>
+    /// <param name="absentTileCount">配信範囲外のタイルの数。</param>
+    public VectorViewResult(SKImage image, int requestedTileCount = 0, int unavailableTileCount = 0, int absentTileCount = 0)
     {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentOutOfRangeException.ThrowIfNegative(requestedTileCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(unavailableTileCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(absentTileCount);
         this.image = image;
         this.RequestedTileCount = requestedTileCount;
         this.UnavailableTileCount = unavailableTileCount;

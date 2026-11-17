@@ -131,9 +131,11 @@ SkiaSharp（4.153.1、既存依存）を活用し、出力サイズ（幅 $W$ ×
 
 ### 3.4 表示範囲の描画 API (`VectorMapRenderer.RenderViewAsync`)
 
+`IVectorMapRenderer` は、この `RenderViewAsync` だけを持つ契約で、`Core`（`SkiaMapImageComposer`）もこの API で描く。`Core` は、合成先と同じ色形式（Rgba8888）を `ColorType` で指定し、返された画像を合成先へそのまま描く（ピンなどを重ねる前の画素が、直接描いた場合と一致する）。
+
 PhotoGeoExplorer など、表示範囲全体を 1 枚の画像として描く利用者向けの API（#130 の PR B1）。要求（`VectorViewRequest`）を受け、結果（`VectorViewResult`）を返す。
 
-- **連続ズーム**: `Zoom` は `double`。取得するタイルのズームは `min(floor(Zoom), 取得元の最大ズーム)`、表示倍率は `2^(Zoom − 取得ズーム)`、スタイルへ渡すズームは `floor(Zoom)`。整数ズームでは従来の `RenderMapAsync` / `RenderToCanvasAsync` と同じ描き方になる（色形式の違いによる境界画素の ±1 を除く）。
+- **連続ズーム**: `Zoom` は `double`。取得するタイルのズームは `min(floor(Zoom), 取得元の最大ズーム)`、表示倍率は `2^(Zoom − 取得ズーム)`、スタイルへ渡すズームは `floor(Zoom)`。整数ズームでは、従来の整数ズーム専用の API（`RenderMapAsync` / `RenderToCanvasAsync`。#130 の PR B3a で削除）と同じ描き方になる。
 - **物理ピクセル寸法**: 画像の寸法は物理ピクセルで指定する。描画側は画素密度を持たない（ウィンドウの DPI との丸めの差を避けるため、呼び出し側が表示の物理ピクセルに合わせた寸法とズームを渡す）。
 - **画像の所有**: 描画のたびに新しい画像を作り、共有・再利用しない。画像は `VectorViewResult`（`IDisposable`）が所有し、`Dispose` で破棄する。呼び出し側が引き取るときは `TakeImage()` を使う（以後、結果は画像を破棄しない）。
 - **キャンセル**: 取得・各描画パスのタイルごと・描画の完了後に加えて、スタイルの中（`IVectorMapStyle` の各メソッドが受けるトークン）でレイヤー・地物の単位で確認する。キャンセルされたら `OperationCanceledException` で終わる（画像を返さない）。並列描画中も、包まれず `OperationCanceledException` になる。

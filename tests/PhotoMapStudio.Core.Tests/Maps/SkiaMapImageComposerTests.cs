@@ -299,6 +299,8 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         Assert.False(result.UsedFallback);
         Assert.True(stubRenderer.RenderCalled);
         Assert.Equal(TileSources.GsiVector, stubRenderer.LastTileSource);
+        // 合成先（Rgba8888）と同じ色形式で描かせ、ピンなどを重ねる前の画素を直接描いた場合と一致させる
+        Assert.Equal(SKColorType.Rgba8888, stubRenderer.LastColorType);
     }
 
     [Fact]
@@ -611,56 +613,22 @@ public sealed class SkiaMapImageComposerTests : IDisposable
         public int LastHeight { get; private set; }
         public TileFetchSession? LastSession { get; private set; }
         public TileSource? LastTileSource { get; private set; }
+        public SKColorType? LastColorType { get; private set; }
 
-        public Task RenderToCanvasAsync(
-            SKCanvas canvas,
-            double latitude, double longitude,
-            int zoom,
-            int width,
-            int height,
-            TileFetchSession? session,
-            TileSource? tileSource,
-            CancellationToken cancellationToken = default)
+        public Task<VectorViewResult> RenderViewAsync(VectorViewRequest request, CancellationToken cancellationToken = default)
         {
             this.RenderCalled = true;
-            this.LastCenter = new GeoCoordinate(latitude, longitude);
-            this.LastZoom = zoom;
-            this.LastWidth = width;
-            this.LastHeight = height;
-            this.LastSession = session;
-            this.LastTileSource = tileSource;
+            this.LastCenter = new GeoCoordinate(request.CenterLatitude, request.CenterLongitude);
+            this.LastZoom = (int)request.Zoom;
+            this.LastWidth = request.PixelWidth;
+            this.LastHeight = request.PixelHeight;
+            this.LastSession = request.Session;
+            this.LastTileSource = request.TileSource;
+            this.LastColorType = request.ColorType;
 
-            canvas.Clear(fillColor);
-            return Task.CompletedTask;
+            using var surface = SKSurface.Create(new SKImageInfo(request.PixelWidth, request.PixelHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+            surface.Canvas.Clear(fillColor);
+            return Task.FromResult(new VectorViewResult(surface.Snapshot()));
         }
-
-        public Task RenderToCanvasAsync(
-            SKCanvas canvas,
-            double latitude, double longitude,
-            int zoom,
-            int width,
-            int height,
-            TileFetchSession? session,
-            CancellationToken cancellationToken = default)
-            => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
-
-        public Task<SKBitmap> RenderMapAsync(
-            double latitude, double longitude,
-            int zoom,
-            int width,
-            int height,
-            TileFetchSession? session,
-            TileSource? tileSource,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<SKBitmap> RenderMapAsync(
-            double latitude, double longitude,
-            int zoom,
-            int width,
-            int height,
-            TileFetchSession? session,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
     }
 }

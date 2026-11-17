@@ -14,6 +14,7 @@
 
 ### Changed
 
+- `PhotoMapStudio.Rendering` の公開 API を整理した（#130 の PR B3a。0.1.0 の公開前の変更）。`IVectorMapRenderer` を `RenderViewAsync` だけの契約にし、`VectorMapRenderer` の整数ズーム専用の旧 API（`RenderMapAsync`・`RenderToCanvasAsync`）と `VectorMapRenderContext` を削除した。`Core`（`SkiaMapImageComposer`）は新 API で描く。要求に `ColorType`（既定は実行環境の形式）を追加し、`Core` は合成先と同じ Rgba8888 を指定するため、アプリの出力は変わらない（保存済みタイルの出力が B2 と SHA-256 まで一致）。`VectorViewResult` のコンストラクターを公開した（`IVectorMapRenderer` の偽物を作れるように）。`GsiVectorStyle.GsiRoadKind`・`GetRoadCategory` を `internal` にし、公開 API の XML ドキュメントの未記載をビルドエラーにした（`GenerateDocumentationFile`）。
 - ベクター地図の描画層（`VectorMapRenderer`・スタイル・注記配置など）を `PhotoMapStudio.Core` から新しいプロジェクト `PhotoMapStudio.Rendering`（名前空間 `PhotoMapStudio.Rendering`。`Tiles` に依存し、`Core` には依存しない）へ移した（#130 の PR A）。描画層の NuGet 化に備えた構成変更で、まだ公開しない（`IsPackable=false`）。描画のテストは `PhotoMapStudio.Rendering.Tests` へ移し、CI に追加した。レンダラーの引数は `GeoCoordinate` から緯度経度（`double`）に変わり、メルカトルの式は `Rendering` の内部に持つ（`Core.Geo.WebMercator` との一致は `Core.Tests` で検証する）。保存済みタイルで移行前後の出力を比較し、ズーム 16〜19 の 4 枚の PNG が完全に一致した。アプリの動作は変わらない。
 
 ## [0.3.3] - 2026-11-15

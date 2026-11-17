@@ -1,4 +1,5 @@
 using PhotoMapStudio.Rendering;
+using PhotoMapStudio.Rendering.Tests.TestSupport;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 

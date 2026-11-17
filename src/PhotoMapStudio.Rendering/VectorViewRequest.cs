@@ -1,5 +1,7 @@
 using PhotoMapStudio.Tiles;
 
+using SkiaSharp;
+
 namespace PhotoMapStudio.Rendering;
 
 /// <summary>
@@ -41,4 +43,10 @@ public sealed record VectorViewRequest(double CenterLatitude, double CenterLongi
     /// 注記の衝突判定は逐次のため 1 スレッドで行う。画像を重ねるため、注記の縁の半透明画素が、並列にしない場合とわずかにずれ得る。
     /// </summary>
     public bool ParallelLabels { get; init; }
+
+    /// <summary>
+    /// 画像の色形式。既定（<see langword="null"/>）は、実行環境の形式（Windows は BGRA）で、画面へ描く画像に向く。
+    /// 別の色形式の画像へ重ねて合成するときは、その形式（例: RGBA）を指定すると、色形式の違いによる半透明画素の丸めのずれが出ない。
+    /// </summary>
+    public SKColorType? ColorType { get; init; }
 }

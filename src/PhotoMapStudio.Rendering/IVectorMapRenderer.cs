@@ -1,139 +1,19 @@
-using PhotoMapStudio.Tiles;
-using PhotoMapStudio.Tiles.Vector;
-
-using SkiaSharp;
-
 namespace PhotoMapStudio.Rendering;
 
 /// <summary>
-/// ベクタータイルから SkiaSharp キャンバスへ地図を描画するレンダラーの契約。
+/// ベクタータイルから、表示範囲全体を 1 枚の画像として描くレンダラーの契約。
 /// </summary>
 public interface IVectorMapRenderer
 {
     /// <summary>
-    /// 指定されたキャンバスにベクター地図を直接描画する。
+    /// 表示範囲全体を 1 枚の画像として描く。ズームは連続値で、位置・拡大率は連続値のまま描き、取得するタイルのズームだけを整数にする。
+    /// 画像は呼び出し側へ所有権を渡す（共有・再利用しない）。
     /// </summary>
-    /// <param name="canvas">描画先のキャンバス。</param>
-    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
-    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">描画幅（ピクセル）。</param>
-    /// <param name="height">描画高さ（ピクセル）。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    Task RenderToCanvasAsync(
-        SKCanvas canvas,
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
-
-    /// <summary>
-    /// 指定されたキャンバスにベクター地図を直接描画する（セッション統計付き）。
-    /// </summary>
-    /// <param name="canvas">描画先のキャンバス。</param>
-    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
-    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">描画幅（ピクセル）。</param>
-    /// <param name="height">描画高さ（ピクセル）。</param>
-    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    Task RenderToCanvasAsync(
-        SKCanvas canvas,
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
-
-    /// <summary>
-    /// 指定されたキャンバスにベクター地図を直接描画する（セッション統計および配信元指定付き）。
-    /// </summary>
-    /// <param name="canvas">描画先のキャンバス。</param>
-    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
-    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">描画幅（ピクセル）。</param>
-    /// <param name="height">描画高さ（ピクセル）。</param>
-    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
-    /// <param name="tileSource">描画対象のタイル配信元情報。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    Task RenderToCanvasAsync(
-        SKCanvas canvas,
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        TileSource? tileSource,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>画像単位の縮退設定と欠落集計を指定して描画する。</summary>
-    Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
-        TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
-        CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, cancellationToken);
-
-    /// <summary>
-    /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する。
-    /// </summary>
-    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
-    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">出力画像の幅（ピクセル）。</param>
-    /// <param name="height">出力画像の高さ（ピクセル）。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    /// <returns>描画されたビットマップ画像。</returns>
-    Task<SKBitmap> RenderMapAsync(
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
-
-    /// <summary>
-    /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する（セッション統計付き）。
-    /// </summary>
-    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
-    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">出力画像の幅（ピクセル）。</param>
-    /// <param name="height">出力画像の高さ（ピクセル）。</param>
-    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    /// <returns>描画されたビットマップ画像。</returns>
-    Task<SKBitmap> RenderMapAsync(
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
-
-    /// <summary>
-    /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する（セッション統計および配信元指定付き）。
-    /// </summary>
-    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
-    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
-    /// <param name="zoom">表示ズームレベル。</param>
-    /// <param name="width">出力画像の幅（ピクセル）。</param>
-    /// <param name="height">出力画像の高さ（ピクセル）。</param>
-    /// <param name="session">一括生成単位の取得統計・レート管理セッション。</param>
-    /// <param name="tileSource">描画対象のタイル配信元情報。</param>
-    /// <param name="cancellationToken">キャンセルトークン。</param>
-    /// <returns>描画されたビットマップ画像。</returns>
-    Task<SKBitmap> RenderMapAsync(
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        TileSource? tileSource,
-        CancellationToken cancellationToken = default);
+    /// <param name="request">描画要求（中心・連続ズーム・物理ピクセル寸法など）。</param>
+    /// <param name="cancellationToken">
+    /// キャンセルトークン。取得・描画の途中で確認し、キャンセルされたときは画像を返さず
+    /// <see cref="OperationCanceledException"/> で終わる。
+    /// </param>
+    /// <returns>画像と欠落タイルの集計。使い終わったら <see cref="VectorViewResult.Dispose"/> する（画像を取り出したときは不要）。</returns>
+    Task<VectorViewResult> RenderViewAsync(VectorViewRequest request, CancellationToken cancellationToken = default);
 }

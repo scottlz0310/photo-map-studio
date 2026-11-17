@@ -5,6 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>PhotoMapStudio.Tiles</RootNamespace>
+    <!--
+      このパッケージの既定の版（公開済みの最新）。`tiles-vX.Y.Z` の公開は `-p:Version` で上書きする。
+      PhotoMapStudio.Rendering を `dotnet pack` したとき、Rendering が宣言する Tiles への依存（>= この版）になるため、
+      Tiles を公開したら、この値を公開した版へ更新する（docs/development/releasing-rendering.md）。
+    -->
+    <Version>0.1.0</Version>
     <!-- 公開 API の XML ドキュメントをパッケージへ含め、未記載（CS1591）をビルドエラーにする -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

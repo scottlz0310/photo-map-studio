@@ -4,18 +4,43 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- 公開 API の XML ドキュメントを必須にし、未記載（CS1591）をビルドエラーにする -->
+    <RootNamespace>PhotoMapStudio.Rendering</RootNamespace>
+    <!--
+      このパッケージの版。公開（rendering-vX.Y.Z）は -p:RenderingPackageVersion で渡す。
+      -p:Version は使わない: グローバルプロパティは参照先の PhotoMapStudio.Tiles にも流れ、nupkg が宣言する Tiles への依存が、
+      存在しない版になってしまうため。
+    -->
+    <Version>0.1.0</Version>
+    <Version Condition="'$(RenderingPackageVersion)' != ''">$(RenderingPackageVersion)</Version>
+    <!-- 公開 API の XML ドキュメントをパッケージへ含め、未記載（CS1591）をビルドエラーにする -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- 公開 API を固めるまで誤って公開されないようにする（NuGet 化は PR B。#130） -->
-    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- NuGet パッケージ。ベクタータイルを SkiaSharp で描く描画層。WinUI・Windows App SDK・PhotoMapStudio.Core に依存しない -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>PhotoMapStudio.Rendering</PackageId>
+    <Description>ベクタータイル（MVT）を SkiaSharp で 1 枚の画像として描く。連続ズーム・物理ピクセル寸法・キャンセル・欠落タイルの判別・帯の並列描画・デコード済みキャッシュに対応する。UI には依存しない。</Description>
+    <Authors>scottlz0310</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/scottlz0310/photo-map-studio</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/scottlz0310/photo-map-studio</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <!-- nuget.org のパッケージのページに表示する README -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ベクタータイルの描画・文字描画 -->
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ベクタータイルの描画・文字描画。利用側（PhotoGeoExplorer など）は、Skia 系のパッケージを同じ版で明示する -->
     <PackageReference Include="SkiaSharp" Version="4.156.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- pack した nupkg では、Tiles への依存（>= Tiles の csproj の既定の Version）になる -->
     <ProjectReference Include="../PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj" />
   </ItemGroup>
 

@@ -58,7 +58,7 @@ public class FallbackCompositionIntegrationTests
     [Fact]
     public async Task 日本国外の写真に地理院ベクトルを指定するとプレビューは代替ソースで生成される()
     {
-        using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
+        using var style = new PhotoMapStudio.Rendering.OpenMapTilesStyle();
         FallbackMapImageComposer composer = CreateVectorComposer(new RangeAwareTileClient(), style);
 
         MapCompositionResult result = await composer.ComposeAsync(
@@ -72,7 +72,7 @@ public class FallbackCompositionIntegrationTests
     [Fact]
     public async Task 日本国外の写真に地理院ベクトルを指定し切替を止めると白紙で成功にせず404で失敗する()
     {
-        using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
+        using var style = new PhotoMapStudio.Rendering.OpenMapTilesStyle();
         FallbackMapImageComposer composer = CreateVectorComposer(new RangeAwareTileClient(), style);
 
         TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
@@ -99,7 +99,7 @@ public class FallbackCompositionIntegrationTests
         try
         {
             var client = new RangeAwareTileClient();
-            using var style = new PhotoMapStudio.Core.Tiles.Vector.OpenMapTilesStyle();
+            using var style = new PhotoMapStudio.Rendering.OpenMapTilesStyle();
             FallbackMapImageComposer composer = CreateVectorComposer(client, style);
             TileSource local = TileSources.CustomVector(
                 PhotoMapStudio.Tiles.Vector.VectorSourceSpec.Create(path, PhotoMapStudio.Tiles.Vector.VectorStyleSchema.OpenMapTiles),
@@ -122,11 +122,11 @@ public class FallbackCompositionIntegrationTests
 
     private static FallbackMapImageComposer CreateVectorComposer(
         ITileClient client,
-        PhotoMapStudio.Core.Tiles.Vector.IVectorMapStyle style)
+        PhotoMapStudio.Rendering.IVectorMapStyle style)
         => new FallbackMapImageComposer(
             new SkiaMapImageComposer(
                 new TileProvider(client, new InMemoryTileCache()),
-                new PhotoMapStudio.Core.Tiles.Vector.VectorMapRenderer(new EmptyVectorTileSource(), style)),
+                new PhotoMapStudio.Rendering.VectorMapRenderer(new EmptyVectorTileSource(), style)),
             TileSources.WorldwideFallback);
 
     private static FallbackMapImageComposer CreateComposer(ITileClient client)

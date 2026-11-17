@@ -4,7 +4,7 @@ using PhotoMapStudio.App.ViewModels;
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tests.TestSupport;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;

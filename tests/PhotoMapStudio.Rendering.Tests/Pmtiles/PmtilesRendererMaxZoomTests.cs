@@ -1,8 +1,8 @@
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
-namespace PhotoMapStudio.Core.Tests.Tiles.Vector.Pmtiles;
+namespace PhotoMapStudio.Rendering.Tests.Pmtiles;
 
 public sealed class PmtilesRendererMaxZoomTests
 {
@@ -16,7 +16,7 @@ public sealed class PmtilesRendererMaxZoomTests
         var renderer = new VectorMapRenderer(source, style);
 
         await Assert.ThrowsAsync<TileFetchException>(
-            () => renderer.RenderMapAsync(new PhotoMapStudio.Core.Geo.GeoCoordinate(35.0, 139.0), 15, 256, 256, session: null, tileSource: null, CancellationToken.None));
+            () => renderer.RenderMapAsync(35.0, 139.0, 15, 256, 256, session: null, tileSource: null, CancellationToken.None));
 
         Assert.True(source.Prepared);
         Assert.All(requestedZooms, z => Assert.Equal(14, z));

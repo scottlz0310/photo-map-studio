@@ -36,21 +36,20 @@ $escapedProject = [System.Security.SecurityElement]::Escape($projectPath)
 
 @'
 using System.Globalization;
-using PhotoMapStudio.Core.Geo;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 using SkiaSharp;
 
 string cache = args[0], output = args[1];
-var center = new GeoCoordinate(double.Parse(args[2], CultureInfo.InvariantCulture), double.Parse(args[3], CultureInfo.InvariantCulture));
+double latitude = double.Parse(args[2], CultureInfo.InvariantCulture), longitude = double.Parse(args[3], CultureInfo.InvariantCulture);
 Directory.CreateDirectory(output);
 using var style = new OpenMapTilesStyle();
 var renderer = new VectorMapRenderer(new LocalSource(cache), style);
 foreach (string value in args.Skip(4))
 {
     int zoom = int.Parse(value, CultureInfo.InvariantCulture);
-    using var bitmap = await renderer.RenderMapAsync(center, zoom, 800, 600);
+    using var bitmap = await renderer.RenderMapAsync(latitude, longitude, zoom, 800, 600);
     using var image = SKImage.FromBitmap(bitmap);
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
     string path = Path.Combine(output, $"z{zoom}.png");

@@ -3,7 +3,7 @@ using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// 地図注記（ラベル・シンボル）の重複配置を防ぐための AABB（軸平行バウンディングボックス）衝突判定マネージャー。

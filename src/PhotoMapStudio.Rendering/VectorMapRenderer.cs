@@ -1,13 +1,12 @@
 using System.Globalization;
 using System.Net;
 
-using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// ベクタータイルから SkiaSharp キャンバスへ直接地図を描画するレンダラー。
@@ -46,26 +45,26 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
     /// <inheritdoc />
     public Task<SKBitmap> RenderMapAsync(
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(center, zoom, width, height, session: null, tileSource: null, cancellationToken);
+        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
 
     /// <inheritdoc />
     public Task<SKBitmap> RenderMapAsync(
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         TileFetchSession? session,
         CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(center, zoom, width, height, session, tileSource: null, cancellationToken);
+        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
 
     /// <inheritdoc />
     public async Task<SKBitmap> RenderMapAsync(
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
@@ -80,7 +79,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         try
         {
             using var canvas = new SKCanvas(bitmap);
-            await this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource, cancellationToken).ConfigureAwait(false);
+            await this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, cancellationToken).ConfigureAwait(false);
 
             SKBitmap rendered = bitmap;
             bitmap = null;
@@ -95,31 +94,31 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
     /// <inheritdoc />
     public Task RenderToCanvasAsync(
         SKCanvas canvas,
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session: null, tileSource: null, cancellationToken);
+        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
 
     /// <inheritdoc />
     public Task RenderToCanvasAsync(
         SKCanvas canvas,
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         TileFetchSession? session,
         CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource: null, cancellationToken);
+        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
 
     /// <inheritdoc />
-    public Task RenderToCanvasAsync(SKCanvas canvas, GeoCoordinate center, int zoom, int width, int height,
+    public Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
         TileFetchSession? session, TileSource? tileSource, CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource, new VectorMapRenderContext(false), cancellationToken);
+        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, new VectorMapRenderContext(false), cancellationToken);
 
     /// <inheritdoc />
-    public async Task RenderToCanvasAsync(SKCanvas canvas, GeoCoordinate center, int zoom, int width, int height,
+    public async Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
         TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
         CancellationToken cancellationToken = default)
     {
@@ -140,9 +139,9 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         int maxTiles = 1 << tileZoom;
 
         // 2. 世界ピクセル座標系での表示範囲計算
-        TilePoint centerTilePoint = WebMercator.ToTilePoint(center, zoom);
-        double left = centerTilePoint.WorldPixelX - (width / 2.0);
-        double top = centerTilePoint.WorldPixelY - (height / 2.0);
+        (double centerWorldX, double centerWorldY) = MercatorProjection.ToWorldPixel(latitude, longitude, zoom);
+        double left = centerWorldX - (width / 2.0);
+        double top = centerWorldY - (height / 2.0);
         double right = left + width;
         double bottom = top + height;
 
@@ -152,10 +151,10 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         double tileRight = right / scaleRatio;
         double tileBottom = bottom / scaleRatio;
 
-        int minTx = (int)Math.Floor(tileLeft / WebMercator.TileSize);
-        int minTy = (int)Math.Floor(tileTop / WebMercator.TileSize);
-        int maxTx = (int)Math.Floor(tileRight / WebMercator.TileSize);
-        int maxTy = (int)Math.Floor(tileBottom / WebMercator.TileSize);
+        int minTx = (int)Math.Floor(tileLeft / MercatorProjection.TileSize);
+        int minTy = (int)Math.Floor(tileTop / MercatorProjection.TileSize);
+        int maxTx = (int)Math.Floor(tileRight / MercatorProjection.TileSize);
+        int maxTy = (int)Math.Floor(tileBottom / MercatorProjection.TileSize);
 
         // 4. タイルの非同期取得とデコード
         var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)>();
@@ -231,9 +230,9 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                     extent = tile.Layers[0].Extent;
                 }
 
-                float scale = (float)((WebMercator.TileSize * scaleRatio) / extent);
-                float dx = (float)((tx * WebMercator.TileSize * scaleRatio) - left);
-                float dy = (float)((ty * WebMercator.TileSize * scaleRatio) - top);
+                float scale = (float)((MercatorProjection.TileSize * scaleRatio) / extent);
+                float dx = (float)((tx * MercatorProjection.TileSize * scaleRatio) - left);
+                float dy = (float)((ty * MercatorProjection.TileSize * scaleRatio) - top);
 
                 loadedTiles.Add((tx, ty, tile, scale, dx, dy));
             }

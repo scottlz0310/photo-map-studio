@@ -1,11 +1,10 @@
-using PhotoMapStudio.Core.Geo;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tests.Tiles.Vector;
+namespace PhotoMapStudio.Rendering.Tests;
 
 public class VectorMapRendererTests
 {
@@ -13,7 +12,7 @@ public class VectorMapRendererTests
     public async Task 有効な座標とサイズでビットマップ画像を生成できる()
     {
         // 皇居付近の座標 (35.685, 139.752)
-        var center = new GeoCoordinate(35.685, 139.752);
+        (double lat, double lon) = (35.685, 139.752);
         int requestedZoom = 14;
         int width = 256;
         int height = 256;
@@ -32,7 +31,7 @@ public class VectorMapRendererTests
         using var style = new OpenMapTilesStyle();
         var renderer = new VectorMapRenderer(mockSource, style);
 
-        using SKBitmap bitmap = await renderer.RenderMapAsync(center, requestedZoom, width, height, CancellationToken.None);
+        using SKBitmap bitmap = await renderer.RenderMapAsync(lat, lon, requestedZoom, width, height, CancellationToken.None);
 
         Assert.NotNull(bitmap);
         Assert.Equal(width, bitmap.Width);
@@ -50,7 +49,7 @@ public class VectorMapRendererTests
     [Fact]
     public async Task TileSourceの指定に応じて適切なソースとスタイルに切り替えて描画する()
     {
-        var center = new GeoCoordinate(35.685, 139.752);
+        (double lat, double lon) = (35.685, 139.752);
         byte[] ofmTile = CreateWaterTile(); // 水色 #A5D6E7
         byte[] gsiTile = CreateWaterTile(); // テスト用ダミー
 
@@ -66,14 +65,14 @@ public class VectorMapRendererTests
 
         // 1. GsiVector 指定時
         using var gsiBitmap = await renderer.RenderMapAsync(
-            center, 14, 256, 256, session: null, tileSource: TileSources.GsiVector, CancellationToken.None);
+            lat, lon, 14, 256, 256, session: null, tileSource: TileSources.GsiVector, CancellationToken.None);
         Assert.NotNull(gsiBitmap);
         // GSI 背景色は #F8F7F2
         Assert.Equal(new SKColor(0xF8, 0xF7, 0xF2), gsiStyle.BackgroundColor);
 
         // 2. OpenFreeMap 指定時
         using var ofmBitmap = await renderer.RenderMapAsync(
-            center, 14, 256, 256, session: null, tileSource: TileSources.OpenFreeMap, CancellationToken.None);
+            lat, lon, 14, 256, 256, session: null, tileSource: TileSources.OpenFreeMap, CancellationToken.None);
         Assert.NotNull(ofmBitmap);
         Assert.Equal(new SKColor(0xEB, 0xE8, 0xE1), ofmStyle.BackgroundColor);
     }
@@ -81,7 +80,7 @@ public class VectorMapRendererTests
     [Fact]
     public async Task sourceのMaxZoomを超えるズームレベルでは過拡大としてMaxZoomのタイルを要求する()
     {
-        var center = new GeoCoordinate(35.685, 139.752);
+        (double lat, double lon) = (35.685, 139.752);
         int requestedZoom = 16; // 要求ズーム 16
         int sourceMaxZoom = 14; // 提供 maxzoom 14
 
@@ -97,7 +96,7 @@ public class VectorMapRendererTests
         using var style = new OpenMapTilesStyle();
         var renderer = new VectorMapRenderer(mockSource, style);
 
-        using SKBitmap bitmap = await renderer.RenderMapAsync(center, requestedZoom, 128, 128, CancellationToken.None);
+        using SKBitmap bitmap = await renderer.RenderMapAsync(lat, lon, requestedZoom, 128, 128, CancellationToken.None);
 
         Assert.Equal(128, bitmap.Width);
         Assert.Equal(128, bitmap.Height);
@@ -111,7 +110,7 @@ public class VectorMapRendererTests
     public async Task 日付変更線付近および低ズームで範囲外のXを要求せず世界幅でwrapする()
     {
         // 中心: 緯度 0, 経度 179.99 度、zoom = 2
-        var center = new GeoCoordinate(0.0, 179.99);
+        (double lat, double lon) = (0.0, 179.99);
         int zoom = 2;
         int width = 256;
         int height = 256;
@@ -128,7 +127,7 @@ public class VectorMapRendererTests
         using var style = new OpenMapTilesStyle();
         var renderer = new VectorMapRenderer(mockSource, style);
 
-        using SKBitmap bitmap = await renderer.RenderMapAsync(center, zoom, width, height, CancellationToken.None);
+        using SKBitmap bitmap = await renderer.RenderMapAsync(lat, lon, zoom, width, height, CancellationToken.None);
 
         Assert.NotNull(bitmap);
         Assert.NotEmpty(requestedTiles);
@@ -160,7 +159,7 @@ public class VectorMapRendererTests
         var renderer = new VectorMapRenderer(mockSource, style);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => renderer.RenderMapAsync(new GeoCoordinate(35.0, 135.0), zoom, width, height, CancellationToken.None));
+            () => renderer.RenderMapAsync(35.0, 135.0, zoom, width, height, CancellationToken.None));
     }
 
     [Theory]
@@ -169,13 +168,13 @@ public class VectorMapRendererTests
     public async Task 描画できるタイルが1枚もない場合は配信範囲外として404のTileFetchExceptionをスローする(bool useEmptyBytes)
     {
         // パリ付近。地理院ベクトルは国外のタイルを配信しない（PMTiles に該当エントリがなく null）
-        var center = new GeoCoordinate(48.8584, 2.2945);
+        (double lat, double lon) = (48.8584, 2.2945);
         var mockSource = new MockVectorTileSource(14, (_, _, _) => useEmptyBytes ? [] : null);
         using var style = new OpenMapTilesStyle();
         var renderer = new VectorMapRenderer(mockSource, style);
 
         TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
-            () => renderer.RenderMapAsync(center, 14, 256, 256, session: null, tileSource: TileSources.GsiVector, CancellationToken.None));
+            () => renderer.RenderMapAsync(lat, lon, 14, 256, 256, session: null, tileSource: TileSources.GsiVector, CancellationToken.None));
 
         Assert.Equal(System.Net.HttpStatusCode.NotFound, exception.StatusCode);
         Assert.NotNull(exception.RequestUri);
@@ -185,14 +184,14 @@ public class VectorMapRendererTests
     public async Task 一部のタイルだけ存在する場合は存在するタイルで描画し例外にしない()
     {
         // 配信範囲の端で一部のタイルだけ欠ける場合は、描画できる範囲を描く
-        var center = new GeoCoordinate(35.685, 139.752);
+        (double lat, double lon) = (35.685, 139.752);
         byte[] waterTile = CreateWaterTile();
         int calls = 0;
         var mockSource = new MockVectorTileSource(14, (_, _, _) => calls++ == 0 ? waterTile : null);
         using var style = new OpenMapTilesStyle();
         var renderer = new VectorMapRenderer(mockSource, style);
 
-        using SKBitmap bitmap = await renderer.RenderMapAsync(center, 14, 512, 512, CancellationToken.None);
+        using SKBitmap bitmap = await renderer.RenderMapAsync(lat, lon, 14, 512, 512, CancellationToken.None);
 
         Assert.True(calls > 1);
         Assert.Equal(512, bitmap.Width);
@@ -207,7 +206,7 @@ public class VectorMapRendererTests
         var style = new RecordingStyle();
         var renderer = new VectorMapRenderer(mockSource, style);
 
-        using SKBitmap bitmap = await renderer.RenderMapAsync(new GeoCoordinate(35.685, 139.752), 14, 512, 512, CancellationToken.None);
+        using SKBitmap bitmap = await renderer.RenderMapAsync(35.685, 139.752, 14, 512, 512, CancellationToken.None);
 
         int lastSymbols = style.Calls.FindLastIndex(c => c == "symbols");
         int firstLabels = style.Calls.FindIndex(c => c == "labels");
@@ -235,7 +234,7 @@ public class VectorMapRendererTests
         var renderer = new VectorMapRenderer(mockSource, style);
 
         TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
-            () => renderer.RenderMapAsync(new GeoCoordinate(35.685, 139.752), 14, 256, 256, CancellationToken.None));
+            () => renderer.RenderMapAsync(35.685, 139.752, 14, 256, 256, CancellationToken.None));
 
         Assert.Contains("読み取れません", exception.Message, StringComparison.Ordinal);
 
@@ -261,13 +260,12 @@ public class VectorMapRendererTests
                 : new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
         }));
         using var style = new OpenMapTilesStyle();
-        using var gsiStyle = new GsiVectorStyle();
-        using var factory = new CustomVectorSourceFactory(client, new NullTileCache(), style, gsiStyle);
-        var center = new GeoCoordinate(35.685, 139.752);
+        using var factory = new VectorTileSourceFactory(client, new NullTileCache());
+        (double lat, double lon) = (35.685, 139.752);
         var renderer = new VectorMapRenderer(
             defaultTileSource: new MockVectorTileSource(14, (_, _, _) => null),
             defaultStyle: style,
-            resolver: source => factory.Resolve(source!.VectorSource!));
+            resolver: source => (factory.Resolve(source!.VectorSource!), style));
 
         TileSource atZoom16 = TileSources.CustomVector(
             VectorSourceSpec.Create("http://127.0.0.1:9/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles, xyzMaxZoom: 16), "© 検証");
@@ -275,14 +273,14 @@ public class VectorMapRendererTests
             VectorSourceSpec.Create("http://127.0.0.1:9/{z}/{x}/{y}.pbf", VectorStyleSchema.OpenMapTiles), "© 検証");
 
         // 最大ズーム 16 を指定すれば、ズーム 16 のタイルを要求して描画できる
-        using SKBitmap bitmap = await renderer.RenderMapAsync(center, 16, 256, 256, session: null, tileSource: atZoom16, CancellationToken.None);
+        using SKBitmap bitmap = await renderer.RenderMapAsync(lat, lon, 16, 256, 256, session: null, tileSource: atZoom16, CancellationToken.None);
         Assert.Equal(new SKColor(0xA0, 0xC8, 0xF0), bitmap.GetPixel(128, 128));
         Assert.Contains("16", requestedZooms);
 
         // 既定（14）のままでは z14 のタイルしか要求できず、この取得元では描画できるタイルがない
         requestedZooms.Clear();
         TileFetchException exception = await Assert.ThrowsAsync<TileFetchException>(
-            () => renderer.RenderMapAsync(center, 16, 256, 256, session: null, tileSource: atZoom14, CancellationToken.None));
+            () => renderer.RenderMapAsync(lat, lon, 16, 256, 256, session: null, tileSource: atZoom14, CancellationToken.None));
         Assert.Equal(System.Net.HttpStatusCode.NotFound, exception.StatusCode);
         Assert.All(requestedZooms, zoom => Assert.Equal("14", zoom));
     }

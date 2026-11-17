@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
 using PhotoMapStudio.Core.Maps;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 

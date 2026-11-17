@@ -1,12 +1,12 @@
 using System.Reflection;
 
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tests.Tiles.Vector;
+namespace PhotoMapStudio.Rendering.Tests;
 
 /// <summary>
 /// DI でシングルトン登録されるスタイルが、描画で共有ペイントを書き換えないことを確認する。

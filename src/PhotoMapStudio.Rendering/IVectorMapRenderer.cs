@@ -1,10 +1,9 @@
-using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// ベクタータイルから SkiaSharp キャンバスへ地図を描画するレンダラーの契約。
@@ -15,25 +14,27 @@ public interface IVectorMapRenderer
     /// 指定されたキャンバスにベクター地図を直接描画する。
     /// </summary>
     /// <param name="canvas">描画先のキャンバス。</param>
-    /// <param name="center">描画領域の中心地理座標。</param>
+    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
+    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
     /// <param name="zoom">表示ズームレベル。</param>
     /// <param name="width">描画幅（ピクセル）。</param>
     /// <param name="height">描画高さ（ピクセル）。</param>
     /// <param name="cancellationToken">キャンセルトークン。</param>
     Task RenderToCanvasAsync(
         SKCanvas canvas,
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session: null, tileSource: null, cancellationToken);
+        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
 
     /// <summary>
     /// 指定されたキャンバスにベクター地図を直接描画する（セッション統計付き）。
     /// </summary>
     /// <param name="canvas">描画先のキャンバス。</param>
-    /// <param name="center">描画領域の中心地理座標。</param>
+    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
+    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
     /// <param name="zoom">表示ズームレベル。</param>
     /// <param name="width">描画幅（ピクセル）。</param>
     /// <param name="height">描画高さ（ピクセル）。</param>
@@ -41,19 +42,20 @@ public interface IVectorMapRenderer
     /// <param name="cancellationToken">キャンセルトークン。</param>
     Task RenderToCanvasAsync(
         SKCanvas canvas,
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         TileFetchSession? session,
         CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource: null, cancellationToken);
+        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
 
     /// <summary>
     /// 指定されたキャンバスにベクター地図を直接描画する（セッション統計および配信元指定付き）。
     /// </summary>
     /// <param name="canvas">描画先のキャンバス。</param>
-    /// <param name="center">描画領域の中心地理座標。</param>
+    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
+    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
     /// <param name="zoom">表示ズームレベル。</param>
     /// <param name="width">描画幅（ピクセル）。</param>
     /// <param name="height">描画高さ（ピクセル）。</param>
@@ -62,7 +64,7 @@ public interface IVectorMapRenderer
     /// <param name="cancellationToken">キャンセルトークン。</param>
     Task RenderToCanvasAsync(
         SKCanvas canvas,
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
@@ -71,32 +73,34 @@ public interface IVectorMapRenderer
         CancellationToken cancellationToken = default);
 
     /// <summary>画像単位の縮退設定と欠落集計を指定して描画する。</summary>
-    Task RenderToCanvasAsync(SKCanvas canvas, GeoCoordinate center, int zoom, int width, int height,
+    Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
         TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
         CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource, cancellationToken);
+        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, cancellationToken);
 
     /// <summary>
     /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する。
     /// </summary>
-    /// <param name="center">描画領域の中心地理座標。</param>
+    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
+    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
     /// <param name="zoom">表示ズームレベル。</param>
     /// <param name="width">出力画像の幅（ピクセル）。</param>
     /// <param name="height">出力画像の高さ（ピクセル）。</param>
     /// <param name="cancellationToken">キャンセルトークン。</param>
     /// <returns>描画されたビットマップ画像。</returns>
     Task<SKBitmap> RenderMapAsync(
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(center, zoom, width, height, session: null, tileSource: null, cancellationToken);
+        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
 
     /// <summary>
     /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する（セッション統計付き）。
     /// </summary>
-    /// <param name="center">描画領域の中心地理座標。</param>
+    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
+    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
     /// <param name="zoom">表示ズームレベル。</param>
     /// <param name="width">出力画像の幅（ピクセル）。</param>
     /// <param name="height">出力画像の高さ（ピクセル）。</param>
@@ -104,18 +108,19 @@ public interface IVectorMapRenderer
     /// <param name="cancellationToken">キャンセルトークン。</param>
     /// <returns>描画されたビットマップ画像。</returns>
     Task<SKBitmap> RenderMapAsync(
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,
         TileFetchSession? session,
         CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(center, zoom, width, height, session, tileSource: null, cancellationToken);
+        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
 
     /// <summary>
     /// 指定された地理座標、ズームレベル、出力サイズでベクター地図をラスタライズして <see cref="SKBitmap"/> を生成する（セッション統計および配信元指定付き）。
     /// </summary>
-    /// <param name="center">描画領域の中心地理座標。</param>
+    /// <param name="latitude">描画領域の中心の緯度（北緯が正）。</param>
+    /// <param name="longitude">描画領域の中心の経度（東経が正）。</param>
     /// <param name="zoom">表示ズームレベル。</param>
     /// <param name="width">出力画像の幅（ピクセル）。</param>
     /// <param name="height">出力画像の高さ（ピクセル）。</param>
@@ -124,7 +129,7 @@ public interface IVectorMapRenderer
     /// <param name="cancellationToken">キャンセルトークン。</param>
     /// <returns>描画されたビットマップ画像。</returns>
     Task<SKBitmap> RenderMapAsync(
-        GeoCoordinate center,
+        double latitude, double longitude,
         int zoom,
         int width,
         int height,

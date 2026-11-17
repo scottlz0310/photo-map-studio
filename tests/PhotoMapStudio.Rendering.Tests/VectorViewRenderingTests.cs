@@ -55,33 +55,31 @@ public class VectorViewRenderingTests
         Assert.All(style.Zooms, z => Assert.Equal(expectedStyleZoom, z));
     }
 
-    [Fact]
-    public async Task 整数ズームは従来のAPIと同じ画素になる()
+    [Theory]
+    [InlineData(SKColorType.Rgba8888)]
+    [InlineData(SKColorType.Bgra8888)]
+    public async Task 色形式を指定した画像で返す(SKColorType colorType)
     {
-        (double latitude, double longitude) = TileToLatLon(TileX + 0.3, TileY + 0.7, BaseZoom);
-        using var style = new OpenMapTilesStyle();
-        var renderer = new VectorMapRenderer(SingleTileSource(MvtTestTile.CreateWater(rightEdge: 3072)), style);
+        var renderer = new VectorMapRenderer(SingleTileSource(MvtTestTile.CreateWater()), new RecordingStyle());
+        (double latitude, double longitude) = TileToLatLon(TileX + 0.5, TileY + 0.5, BaseZoom);
 
-        using SKBitmap legacy = await renderer.RenderMapAsync(latitude, longitude, BaseZoom, 200, 150, CancellationToken.None);
-        using VectorViewResult view = await renderer.RenderViewAsync(
-            new VectorViewRequest(latitude, longitude, BaseZoom, 200, 150), CancellationToken.None);
+        using VectorViewResult result = await renderer.RenderViewAsync(
+            new VectorViewRequest(latitude, longitude, 14, 64, 64) { ColorType = colorType });
 
-        // 既存の API は RGBA、新しい API は実行環境の色形式（Windows は BGRA）で描く。
-        // 色形式が違うと、境界の半透明の画素の丸めが 1 だけずれ得るため、各チャンネルの差 1 までを許す
-        using SKBitmap actual = SKBitmap.FromImage(view.Image);
-        for (int y = 0; y < 150; y++)
-        {
-            for (int x = 0; x < 200; x++)
-            {
-                SKColor expected = legacy.GetPixel(x, y);
-                SKColor pixel = actual.GetPixel(x, y);
-                Assert.InRange(Math.Abs(expected.Red - pixel.Red), 0, 1);
-                Assert.InRange(Math.Abs(expected.Green - pixel.Green), 0, 1);
-                Assert.InRange(Math.Abs(expected.Blue - pixel.Blue), 0, 1);
-                Assert.Equal(expected.Alpha, pixel.Alpha);
-            }
-        }
+        Assert.Equal(colorType, result.Image.ColorType);
     }
+
+    [Fact]
+    public async Task 色形式を指定しなければ実行環境の形式で返す()
+    {
+        var renderer = new VectorMapRenderer(SingleTileSource(MvtTestTile.CreateWater()), new RecordingStyle());
+        (double latitude, double longitude) = TileToLatLon(TileX + 0.5, TileY + 0.5, BaseZoom);
+
+        using VectorViewResult result = await renderer.RenderViewAsync(new VectorViewRequest(latitude, longitude, 14, 64, 64));
+
+        Assert.Equal(SKImageInfo.PlatformColorType, result.Image.ColorType);
+    }
+
 
     [Theory]
     [InlineData(301, 177)]

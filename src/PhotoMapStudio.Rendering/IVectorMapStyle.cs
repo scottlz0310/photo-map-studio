@@ -11,7 +11,7 @@ namespace PhotoMapStudio.Rendering;
 /// <remarks>
 /// 描画メソッドは、同じインスタンスに対して別のキャンバスから並行して呼ばれ得る（帯の並列描画）。
 /// 共有のペイントなどの可変な状態を書き換えず、描画ごとに複製を使うこと。
-/// 実行中のキャンセルは、レイヤー・地物の単位で <paramref name="cancellationToken"/> を確認し、
+/// 実行中のキャンセルは、レイヤー・地物の単位で <c>cancellationToken</c> を確認し、
 /// キャンセルされたら <see cref="OperationCanceledException"/> を投げる。
 /// </remarks>
 public interface IVectorMapStyle

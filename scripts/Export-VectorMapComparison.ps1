@@ -49,9 +49,8 @@ var renderer = new VectorMapRenderer(new LocalSource(cache), style);
 foreach (string value in args.Skip(4))
 {
     int zoom = int.Parse(value, CultureInfo.InvariantCulture);
-    using var bitmap = await renderer.RenderMapAsync(latitude, longitude, zoom, 800, 600);
-    using var image = SKImage.FromBitmap(bitmap);
-    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+    using var result = await renderer.RenderViewAsync(new VectorViewRequest(latitude, longitude, zoom, 800, 600) { ColorType = SKColorType.Rgba8888 });
+    using var data = result.Image.Encode(SKEncodedImageFormat.Png, 100);
     string path = Path.Combine(output, $"z{zoom}.png");
     File.WriteAllBytes(path, data.ToArray());
     Console.WriteLine(path);

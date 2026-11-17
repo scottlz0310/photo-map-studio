@@ -57,20 +57,20 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
                 throw new InvalidOperationException("ベクタータイルの描画エンジンが設定されていません。");
             }
 
-            var context = new VectorMapRenderContext(request.AllowIncompleteVectorMaps);
-            await this.vectorMapRenderer.RenderToCanvasAsync(
-                canvas,
-                request.Center.Latitude,
-                request.Center.Longitude,
-                request.Zoom,
-                request.Width,
-                request.Height,
-                request.TileSession,
-                request.TileSource,
-                context, cancellationToken).ConfigureAwait(false);
-            if (context.AllowIncompleteMaps && context.MissingTileCount > 0)
+            // 合成先（Rgba8888）と同じ色形式で描くと、ピンなどを重ねる前の画素が、直接描いた場合と一致する
+            using VectorViewResult vector = await this.vectorMapRenderer.RenderViewAsync(
+                new VectorViewRequest(request.Center.Latitude, request.Center.Longitude, request.Zoom, request.Width, request.Height)
+                {
+                    TileSource = request.TileSource,
+                    Session = request.TileSession,
+                    AllowIncompleteMaps = request.AllowIncompleteVectorMaps,
+                    ColorType = SKColorType.Rgba8888,
+                },
+                cancellationToken).ConfigureAwait(false);
+            canvas.DrawImage(vector.Image, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
+            if (request.AllowIncompleteVectorMaps && vector.MissingTileCount > 0)
             {
-                warning = new(context.MissingTileCount, context.RequestedTileCount, request.TileSession?.IsCacheOnly == true);
+                warning = new(vector.MissingTileCount, vector.RequestedTileCount, request.TileSession?.IsCacheOnly == true);
             }
         }
         else

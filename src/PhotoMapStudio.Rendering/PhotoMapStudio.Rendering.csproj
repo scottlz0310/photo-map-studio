@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- 公開 API の XML ドキュメントを必須にし、未記載（CS1591）をビルドエラーにする -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- 公開 API を固めるまで誤って公開されないようにする（NuGet 化は PR B。#130） -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>

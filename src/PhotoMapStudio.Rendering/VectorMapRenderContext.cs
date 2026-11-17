@@ -4,7 +4,7 @@ using PhotoMapStudio.Tiles.Vector;
 namespace PhotoMapStudio.Rendering;
 
 /// <summary>1画像に限定した縮退描画の設定と欠落集計。他の画像と共有しない。</summary>
-public sealed class VectorMapRenderContext(bool allowIncompleteMaps)
+internal sealed class VectorMapRenderContext(bool allowIncompleteMaps)
 {
     /// <summary>通信失敗時に警告付きの縮退描画を許可する。</summary>
     public bool AllowIncompleteMaps { get; } = allowIncompleteMaps;

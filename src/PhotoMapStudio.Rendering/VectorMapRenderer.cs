@@ -48,89 +48,6 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         this.resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
     }
 
-    /// <inheritdoc />
-    public Task<SKBitmap> RenderMapAsync(
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<SKBitmap> RenderMapAsync(
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        CancellationToken cancellationToken = default)
-        => this.RenderMapAsync(latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
-
-    /// <inheritdoc />
-    public async Task<SKBitmap> RenderMapAsync(
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        TileSource? tileSource,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
-
-        SKBitmap? bitmap = new(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        try
-        {
-            using var canvas = new SKCanvas(bitmap);
-            await this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, cancellationToken).ConfigureAwait(false);
-
-            SKBitmap rendered = bitmap;
-            bitmap = null;
-            return rendered;
-        }
-        finally
-        {
-            bitmap?.Dispose();
-        }
-    }
-
-    /// <inheritdoc />
-    public Task RenderToCanvasAsync(
-        SKCanvas canvas,
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session: null, tileSource: null, cancellationToken);
-
-    /// <inheritdoc />
-    public Task RenderToCanvasAsync(
-        SKCanvas canvas,
-        double latitude, double longitude,
-        int zoom,
-        int width,
-        int height,
-        TileFetchSession? session,
-        CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
-
-    /// <inheritdoc />
-    public Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
-        TileFetchSession? session, TileSource? tileSource, CancellationToken cancellationToken = default)
-        => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, new VectorMapRenderContext(false), cancellationToken);
-
-    /// <inheritdoc />
-    public Task RenderToCanvasAsync(SKCanvas canvas, double latitude, double longitude, int zoom, int width, int height,
-        TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(zoom);
-        return this.RenderCoreAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, renderContext, parallel: null, cancellationToken);
-    }
-
     /// <summary>
     /// 表示範囲全体を 1 枚の画像として描く。ズームは連続値で、位置・拡大率は連続値のまま描き、
     /// 取得するタイルのズームだけを整数にする。画像は呼び出し側へ所有権を渡す（共有・再利用しない）。
@@ -144,6 +61,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
     /// <exception cref="TileFetchException">
     /// 描画できるタイルが 1 枚もない、または欠落を許可していないときに取得できないタイルがある。
     /// </exception>
+    /// <inheritdoc />
     public async Task<VectorViewResult> RenderViewAsync(VectorViewRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -156,7 +74,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         ArgumentOutOfRangeException.ThrowIfLessThan(request.BandCount, 1, nameof(request));
 
         var context = new VectorMapRenderContext(request.AllowIncompleteMaps);
-        using var bitmap = new SKBitmap(request.PixelWidth, request.PixelHeight, SKImageInfo.PlatformColorType, SKAlphaType.Premul);
+        using var bitmap = new SKBitmap(request.PixelWidth, request.PixelHeight, request.ColorType ?? SKImageInfo.PlatformColorType, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(bitmap))
         {
             await this.RenderCoreAsync(
@@ -477,7 +395,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         {
             if (parallel.ParallelLabels)
             {
-                labelBitmap = new SKBitmap(width, height, SKImageInfo.PlatformColorType, SKAlphaType.Premul);
+                labelBitmap = new SKBitmap(width, height, bitmap.ColorType, SKAlphaType.Premul);
                 SKBitmap labelTarget = labelBitmap;
                 labelTask = Task.Run(
                     () =>

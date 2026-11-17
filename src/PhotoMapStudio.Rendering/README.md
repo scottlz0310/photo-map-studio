@@ -24,6 +24,7 @@
 using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
+using SkiaSharp;
 
 using var http = new HttpClient();
 
@@ -38,7 +39,7 @@ using var style = new OpenMapTilesStyle();
 var renderer = new VectorMapRenderer(source, style, new DecodedTileCache(128L * 1024 * 1024));
 
 // 中心の緯度経度・連続ズーム・物理ピクセルの寸法で描く
-var request = new VectorViewRequest(centerLatitude: 35.681, centerLongitude: 139.767, zoom: 15.4, pixelWidth: 1366, pixelHeight: 1220)
+var request = new VectorViewRequest(CenterLatitude: 35.681, CenterLongitude: 139.767, Zoom: 15.4, PixelWidth: 1366, PixelHeight: 1220)
 {
     AllowIncompleteMaps = true,   // 一時的な通信失敗のタイルを欠落として許し、結果で判別する
     BandCount = Math.Clamp(Environment.ProcessorCount, 1, 8),

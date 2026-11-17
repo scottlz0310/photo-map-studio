@@ -42,12 +42,17 @@
 4. Actions の `Publish Tiles Package` が起動する。`pack` ジョブは、タグを検証し、テストと依存の検査（描画・UI のパッケージへ推移的にも依存していないこと）をして、タグの版で nupkg を作る。
 5. `publish` ジョブが、環境 `nuget` の承認待ちになる。`pack` の結果（版・依存）を確認して承認する。
 6. nuget.org に `PhotoMapStudio.Tiles` の新しい版が現れることを確認する（検証のため、反映に数分かかることがある）。
+  公開した版を、`src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj` の既定の `<Version>` へ反映する（`PhotoMapStudio.Rendering` が宣言する Tiles への依存の最小の版になる。[releasing-rendering.md](releasing-rendering.md#tiles-への依存の版)）。
 
 同じ版は公開し直せません。公開が失敗したときの再実行は、同じ run の「Re-run failed jobs」で行います。版が既に公開されている場合は失敗します（`--skip-duplicate` は、公開済みの版の見落としを避けるため使っていません）。
 
 ## 公開が必要かの判断
 
-アプリのリリース準備（`Prepare Release`）の `tiles-check` ジョブが、最新の正式版のタグ（`tiles-vX.Y.Z`。`-rc.N` などの先行版は除く）から HEAD までの `src/PhotoMapStudio.Tiles` の変更を調べ、公開が要りそうなときに警告（アノテーションとジョブのサマリー）を出します。ローカルでは `pwsh -File .\scripts\Test-TilesUnpublishedChanges.ps1` で同じ確認ができます。警告だけで、リリース準備は止めず、公開もしません。
+アプリのリリース準備（`Prepare Release`）の `package-check` ジョブ（`PhotoMapStudio.Rendering` と共通）が、最新の正式版のタグ（`tiles-vX.Y.Z`。`-rc.N` などの先行版は除く）から HEAD までの `src/PhotoMapStudio.Tiles` の変更を調べ、公開が要りそうなときに警告（アノテーションとジョブのサマリー）を出します。ローカルでは次のコマンドで同じ確認ができます。警告だけで、リリース準備は止めず、公開もしません。
+
+```shell
+pwsh -File .\scripts\Test-PackageUnpublishedChanges.ps1 -PackageId PhotoMapStudio.Tiles -PackagePath src/PhotoMapStudio.Tiles -TagPrefix tiles-v -ReleaseGuide docs/development/releasing-tiles.md
+```
 
 | 分類 | 内容 | 判断 |
 | --- | --- | --- |

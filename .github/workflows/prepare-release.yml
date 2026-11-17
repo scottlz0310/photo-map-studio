@@ -19,21 +19,39 @@ permissions:
   contents: read
 
 jobs:
-  # アプリのリリース準備のたびに、PhotoMapStudio.Tiles の未公開の変更を知らせる（警告のみ。リリース準備は止めない）。
-  # パッケージの公開は tiles-vX.Y.Z のタグで別に行う（docs/development/releasing-tiles.md）。
-  tiles-check:
+  # アプリのリリース準備のたびに、NuGet パッケージ（PhotoMapStudio.Tiles・PhotoMapStudio.Rendering）の未公開の変更を知らせる
+  # （警告のみ。リリース準備は止めない）。パッケージの公開は、パッケージごとのタグ（tiles-vX.Y.Z・rendering-vX.Y.Z）で別に行う
+  # （docs/development/releasing-tiles.md・releasing-rendering.md）。
+  package-check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-id: PhotoMapStudio.Tiles
+            package-path: src/PhotoMapStudio.Tiles
+            tag-prefix: tiles-v
+            release-guide: docs/development/releasing-tiles.md
+          - package-id: PhotoMapStudio.Rendering
+            package-path: src/PhotoMapStudio.Rendering
+            tag-prefix: rendering-v
+            release-guide: docs/development/releasing-rendering.md
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # 最新の tiles-v* タグからの差分を調べるため、履歴とタグが要る
+          # 最新の <tag-prefix>* タグからの差分を調べるため、履歴とタグが要る
           fetch-depth: 0
 
-      - name: Check unpublished PhotoMapStudio.Tiles changes
+      - name: Check unpublished ${{ matrix.package-id }} changes
         shell: pwsh
-        run: ./scripts/Test-TilesUnpublishedChanges.ps1
+        run: >
+          ./scripts/Test-PackageUnpublishedChanges.ps1
+          -PackageId ${{ matrix.package-id }}
+          -PackagePath ${{ matrix.package-path }}
+          -TagPrefix ${{ matrix.tag-prefix }}
+          -ReleaseGuide ${{ matrix.release-guide }}
 
   prepare:
     uses: scottlz0310/release-automate/.github/workflows/reusable-prepare-release.yml@3c860f1b178eb5b942d87c800153bc47887a7bfd # v3.2.1

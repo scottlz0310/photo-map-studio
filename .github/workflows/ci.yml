@@ -49,6 +49,14 @@ jobs:
       - name: Test (Rendering)
         run: dotnet test tests/PhotoMapStudio.Rendering.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
 
+      # 描画層のパッケージが、WinUI・Windows App SDK・Core へ依存せず、SkiaSharp は宣言した版だけであることを守る。pack の成功と、nupkg が宣言する依存も確認する
+      - name: Verify Rendering package
+        shell: pwsh
+        run: |
+          dotnet pack src/PhotoMapStudio.Rendering/PhotoMapStudio.Rendering.csproj -c Release --no-build -o "$env:RUNNER_TEMP/nupkg-rendering"
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet pack failed' }
+          ./scripts/Test-RenderingPackage.ps1 -NupkgPath (Get-ChildItem "$env:RUNNER_TEMP/nupkg-rendering" -Filter *.nupkg).FullName
+
       - name: Test (Core)
         run: dotnet test tests/PhotoMapStudio.Core.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
 

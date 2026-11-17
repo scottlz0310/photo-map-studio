@@ -71,7 +71,7 @@ flowchart TD
 | プロジェクト | 役割 | 依存 |
 |---|---|---|
 | `PhotoMapStudio.Tiles` | タイルの取得・キャッシュ・レート制御・デコード。NuGet パッケージ | SkiaSharp・WinUI 非依存 |
-| `PhotoMapStudio.Rendering` | ベクター地図の描画（`VectorMapRenderer`・スタイル・注記配置）。公開は #130 の PR B で行う（それまでは `IsPackable=false`） | `Tiles`・SkiaSharp。`Core`・WinUI には依存しない |
+| `PhotoMapStudio.Rendering` | ベクター地図の描画（`VectorMapRenderer`・スタイル・注記配置）。NuGet パッケージ。公開手順は [releasing-rendering.md](releasing-rendering.md) | `Tiles`・SkiaSharp。`Core`・WinUI には依存しない |
 | `PhotoMapStudio.Core` | EXIF・地図合成（ラスター経路と、ベクター描画の呼び出し）・設定の型 | `Tiles`・`Rendering`・SkiaSharp |
 | `PhotoMapStudio.App` | WinUI 3 の UI | `Core` |
 

@@ -1,4 +1,4 @@
-using PhotoMapStudio.Rendering;
+using PhotoMapStudio.Rendering.Tests.TestSupport;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
@@ -285,83 +285,7 @@ public class VectorMapRendererTests
         Assert.All(requestedZooms, zoom => Assert.Equal("14", zoom));
     }
 
-    private static byte[] CreateWaterTile()
-    {
-        using var stream = new MemoryStream();
-        using var layerStream = new MemoryStream();
-
-        // name = "water"
-        WriteTag(layerStream, 1, 2);
-        WriteString(layerStream, "water");
-
-        // extent = 4096
-        WriteTag(layerStream, 5, 0);
-        WriteVarint(layerStream, 4096);
-
-        // Feature (全域を覆うポリゴン)
-        using var featStream = new MemoryStream();
-        WriteTag(featStream, 3, 0);
-        WriteVarint(featStream, 3); // Polygon
-
-        using var geomStream = new MemoryStream();
-        WriteVarint(geomStream, (1 << 3) | 1); // MoveTo 1
-        WriteVarint(geomStream, EncodeZigzag32(0));
-        WriteVarint(geomStream, EncodeZigzag32(0));
-
-        WriteVarint(geomStream, (3 << 3) | 2); // LineTo 3
-        WriteVarint(geomStream, EncodeZigzag32(4096)); // -> (4096, 0)
-        WriteVarint(geomStream, EncodeZigzag32(0));
-        WriteVarint(geomStream, EncodeZigzag32(0));    // -> (4096, 4096)
-        WriteVarint(geomStream, EncodeZigzag32(4096));
-        WriteVarint(geomStream, EncodeZigzag32(-4096)); // -> (0, 4096)
-        WriteVarint(geomStream, EncodeZigzag32(0));
-
-        WriteVarint(geomStream, (1 << 3) | 7); // ClosePath 1
-
-        WriteTag(featStream, 4, 2);
-        WriteBytes(featStream, geomStream.ToArray());
-
-        WriteTag(layerStream, 2, 2);
-        WriteBytes(layerStream, featStream.ToArray());
-
-        WriteTag(stream, 3, 2);
-        WriteBytes(stream, layerStream.ToArray());
-
-        return stream.ToArray();
-    }
-
-    private static void WriteTag(Stream stream, int fieldNumber, int wireType)
-    {
-        WriteVarint(stream, (uint)((fieldNumber << 3) | wireType));
-    }
-
-    private static void WriteVarint(Stream stream, ulong value)
-    {
-        while (value >= 0x80)
-        {
-            stream.WriteByte((byte)((value & 0x7F) | 0x80));
-            value >>= 7;
-        }
-
-        stream.WriteByte((byte)value);
-    }
-
-    private static void WriteBytes(Stream stream, byte[] bytes)
-    {
-        WriteVarint(stream, (ulong)bytes.Length);
-        stream.Write(bytes, 0, bytes.Length);
-    }
-
-    private static void WriteString(Stream stream, string str)
-    {
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(str);
-        WriteBytes(stream, bytes);
-    }
-
-    private static uint EncodeZigzag32(int n)
-    {
-        return (uint)((n << 1) ^ (n >> 31));
-    }
+    private static byte[] CreateWaterTile() => MvtTestTile.CreateWater();
 
     private sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
@@ -374,38 +298,5 @@ public class VectorMapRendererTests
         public Task<byte[]?> TryReadAsync(string key, CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
 
         public Task WriteAsync(string key, byte[] content, CancellationToken cancellationToken) => Task.CompletedTask;
-    }
-
-    private sealed class MockVectorTileSource(int maxZoom, Func<int, int, int, byte[]?> fetchHandler) : IVectorTileSource
-    {
-        public string SourceId => "mock-source";
-        public int MaxZoom => maxZoom;
-
-        public Task<byte[]?> GetTileAsync(int z, int x, int y, TileFetchSession? session, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(fetchHandler(z, x, y));
-        }
-    }
-
-    private sealed class RecordingStyle : IVectorMapStyle
-    {
-        public List<string> Calls { get; } = [];
-
-        public string StyleId => "recording";
-
-        public SKColor BackgroundColor => SKColors.White;
-
-        public void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom) => this.Calls.Add("polygons");
-
-        public void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom) => this.Calls.Add("lines");
-
-        public void RenderSymbols(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
-            => this.Calls.Add("symbols");
-
-        public void RenderLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
-            => this.Calls.Add("labels");
-
-        public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
-            => this.Calls.Add("roadNames");
     }
 }

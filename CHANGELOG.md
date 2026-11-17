@@ -8,6 +8,7 @@
 
 ### Added
 
+- `PhotoMapStudio.Rendering` に、PhotoGeoExplorer の統合に要る描画の高速化を追加した（#130 の PR B2）。`VectorViewRequest.BandCount`（面・線を帯ごとに並列で描く。既定は 1＝並列にしない）と `ParallelLabels`（注記を別スレッドで描いて重ねる。既定は無効）、デコード済みタイルの LRU キャッシュ `DecodedTileCache`（`VectorMapRenderer` の省略可能な引数。既定はなし）。`IVectorMapStyle` の描画メソッドが `CancellationToken` を受け、スタイルの中でレイヤー・地物の単位でキャンセルを確認する（**スタイルを実装している場合は、メソッドの引数にトークンを足す**。0.1.0 の公開前の変更）。`OpenMapTilesStyle` は、描画先の範囲と交わらない地物を描かず（出力は変わらない）、破線の小道は範囲と交わる区間だけを位相を合わせて描く（深いズームの線の描画が数倍速くなる。破線の縁の半透明画素が数画素ずれ得る）。取り込まなかった PoC の最適化（パスの事前生成・道路のバッチ化・間引き・並列デコード）は `docs/development/vector-map-architecture.md` に理由を記録した。アプリの動作は変わらない。
 - `PhotoMapStudio.Rendering` に、表示範囲全体を 1 枚の画像として描く API `VectorMapRenderer.RenderViewAsync` を追加した（#130 の PR B1）。連続ズーム（`double`。取得ズームは整数、表示倍率は連続値）、物理ピクセルの画像寸法、キャンセル（途中でキャンセルされたら `OperationCanceledException` で終わり、画像を返さない）、欠落タイルの判別（`AllowIncompleteMaps` と `UnavailableTileCount`・`AbsentTileCount`・`IsComplete`）、画像の所有権（結果は `IDisposable`。`TakeImage()` で引き取れる）に対応する。既存の API の出力は変わらない（保存済みタイルの比較で、ズーム 16〜19 の 4 枚が移行前と完全に一致）。アプリの動作は変わらない。
 - `Prepare Release` に、`PhotoMapStudio.Tiles` の未公開の変更を確認するジョブ `tiles-check`（`scripts/Test-TilesUnpublishedChanges.ps1`）を追加した。最新の正式版のタグ（`tiles-vX.Y.Z`）からの `src/PhotoMapStudio.Tiles` の差分を「変更なし」「依存の更新だけ」「変更あり」に分類し、公開が要りそうなときは警告を出す。警告だけで、リリース準備は止めず、パッケージの公開も自動では行わない（公開は従来どおり `tiles-vX.Y.Z` のタグで行う）。判断の基準は `docs/development/releasing-tiles.md` に追記した。
 

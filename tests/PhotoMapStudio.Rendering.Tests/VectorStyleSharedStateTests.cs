@@ -72,7 +72,7 @@ public sealed class VectorStyleSharedStateTests
         {
             canvas.Clear(SKColors.White);
             canvas.Scale(tileScale, tileScale);
-            style.RenderLines(canvas, tile, tileScale, zoom);
+            style.RenderLines(canvas, tile, tileScale, zoom, CancellationToken.None);
         }
 
         return bitmap.Bytes;

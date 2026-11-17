@@ -55,7 +55,7 @@ public class OpenMapTilesStyleTests
         };
 
         canvas.Scale(100f / 4096f, 100f / 4096f);
-        style.RenderPolygons(canvas, tile, 100f / 4096f, 14);
+        style.RenderPolygons(canvas, tile, 100f / 4096f, 14, CancellationToken.None);
 
         // 中央のピクセルが水色（#A0C8F0）になっていること
         SKColor centerPixel = bitmap.GetPixel(50, 50);
@@ -102,7 +102,7 @@ public class OpenMapTilesStyleTests
 
         float tileScale = 100f / 4096f;
         canvas.Scale(tileScale, tileScale);
-        style.RenderLines(canvas, tile, tileScale, 14);
+        style.RenderLines(canvas, tile, tileScale, 14, CancellationToken.None);
 
         // 道路中心（y = 50）が fill 色（#9AD8A8）
         SKColor roadCenter = bitmap.GetPixel(50, 50);
@@ -152,7 +152,7 @@ public class OpenMapTilesStyleTests
 
         float tileScale = 100f / 4096f;
         canvas.Scale(tileScale, tileScale);
-        style.RenderLines(canvas, tile, tileScale, 14);
+        style.RenderLines(canvas, tile, tileScale, 14, CancellationToken.None);
 
         // 線中央（y = 50）が鉄道ペイント色（#777777）で描画されていること（アンチエイリアス考慮）
         SKColor railCenter = bitmap.GetPixel(50, 50);
@@ -203,7 +203,7 @@ public class OpenMapTilesStyleTests
         var grid = new LabelCollisionGrid();
         var viewport = new SKRect(0, 0, 256, 256);
 
-        style.RenderLabels(canvas, tile, matrix, 14, grid, viewport);
+        style.RenderLabels(canvas, tile, matrix, 14, grid, viewport, CancellationToken.None);
 
         // 画面中央 (128, 128) 付近にテキスト（非透明）が描画されていること
         // 誤って二重変換されて (7, 7) 付近に飛んでいないことを検証
@@ -240,14 +240,14 @@ public class OpenMapTilesStyleTests
         var grid = new LabelCollisionGrid();
         var viewport = new SKRect(0, 0, 10, 10);
 
-        Assert.Throws<ArgumentNullException>(() => style.RenderPolygons(null!, tile, 1f, 14));
-        Assert.Throws<ArgumentNullException>(() => style.RenderPolygons(canvas, null!, 1f, 14));
+        Assert.Throws<ArgumentNullException>(() => style.RenderPolygons(null!, tile, 1f, 14, CancellationToken.None));
+        Assert.Throws<ArgumentNullException>(() => style.RenderPolygons(canvas, null!, 1f, 14, CancellationToken.None));
 
-        Assert.Throws<ArgumentNullException>(() => style.RenderLines(null!, tile, 1f, 14));
-        Assert.Throws<ArgumentNullException>(() => style.RenderLines(canvas, null!, 1f, 14));
+        Assert.Throws<ArgumentNullException>(() => style.RenderLines(null!, tile, 1f, 14, CancellationToken.None));
+        Assert.Throws<ArgumentNullException>(() => style.RenderLines(canvas, null!, 1f, 14, CancellationToken.None));
 
-        Assert.Throws<ArgumentNullException>(() => style.RenderLabels(null!, tile, SKMatrix.Identity, 14, grid, viewport));
-        Assert.Throws<ArgumentNullException>(() => style.RenderLabels(canvas, null!, SKMatrix.Identity, 14, grid, viewport));
-        Assert.Throws<ArgumentNullException>(() => style.RenderLabels(canvas, tile, SKMatrix.Identity, 14, null!, viewport));
+        Assert.Throws<ArgumentNullException>(() => style.RenderLabels(null!, tile, SKMatrix.Identity, 14, grid, viewport, CancellationToken.None));
+        Assert.Throws<ArgumentNullException>(() => style.RenderLabels(canvas, null!, SKMatrix.Identity, 14, grid, viewport, CancellationToken.None));
+        Assert.Throws<ArgumentNullException>(() => style.RenderLabels(canvas, tile, SKMatrix.Identity, 14, null!, viewport, CancellationToken.None));
     }
 }

@@ -28,4 +28,17 @@ public sealed record VectorViewRequest(double CenterLatitude, double CenterLongi
     /// 欠落は <see cref="VectorViewResult"/> の集計で判別できる。既定では許さず、失敗は例外になる。
     /// </summary>
     public bool AllowIncompleteMaps { get; init; }
+
+    /// <summary>
+    /// 面・線を、画像を横に分けた帯ごとに並列で描く帯の数（1 で並列にしない。既定は 1）。
+    /// 最良の帯の数は実行環境のコア数に近く、コア数より多いと遅くなり得る（目安: <c>Math.Clamp(Environment.ProcessorCount, 1, 8)</c>）。
+    /// 帯ごとに別のサーフェスへ描くため、線の縁の半透明画素が、並列にしない場合と最大 20 程度（/255）ずれ得る（画素の数 %。見た目は同じ）。
+    /// </summary>
+    public int BandCount { get; init; } = 1;
+
+    /// <summary>
+    /// 注記（シンボル・道路名・地名）を、面・線の描画と並行して別スレッドの透明な画像へ描き、最後に重ねる。
+    /// 注記の衝突判定は逐次のため 1 スレッドで行う。画像を重ねるため、注記の縁の半透明画素が、並列にしない場合とわずかにずれ得る。
+    /// </summary>
+    public bool ParallelLabels { get; init; }
 }

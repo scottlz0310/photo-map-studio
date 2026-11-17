@@ -16,16 +16,19 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
     private readonly IVectorTileSource defaultTileSource;
     private readonly IVectorMapStyle defaultStyle;
     private readonly Func<TileSource?, (IVectorTileSource Source, IVectorMapStyle Style)>? resolver;
+    private readonly DecodedTileCache? decodedTileCache;
 
     /// <summary>
     /// 単一のデータソースとスタイルでベクター地図レンダラーを初期化する。
     /// </summary>
     /// <param name="tileSource">ベクタータイルデータソース。</param>
     /// <param name="style">地図描画スタイル。</param>
-    public VectorMapRenderer(IVectorTileSource tileSource, IVectorMapStyle style)
+    /// <param name="decodedTileCache">デコード済みタイルのキャッシュ。指定すると、同じタイルの取得とデコードを省く。</param>
+    public VectorMapRenderer(IVectorTileSource tileSource, IVectorMapStyle style, DecodedTileCache? decodedTileCache = null)
     {
         this.defaultTileSource = tileSource ?? throw new ArgumentNullException(nameof(tileSource));
         this.defaultStyle = style ?? throw new ArgumentNullException(nameof(style));
+        this.decodedTileCache = decodedTileCache;
     }
 
     /// <summary>
@@ -34,11 +37,13 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
     /// <param name="defaultTileSource">既定のベクタータイルデータソース。</param>
     /// <param name="defaultStyle">既定の地図描画スタイル。</param>
     /// <param name="resolver">タイル配信元に応じたソースおよびスタイルの解決関数。</param>
+    /// <param name="decodedTileCache">デコード済みタイルのキャッシュ。指定すると、同じタイルの取得とデコードを省く。</param>
     public VectorMapRenderer(
         IVectorTileSource defaultTileSource,
         IVectorMapStyle defaultStyle,
-        Func<TileSource?, (IVectorTileSource Source, IVectorMapStyle Style)> resolver)
-        : this(defaultTileSource, defaultStyle)
+        Func<TileSource?, (IVectorTileSource Source, IVectorMapStyle Style)> resolver,
+        DecodedTileCache? decodedTileCache = null)
+        : this(defaultTileSource, defaultStyle, decodedTileCache)
     {
         this.resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
     }
@@ -123,7 +128,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(zoom);
-        return this.RenderCoreAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, renderContext, cancellationToken);
+        return this.RenderCoreAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource, renderContext, parallel: null, cancellationToken);
     }
 
     /// <summary>
@@ -148,6 +153,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         {
             throw new ArgumentOutOfRangeException(nameof(request), request.Zoom, "ズームは 0 以上の有限値で指定してください。");
         }
+        ArgumentOutOfRangeException.ThrowIfLessThan(request.BandCount, 1, nameof(request));
 
         var context = new VectorMapRenderContext(request.AllowIncompleteMaps);
         using var bitmap = new SKBitmap(request.PixelWidth, request.PixelHeight, SKImageInfo.PlatformColorType, SKAlphaType.Premul);
@@ -155,7 +161,9 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         {
             await this.RenderCoreAsync(
                 canvas, request.CenterLatitude, request.CenterLongitude, request.Zoom, request.PixelWidth, request.PixelHeight,
-                request.Session, request.TileSource, context, cancellationToken).ConfigureAwait(false);
+                request.Session, request.TileSource, context,
+                request.BandCount > 1 || request.ParallelLabels ? new ParallelDraw(bitmap, request.BandCount, request.ParallelLabels) : null,
+                cancellationToken).ConfigureAwait(false);
         }
 
         // 画像を不変にしてから SKImage へ渡す。画素は共有し、コピーしない
@@ -165,7 +173,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
     private async Task RenderCoreAsync(SKCanvas canvas, double latitude, double longitude, double zoom, int width, int height,
         TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
-        CancellationToken cancellationToken)
+        ParallelDraw? parallel, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(renderContext);
@@ -205,6 +213,17 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
         // 4. タイルの非同期取得とデコード
         var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)>();
+
+        // タイルを、表示範囲の画素へ置く拡大率と位置を決める
+        (int Tx, int Ty, VectorTile Tile, float Scale, float Dx, float Dy) Place(VectorTile placed, int tx, int ty)
+        {
+            uint extent = placed.Layers.Count > 0 ? placed.Layers[0].Extent : 4096;
+            float scale = (float)((MercatorProjection.TileSize * scaleRatio) / extent);
+            float dx = (float)((tx * MercatorProjection.TileSize * scaleRatio) - left);
+            float dy = (float)((ty * MercatorProjection.TileSize * scaleRatio) - top);
+            return (tx, ty, placed, scale, dx, dy);
+        }
+
         int attemptedTiles = 0;
         int unreadableTiles = 0;
         int firstFetchX = 0;
@@ -230,10 +249,30 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                 }
 
                 renderContext.RequestedTileCount++;
+                // 動的に版を解決する取得元（OpenFreeMap の TileJSON など）は、解決の前後で識別子が変わる。キャッシュの鍵の版と取得するタイルの版を
+                // 揃えるため、解決した識別子を鍵にし、同じ識別子でタイルを取得する（CachedVectorTileSource と同じ作法。通信を止めているときは解決しない）
+                string? effectiveSourceId = null;
+                DecodedTileCache.TileKey cacheKey = default;
+                if (this.decodedTileCache is not null)
+                {
+                    effectiveSourceId = session?.IsCacheOnly == true
+                        ? activeSource.SourceId
+                        : await activeSource.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
+                    cacheKey = new DecodedTileCache.TileKey(effectiveSourceId, tileZoom, fetchX, ty);
+                    if (this.decodedTileCache.TryGet(cacheKey, out VectorTile? cachedTile))
+                    {
+                        loadedTiles.Add(Place(cachedTile, tx, ty));
+                        continue;
+                    }
+                }
+
+
                 byte[]? tileData;
                 try
                 {
-                    tileData = await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
+                    tileData = effectiveSourceId is null
+                        ? await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false)
+                        : await activeSource.GetTileForSourceIdAsync(tileZoom, fetchX, ty, effectiveSourceId, session, cancellationToken).ConfigureAwait(false);
                 }
                 catch (TileFetchException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -253,6 +292,8 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
 
                 VectorTile tile;
                 bool readable;
+                // デコードは同期処理なので、同じスレッドの割り当て量の差を、キャッシュの容量に数えるタイルの大きさの見積もりにする
+                long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
                 try
                 {
                     readable = VectorTileDecoder.TryDecode(tileData, out tile);
@@ -271,17 +312,16 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                     continue;
                 }
 
-                uint extent = 4096;
-                if (tile.Layers.Count > 0)
+                long decodedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                if (effectiveSourceId is not null
+                    && (session?.IsCacheOnly == true
+                        || string.Equals(effectiveSourceId, await activeSource.GetSourceIdAsync(cancellationToken).ConfigureAwait(false), StringComparison.Ordinal)))
                 {
-                    extent = tile.Layers[0].Extent;
+                    // 取得の間に識別子（版）が変わっていたら、どの版のタイルか分からないので保存しない
+                    this.decodedTileCache!.Add(cacheKey, tile, decodedBytes);
                 }
 
-                float scale = (float)((MercatorProjection.TileSize * scaleRatio) / extent);
-                float dx = (float)((tx * MercatorProjection.TileSize * scaleRatio) - left);
-                float dy = (float)((ty * MercatorProjection.TileSize * scaleRatio) - top);
-
-                loadedTiles.Add((tx, ty, tile, scale, dx, dy));
+                loadedTiles.Add(Place(tile, tx, ty));
             }
         }
 
@@ -315,6 +355,13 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
         }
 
         // 5. SkiaSharp によるキャンバス描画
+        if (parallel is not null)
+        {
+            await DrawParallelAsync(parallel, canvas, loadedTiles, activeStyle, styleZoom, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return;
+        }
+
         // 背景クリア
         canvas.Clear(activeStyle.BackgroundColor);
 
@@ -330,7 +377,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             canvas.Translate(item.dx, item.dy);
             canvas.Scale(item.scale, item.scale);
 
-            activeStyle.RenderPolygons(canvas, item.tile, item.scale, styleZoom);
+            activeStyle.RenderPolygons(canvas, item.tile, item.scale, styleZoom, cancellationToken);
 
             canvas.Restore();
         }
@@ -344,7 +391,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             canvas.Translate(item.dx, item.dy);
             canvas.Scale(item.scale, item.scale);
 
-            activeStyle.RenderLines(canvas, item.tile, item.scale, styleZoom);
+            activeStyle.RenderLines(canvas, item.tile, item.scale, styleZoom, cancellationToken);
 
             canvas.Restore();
         }
@@ -357,7 +404,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
             tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
 
-            activeStyle.RenderSymbols(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport);
+            activeStyle.RenderSymbols(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport, cancellationToken);
         }
 
         // 道路名を全タイルの地名・施設名より先に配置する。
@@ -366,7 +413,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             SKMatrix matrix = SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy);
-            activeStyle.RenderLineLabels(canvas, item.tile, matrix, styleZoom, collisionGrid, viewport);
+            activeStyle.RenderLineLabels(canvas, item.tile, matrix, styleZoom, collisionGrid, viewport, cancellationToken);
         }
 
         // パス 3b: 全タイルの注記・ラベル（画面座標系で直接描画）
@@ -377,10 +424,159 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
             SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
             tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
 
-            activeStyle.RenderLabels(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport);
+            activeStyle.RenderLabels(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport, cancellationToken);
         }
 
         // 最後のパスの途中でキャンセルされた場合も、完成した画像として返さない
         cancellationToken.ThrowIfCancellationRequested();
     }
+
+    /// <summary>
+    /// 面・線を、画像を横に分けた帯ごとに並列で描く（帯は連続した行なので、同じ画素メモリの別範囲を別のサーフェスで描ける）。
+    /// 注記は衝突判定が逐次のため 1 スレッドで、並列にする場合は別の透明な画像へ描いて最後に重ね、しない場合は帯の描画のあとに本体へ直接描く。
+    /// </summary>
+    private static async Task DrawParallelAsync(
+        ParallelDraw parallel,
+        SKCanvas canvas,
+        IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)> tiles,
+        IVectorMapStyle style,
+        int styleZoom,
+        CancellationToken cancellationToken)
+    {
+        SKBitmap bitmap = parallel.Bitmap;
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        var viewport = new SKRect(0, 0, width, height);
+        var collisionGrid = new LabelCollisionGrid();
+
+        void DrawLabels(SKCanvas target)
+        {
+            // 全タイルのシンボル → 道路名 → その他の注記の順に配置する（逐次の描画と同じ）
+            foreach (var item in tiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                style.RenderSymbols(target, item.tile, SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy), styleZoom, collisionGrid, viewport, cancellationToken);
+            }
+
+            foreach (var item in tiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                style.RenderLineLabels(target, item.tile, SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy), styleZoom, collisionGrid, viewport, cancellationToken);
+            }
+
+            foreach (var item in tiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                style.RenderLabels(target, item.tile, SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy), styleZoom, collisionGrid, viewport, cancellationToken);
+            }
+        }
+
+        SKBitmap? labelBitmap = null;
+        Task? labelTask = null;
+        try
+        {
+            if (parallel.ParallelLabels)
+            {
+                labelBitmap = new SKBitmap(width, height, SKImageInfo.PlatformColorType, SKAlphaType.Premul);
+                SKBitmap labelTarget = labelBitmap;
+                labelTask = Task.Run(
+                    () =>
+                    {
+                        using var labelCanvas = new SKCanvas(labelTarget);
+                        labelCanvas.Clear(SKColors.Transparent);
+                        DrawLabels(labelCanvas);
+                    },
+                    CancellationToken.None);
+            }
+
+            await DrawBandsAsync(bitmap, tiles, style, styleZoom, Math.Min(parallel.BandCount, height), cancellationToken).ConfigureAwait(false);
+
+            if (labelTask is null)
+            {
+                DrawLabels(canvas);
+                return;
+            }
+
+            await labelTask.ConfigureAwait(false);
+            using SKImage labelImage = SKImage.FromBitmap(labelBitmap!);
+            canvas.DrawImage(labelImage, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
+        }
+        finally
+        {
+            // 帯の描画が失敗・キャンセルされても、注記を描いているスレッドが終わるまで、その画像を破棄しない
+            if (labelTask is not null)
+            {
+                await Task.WhenAny(labelTask).ConfigureAwait(false);
+            }
+
+            labelBitmap?.Dispose();
+        }
+    }
+
+    private static async Task DrawBandsAsync(
+        SKBitmap bitmap,
+        IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)> tiles,
+        IVectorMapStyle style,
+        int styleZoom,
+        int bandCount,
+        CancellationToken cancellationToken)
+    {
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        IntPtr pixels = bitmap.GetPixels();
+        int rowBytes = bitmap.RowBytes;
+        SKColor background = style.BackgroundColor;
+        var options = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = bandCount };
+
+        void DrawBand(int band)
+        {
+            int top = height * band / bandCount;
+            int bottom = height * (band + 1) / bandCount;
+            if (bottom <= top)
+            {
+                return;
+            }
+
+            var info = new SKImageInfo(width, bottom - top, bitmap.ColorType, bitmap.AlphaType);
+            using SKSurface surface = SKSurface.Create(info, pixels + (top * rowBytes), rowBytes)
+                ?? throw new InvalidOperationException("帯の描画先を作れませんでした。");
+            SKCanvas bandCanvas = surface.Canvas;
+            bandCanvas.Clear(background);
+            bandCanvas.Translate(0, -top);
+
+            // 面 → 線の順に、全タイルを描く（逐次の描画と同じ）
+            foreach (var item in tiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bandCanvas.Save();
+                bandCanvas.Translate(item.dx, item.dy);
+                bandCanvas.Scale(item.scale, item.scale);
+                style.RenderPolygons(bandCanvas, item.tile, item.scale, styleZoom, cancellationToken);
+                bandCanvas.Restore();
+            }
+
+            foreach (var item in tiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bandCanvas.Save();
+                bandCanvas.Translate(item.dx, item.dy);
+                bandCanvas.Scale(item.scale, item.scale);
+                style.RenderLines(bandCanvas, item.tile, item.scale, styleZoom, cancellationToken);
+                bandCanvas.Restore();
+            }
+        }
+
+        try
+        {
+            await Task.Run(() => Parallel.For(0, bandCount, options, DrawBand), cancellationToken).ConfigureAwait(false);
+        }
+        catch (AggregateException exception)
+        {
+            // 並列の描画の失敗は AggregateException に包まれる（複数の帯が同じ理由で同時に失敗し得る）。
+            // 利用者には元の例外（スタイルの失敗など）として見せるため、最初の失敗を投げ直す
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.Flatten().InnerExceptions[0]).Throw();
+        }
+    }
+
+    private sealed record ParallelDraw(SKBitmap Bitmap, int BandCount, bool ParallelLabels);
 }

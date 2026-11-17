@@ -175,6 +175,80 @@ public class DecodedTileCacheTests
         Assert.Equal(first.Bytes, second.Bytes);
     }
 
+    [Fact]
+    public async Task 動的に版を解決する取得元のタイルを別の版の固定の取得元へ返さない()
+    {
+        // 解決の前の識別子（フォールバックの版 v1）で鍵を作ると、解決後の版 v2 のタイルが v1 の鍵で保存され、
+        // 同じキャッシュを共有する v1 固定の取得元に、v2 のタイルが返ってしまう
+        using var style = new OpenMapTilesStyle();
+        var cache = new DecodedTileCache(10_000_000);
+        var dynamicSource = new VersionedSource("v1", resolvedAtFirstCall: "v2", tileFor: id => id == "v2" ? MvtTestTile.CreateWater() : null);
+        var fixedSource = new VersionedSource("v1", resolvedAtFirstCall: null, tileFor: _ => null);
+
+        using VectorViewResult latest = await new VectorMapRenderer(dynamicSource, style, cache).RenderViewAsync(Request());
+
+        Assert.True(latest.IsComplete);
+        await Assert.ThrowsAsync<PhotoMapStudio.Tiles.TileFetchException>(
+            () => new VectorMapRenderer(fixedSource, style, cache).RenderViewAsync(Request()));
+    }
+
+    [Fact]
+    public async Task 解決に失敗した後に再解決で版が変わったら新しい版のタイルを取得する()
+    {
+        using var style = new OpenMapTilesStyle();
+        var cache = new DecodedTileCache(10_000_000);
+        var source = new VersionedSource("v1", resolvedAtFirstCall: null, tileFor: id => id == "v2" ? MvtTestTile.CreateWater() : MvtTestTile.CreateWater(rightEdge: 1024));
+        var renderer = new VectorMapRenderer(source, style, cache);
+
+        // 解決に失敗している間は v1（フォールバック）のタイルを描く
+        using VectorViewResult first = await renderer.RenderViewAsync(Request());
+        using SKBitmap before = SKBitmap.FromImage(first.Image);
+        Assert.NotEqual(new SKColor(0xA0, 0xC8, 0xF0), before.GetPixel(120, 64));
+
+        // 再解決で最新の版になったら、v1 のキャッシュを使わず v2 のタイルを取得する
+        source.Resolve("v2");
+        using VectorViewResult second = await renderer.RenderViewAsync(Request());
+        using SKBitmap after = SKBitmap.FromImage(second.Image);
+
+        Assert.Equal(new SKColor(0xA0, 0xC8, 0xF0), after.GetPixel(120, 64));
+        Assert.Equal(2, source.FetchCalls);
+    }
+
+    [Fact]
+    public async Task 取得の間に識別子が変わったらそのタイルは保存しない()
+    {
+        using var style = new OpenMapTilesStyle();
+        var cache = new DecodedTileCache(10_000_000);
+        var source = new VersionedSource("v1", resolvedAtFirstCall: null, tileFor: _ => MvtTestTile.CreateWater());
+        source.OnFetched = () => source.Resolve("v2");
+        var renderer = new VectorMapRenderer(source, style, cache);
+
+        using VectorViewResult result = await renderer.RenderViewAsync(Request());
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(0, cache.Count);
+    }
+
+    [Fact]
+    public async Task 通信を止めている間は識別子を解決せず解決前の識別子の鍵を使う()
+    {
+        using var style = new OpenMapTilesStyle();
+        var cache = new DecodedTileCache(10_000_000);
+        var source = new VersionedSource("v1", resolvedAtFirstCall: "v2", tileFor: _ => MvtTestTile.CreateWater());
+        var session = new PhotoMapStudio.Tiles.TileFetchSession(TimeProvider.System) { AllowIncompleteVectorMaps = true };
+        for (int i = 0; i < PhotoMapStudio.Tiles.TileFetchSession.FailureLimit; i++)
+        {
+            session.RecordFailure(new PhotoMapStudio.Tiles.TileFetchException("通信失敗", new Uri("https://example.test/tile"), System.Net.HttpStatusCode.ServiceUnavailable, null));
+        }
+
+        Assert.True(session.IsCacheOnly);
+        using VectorViewResult result = await new VectorMapRenderer(source, style, cache)
+            .RenderViewAsync(Request() with { Session = session, AllowIncompleteMaps = true });
+
+        Assert.Equal(0, source.ResolveCalls);
+        Assert.Equal(1, cache.Count);
+    }
+
     private static DecodedTileCache.TileKey Key(int x) => new("test-source", 14, x, 0);
 
     private static VectorTile NewTile()
@@ -187,6 +261,54 @@ public class DecodedTileCacheTests
     {
         (double latitude, double longitude) = TileToLatLon(TileX + 0.5, TileY + 0.5, BaseZoom);
         return new VectorViewRequest(latitude, longitude, 14.2, 128, 128);
+    }
+
+    /// <summary>
+    /// OpenFreeMap のように、識別子（版）を非同期に解決する取得元。解決前の <see cref="SourceId"/> はフォールバックの版を返し、
+    /// 解決（<see cref="GetSourceIdAsync"/>）で最新の版になる。タイルは、指定された識別子の版で返す。
+    /// </summary>
+    private sealed class VersionedSource(string initialId, string? resolvedAtFirstCall, Func<string, byte[]?> tileFor) : IVectorTileSource
+    {
+        private string effectiveId = initialId;
+        private bool resolved;
+
+        public int ResolveCalls { get; private set; }
+
+        public int FetchCalls { get; private set; }
+
+        public Action? OnFetched { get; set; }
+
+        public string SourceId => this.effectiveId;
+
+        public int MaxZoom => BaseZoom;
+
+        public void Resolve(string id) => this.effectiveId = id;
+
+        public Task<string> GetSourceIdAsync(CancellationToken cancellationToken = default)
+        {
+            this.ResolveCalls++;
+            if (!this.resolved && resolvedAtFirstCall is not null)
+            {
+                this.resolved = true;
+                this.effectiveId = resolvedAtFirstCall;
+            }
+
+            return Task.FromResult(this.effectiveId);
+        }
+
+        public Task<byte[]?> GetTileAsync(int z, int x, int y, PhotoMapStudio.Tiles.TileFetchSession? session, CancellationToken cancellationToken = default)
+            => this.Fetch(this.effectiveId, x, y);
+
+        public Task<byte[]?> GetTileForSourceIdAsync(int z, int x, int y, string resolvedSourceId, PhotoMapStudio.Tiles.TileFetchSession? session, CancellationToken cancellationToken = default)
+            => this.Fetch(resolvedSourceId, x, y);
+
+        private Task<byte[]?> Fetch(string id, int x, int y)
+        {
+            this.FetchCalls++;
+            byte[]? tile = x == TileX && y == TileY ? tileFor(id) : null;
+            this.OnFetched?.Invoke();
+            return Task.FromResult(tile);
+        }
     }
 
     private static (double Latitude, double Longitude) TileToLatLon(double tileX, double tileY, int zoom)

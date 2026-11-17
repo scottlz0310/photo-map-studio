@@ -249,17 +249,30 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                 }
 
                 renderContext.RequestedTileCount++;
-                var cacheKey = new DecodedTileCache.TileKey(activeSource.SourceId, tileZoom, fetchX, ty);
-                if (this.decodedTileCache is not null && this.decodedTileCache.TryGet(cacheKey, out VectorTile? cachedTile))
+                // 動的に版を解決する取得元（OpenFreeMap の TileJSON など）は、解決の前後で識別子が変わる。キャッシュの鍵の版と取得するタイルの版を
+                // 揃えるため、解決した識別子を鍵にし、同じ識別子でタイルを取得する（CachedVectorTileSource と同じ作法。通信を止めているときは解決しない）
+                string? effectiveSourceId = null;
+                DecodedTileCache.TileKey cacheKey = default;
+                if (this.decodedTileCache is not null)
                 {
-                    loadedTiles.Add(Place(cachedTile, tx, ty));
-                    continue;
+                    effectiveSourceId = session?.IsCacheOnly == true
+                        ? activeSource.SourceId
+                        : await activeSource.GetSourceIdAsync(cancellationToken).ConfigureAwait(false);
+                    cacheKey = new DecodedTileCache.TileKey(effectiveSourceId, tileZoom, fetchX, ty);
+                    if (this.decodedTileCache.TryGet(cacheKey, out VectorTile? cachedTile))
+                    {
+                        loadedTiles.Add(Place(cachedTile, tx, ty));
+                        continue;
+                    }
                 }
+
 
                 byte[]? tileData;
                 try
                 {
-                    tileData = await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false);
+                    tileData = effectiveSourceId is null
+                        ? await activeSource.GetTileAsync(tileZoom, fetchX, ty, session, cancellationToken).ConfigureAwait(false)
+                        : await activeSource.GetTileForSourceIdAsync(tileZoom, fetchX, ty, effectiveSourceId, session, cancellationToken).ConfigureAwait(false);
                 }
                 catch (TileFetchException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -299,7 +312,15 @@ public sealed class VectorMapRenderer : IVectorMapRenderer
                     continue;
                 }
 
-                this.decodedTileCache?.Add(cacheKey, tile, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+                long decodedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                if (effectiveSourceId is not null
+                    && (session?.IsCacheOnly == true
+                        || string.Equals(effectiveSourceId, await activeSource.GetSourceIdAsync(cancellationToken).ConfigureAwait(false), StringComparison.Ordinal)))
+                {
+                    // 取得の間に識別子（版）が変わっていたら、どの版のタイルか分からないので保存しない
+                    this.decodedTileCache!.Add(cacheKey, tile, decodedBytes);
+                }
+
                 loadedTiles.Add(Place(tile, tx, ty));
             }
         }

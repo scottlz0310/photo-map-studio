@@ -138,17 +138,17 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
     };
 
     /// <inheritdoc />
-    public void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom)
+    public void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
 
         // 1. 地形面・緑地 (TpgphArea)
-        RenderLayerPolygons(canvas, tile.GetLayer("TpgphArea"), this.greenAreaPaint);
+        RenderLayerPolygons(canvas, tile.GetLayer("TpgphArea"), this.greenAreaPaint, cancellationToken);
 
         // 2. 水域 (WA / WStrA)
-        RenderLayerPolygons(canvas, tile.GetLayer("WA"), this.waterPaint);
-        RenderLayerPolygons(canvas, tile.GetLayer("WStrA"), this.waterPaint);
+        RenderLayerPolygons(canvas, tile.GetLayer("WA"), this.waterPaint, cancellationToken);
+        RenderLayerPolygons(canvas, tile.GetLayer("WStrA"), this.waterPaint, cancellationToken);
 
         // 3. 建物 (BldA): ズーム 13 以上で描画
         if (zoom >= 13)
@@ -156,13 +156,13 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
             VectorTileLayer? buildingLayer = tile.GetLayer("BldA");
             if (buildingLayer is not null)
             {
-                RenderLayerPolygons(canvas, buildingLayer, this.buildingFillPaint, this.buildingStrokePaint);
+                RenderLayerPolygons(canvas, buildingLayer, this.buildingFillPaint, cancellationToken, this.buildingStrokePaint);
             }
         }
     }
 
     /// <inheritdoc />
-    public void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom)
+    public void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
@@ -172,47 +172,47 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         // 1. 等高線 (Cntr)
         using (SKPaint contour = StrokeOf(this.contourPaint, 0.8f / tileScale))
         {
-            RenderLayerLines(canvas, tile.GetLayer("Cntr"), contour);
+            RenderLayerLines(canvas, tile.GetLayer("Cntr"), contour, cancellationToken);
         }
 
         // 2. 水涯線・河川中心線・海岸線 (WL / RvrCL / Cstline)
         using (SKPaint river = StrokeOf(this.riverPaint, 1.0f / tileScale))
         {
-            RenderLayerLines(canvas, tile.GetLayer("WL"), river);
-            RenderLayerLines(canvas, tile.GetLayer("RvrCL"), river);
-            RenderLayerLines(canvas, tile.GetLayer("Cstline"), river);
+            RenderLayerLines(canvas, tile.GetLayer("WL"), river, cancellationToken);
+            RenderLayerLines(canvas, tile.GetLayer("RvrCL"), river, cancellationToken);
+            RenderLayerLines(canvas, tile.GetLayer("Cstline"), river, cancellationToken);
         }
 
         // 3. 行政境界線 (AdmBdry)
         using (SKPaint admBdry = StrokeOf(this.admBdryPaint, 1.0f / tileScale))
         {
-            RenderLayerLines(canvas, tile.GetLayer("AdmBdry"), admBdry);
+            RenderLayerLines(canvas, tile.GetLayer("AdmBdry"), admBdry, cancellationToken);
         }
 
         // 4. 鉄道 (RailCL)
         using (SKPaint railway = StrokeOf(this.railwayPaint, 1.2f / tileScale))
         {
-            RenderLayerLines(canvas, tile.GetLayer("RailCL"), railway);
+            RenderLayerLines(canvas, tile.GetLayer("RailCL"), railway, cancellationToken);
         }
 
         // 5. 道路 (RdCL: 道路中心線 / RdEdg: 道路縁)
         VectorTileLayer? roadLayer = tile.GetLayer("RdCL");
         if (roadLayer is not null)
         {
-            this.RenderRoads(canvas, roadLayer, tileScale);
+            this.RenderRoads(canvas, roadLayer, tileScale, cancellationToken);
         }
 
         VectorTileLayer? roadEdgeLayer = tile.GetLayer("RdEdg");
         if (roadEdgeLayer is not null && zoom >= 15)
         {
             using SKPaint roadEdge = StrokeOf(this.minorCasing, 0.8f / tileScale);
-            RenderLayerLines(canvas, roadEdgeLayer, roadEdge);
+            RenderLayerLines(canvas, roadEdgeLayer, roadEdge, cancellationToken);
         }
     }
 
     /// <inheritdoc />
     public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
-        LabelCollisionGrid collisionGrid, SKRect viewport)
+        LabelCollisionGrid collisionGrid, SKRect viewport, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
@@ -221,6 +221,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         if (layer is null) { return; }
         foreach (VectorTileFeature feature in layer.Features.Where(f => f.GeometryType == VectorGeometryType.LineString))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string? text = feature.GetString("vt_text") ?? feature.GetString("knj") ?? feature.GetString("name") ?? feature.GetString("text");
             if (string.IsNullOrWhiteSpace(text)) { continue; }
             PathLabelRenderer.Render(canvas, feature, tileToCanvasMatrix, text, this.labelFont,
@@ -235,7 +236,8 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         SKMatrix tileToCanvasMatrix,
         int zoom,
         LabelCollisionGrid collisionGrid,
-        SKRect viewport)
+        SKRect viewport,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(tile);
@@ -250,6 +252,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 
         for (int i = 0; i < annoLayer.Features.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             VectorTileFeature feature = annoLayer.Features[i];
             if (feature.GeometryType == VectorGeometryType.LineString || feature.GeometryParts.Count == 0 || feature.GeometryParts[0].Count == 0)
             {
@@ -288,7 +291,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         }
     }
 
-    private void RenderRoads(SKCanvas canvas, VectorTileLayer roadLayer, float tileScale)
+    private void RenderRoads(SKCanvas canvas, VectorTileLayer roadLayer, float tileScale, CancellationToken cancellationToken)
     {
         // 種別・線幅ごとの複製ペイントをこの描画の間だけ保持する（共有のペイントは書き換えない）
         var strokes = new Dictionary<(GsiRoadKind Kind, float Width, bool Casing), SKPaint>();
@@ -297,6 +300,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
             // 道路は casing (外枠) を先にすべて描き、その上に fill (中塗り) を描く
             for (int i = 0; i < roadLayer.Features.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 VectorTileFeature feature = roadLayer.Features[i];
                 if (feature.GeometryType != VectorGeometryType.LineString)
                 {
@@ -309,6 +313,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 
             for (int i = 0; i < roadLayer.Features.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 VectorTileFeature feature = roadLayer.Features[i];
                 if (feature.GeometryType != VectorGeometryType.LineString)
                 {
@@ -501,6 +506,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         SKCanvas canvas,
         VectorTileLayer? layer,
         SKPaint fillPaint,
+        CancellationToken cancellationToken,
         SKPaint? strokePaint = null)
     {
         if (layer is null)
@@ -510,6 +516,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 
         for (int i = 0; i < layer.Features.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             VectorTileFeature feature = layer.Features[i];
             if (feature.GeometryType != VectorGeometryType.Polygon)
             {
@@ -543,7 +550,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         }
     }
 
-    private static void RenderLayerLines(SKCanvas canvas, VectorTileLayer? layer, SKPaint strokePaint)
+    private static void RenderLayerLines(SKCanvas canvas, VectorTileLayer? layer, SKPaint strokePaint, CancellationToken cancellationToken)
     {
         if (layer is null)
         {
@@ -552,6 +559,7 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
 
         for (int i = 0; i < layer.Features.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             RenderFeatureLine(canvas, layer.Features[i], strokePaint);
         }
     }

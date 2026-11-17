@@ -17,17 +17,17 @@ internal sealed class RecordingStyle : IVectorMapStyle
 
     public SKColor BackgroundColor => SKColors.White;
 
-    public void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom) => this.Record("polygons", zoom);
+    public void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom, CancellationToken cancellationToken) => this.Record("polygons", zoom);
 
-    public void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom) => this.Record("lines", zoom);
+    public void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom, CancellationToken cancellationToken) => this.Record("lines", zoom);
 
-    public void RenderSymbols(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
+    public void RenderSymbols(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport, CancellationToken cancellationToken)
         => this.Record("symbols", zoom);
 
-    public void RenderLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
+    public void RenderLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport, CancellationToken cancellationToken)
         => this.Record("labels", zoom);
 
-    public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport)
+    public void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom, LabelCollisionGrid collisionGrid, SKRect viewport, CancellationToken cancellationToken)
         => this.Record("roadNames", zoom);
 
     private void Record(string pass, int zoom)

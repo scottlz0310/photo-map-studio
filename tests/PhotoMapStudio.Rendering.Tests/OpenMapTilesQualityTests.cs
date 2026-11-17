@@ -20,7 +20,7 @@ public sealed class OpenMapTilesQualityTests
         using var bitmap = new SKBitmap(300, 300);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
-        style.RenderLines(canvas, Tile("transportation", Line(kind)), 1f, 16);
+        style.RenderLines(canvas, Tile("transportation", Line(kind)), 1f, 16, CancellationToken.None);
         Assert.Equal(SKColor.Parse(color), bitmap.GetPixel(150, 150));
     }
 
@@ -35,8 +35,8 @@ public sealed class OpenMapTilesQualityTests
         a.Clear(SKColors.Transparent);
         b.Clear(SKColors.Transparent);
         VectorTile tile = Tile("transportation", Line("minor"));
-        style.RenderLines(a, tile, 1f, 16);
-        style.RenderLines(b, tile, 1f, 18);
+        style.RenderLines(a, tile, 1f, 16, CancellationToken.None);
+        style.RenderLines(b, tile, 1f, 18, CancellationToken.None);
         int smallWidth = Enumerable.Range(0, 300).Count(y => smaller.GetPixel(150, y).Alpha > 128);
         int largeWidth = Enumerable.Range(0, 300).Count(y => larger.GetPixel(150, y).Alpha > 128);
         Assert.True(largeWidth > smallWidth * 2);
@@ -58,7 +58,7 @@ public sealed class OpenMapTilesQualityTests
             Properties = new Dictionary<string, object> { ["class"] = kind },
             GeometryParts = [[new(0, 0), new(300, 0), new(300, 300), new(0, 300), new(0, 0)]],
         };
-        style.RenderPolygons(canvas, Tile(layer, area), 1f, 16);
+        style.RenderPolygons(canvas, Tile(layer, area), 1f, 16, CancellationToken.None);
         Assert.Equal(SKColor.Parse(color), bitmap.GetPixel(150, 150));
     }
 
@@ -75,12 +75,12 @@ public sealed class OpenMapTilesQualityTests
             GeometryParts = [[new(150, 0), new(150, 300)]],
         };
         var tile = new VectorTile { Layers = [Layer("transportation", Line("secondary")), Layer("waterway", river)] };
-        style.RenderLines(canvas, tile, 1f, 16);
+        style.RenderLines(canvas, tile, 1f, 16, CancellationToken.None);
         Assert.Equal(SKColor.Parse("#ffe27a"), bitmap.GetPixel(150, 150));
         Assert.Equal(SKColor.Parse("#a0c8f0"), bitmap.GetPixel(150, 100));
 
         canvas.Clear(SKColors.Transparent);
-        style.RenderLines(canvas, Tile("transportation", Line("path")), 1f, 18);
+        style.RenderLines(canvas, Tile("transportation", Line("path")), 1f, 18, CancellationToken.None);
         int drawn = Enumerable.Range(20, 260).Count(x => bitmap.GetPixel(x, 150).Alpha > 0);
         Assert.InRange(drawn, 50, 240);
     }

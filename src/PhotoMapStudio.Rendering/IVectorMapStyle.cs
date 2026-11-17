@@ -8,6 +8,12 @@ namespace PhotoMapStudio.Rendering;
 /// <summary>
 /// ベクタータイルの描画スタイル（配色・線幅・階層・注記ルール）を規定するインターフェース。
 /// </summary>
+/// <remarks>
+/// 描画メソッドは、同じインスタンスに対して別のキャンバスから並行して呼ばれ得る（帯の並列描画）。
+/// 共有のペイントなどの可変な状態を書き換えず、描画ごとに複製を使うこと。
+/// 実行中のキャンセルは、レイヤー・地物の単位で <paramref name="cancellationToken"/> を確認し、
+/// キャンセルされたら <see cref="OperationCanceledException"/> を投げる。
+/// </remarks>
 public interface IVectorMapStyle
 {
     /// <summary>スタイルの識別子（例: "openmaptiles", "gsi"）。</summary>
@@ -23,7 +29,8 @@ public interface IVectorMapStyle
     /// <param name="tile">対象ベクタータイルデータ。</param>
     /// <param name="tileScale">タイルのスケール係数（Extent / ピクセル変換用）。</param>
     /// <param name="zoom">現在の表示ズームレベル。</param>
-    void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom);
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    void RenderPolygons(SKCanvas canvas, VectorTile tile, float tileScale, int zoom, CancellationToken cancellationToken);
 
     /// <summary>
     /// 線（ライン: 道路、鉄道、河川等）を描画する。
@@ -32,7 +39,8 @@ public interface IVectorMapStyle
     /// <param name="tile">対象ベクタータイルデータ。</param>
     /// <param name="tileScale">タイルのスケール係数。</param>
     /// <param name="zoom">現在の表示ズームレベル。</param>
-    void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom);
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    void RenderLines(SKCanvas canvas, VectorTile tile, float tileScale, int zoom, CancellationToken cancellationToken);
 
     /// <summary>
     /// 注記より優先して配置するシンボル（経路番号の盾など）を描画する。
@@ -45,19 +53,34 @@ public interface IVectorMapStyle
     /// <param name="zoom">現在の表示ズームレベル。</param>
     /// <param name="collisionGrid">ラベル衝突判定グリッド（注記と共有する）。</param>
     /// <param name="viewport">描画画面全体の矩形。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
     void RenderSymbols(
         SKCanvas canvas,
         VectorTile tile,
         SKMatrix tileToCanvasMatrix,
         int zoom,
         LabelCollisionGrid collisionGrid,
-        SKRect viewport)
+        SKRect viewport,
+        CancellationToken cancellationToken)
     {
     }
 
     /// <summary>道路名などの線注記を地名・施設名より先に配置する。</summary>
-    void RenderLineLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
-        LabelCollisionGrid collisionGrid, SKRect viewport)
+    /// <param name="canvas">描画先 SkiaSharp キャンバス（画面座標系）。</param>
+    /// <param name="tile">対象ベクタータイルデータ。</param>
+    /// <param name="tileToCanvasMatrix">タイルローカル座標から画面ピクセル座標への変換行列。</param>
+    /// <param name="zoom">現在の表示ズームレベル。</param>
+    /// <param name="collisionGrid">ラベル衝突判定グリッド。</param>
+    /// <param name="viewport">描画画面全体の矩形。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    void RenderLineLabels(
+        SKCanvas canvas,
+        VectorTile tile,
+        SKMatrix tileToCanvasMatrix,
+        int zoom,
+        LabelCollisionGrid collisionGrid,
+        SKRect viewport,
+        CancellationToken cancellationToken)
     {
     }
 
@@ -70,11 +93,13 @@ public interface IVectorMapStyle
     /// <param name="zoom">現在の表示ズームレベル。</param>
     /// <param name="collisionGrid">ラベル衝突判定グリッド。</param>
     /// <param name="viewport">描画画面全体の矩形。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
     void RenderLabels(
         SKCanvas canvas,
         VectorTile tile,
         SKMatrix tileToCanvasMatrix,
         int zoom,
         LabelCollisionGrid collisionGrid,
-        SKRect viewport);
+        SKRect viewport,
+        CancellationToken cancellationToken);
 }

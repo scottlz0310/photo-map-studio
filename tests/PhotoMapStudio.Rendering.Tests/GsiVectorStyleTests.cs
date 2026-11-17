@@ -26,11 +26,11 @@ public sealed class GsiVectorStyleTests
         var tile = new VectorTile { Layers = [new VectorTileLayer { Name = "Anno", Features = [line] }] };
         var grid = new LabelCollisionGrid();
         var viewport = new SKRect(0, 0, 300, 300);
-        style.RenderLineLabels(canvas, tile, SKMatrix.Identity, 18, grid, viewport);
+        style.RenderLineLabels(canvas, tile, SKMatrix.Identity, 18, grid, viewport, CancellationToken.None);
         SKColor[] linePixels = bitmap.Pixels;
         Assert.Contains(linePixels, color => color.Red < 160);
         // 線注記をポイント注記のパスで二重に描画しない。
-        style.RenderLabels(canvas, tile, SKMatrix.Identity, 18, grid, viewport);
+        style.RenderLabels(canvas, tile, SKMatrix.Identity, 18, grid, viewport, CancellationToken.None);
         Assert.Equal(linePixels, bitmap.Pixels);
     }
 
@@ -91,7 +91,7 @@ public sealed class GsiVectorStyleTests
 
         float tileScale = 256f / 4096f;
         canvas.Scale(tileScale, tileScale);
-        style.RenderPolygons(canvas, tile, tileScale, 14);
+        style.RenderPolygons(canvas, tile, tileScale, 14, CancellationToken.None);
 
         SKColor waterPixel = bitmap.GetPixel(128, 128);
         Assert.Equal(new SKColor(0xC4, 0xE5, 0xF8), waterPixel);
@@ -158,7 +158,7 @@ public sealed class GsiVectorStyleTests
 
         float tileScale = 256f / 4096f;
         canvas.Scale(tileScale, tileScale);
-        style.RenderLines(canvas, tile, tileScale, 14);
+        style.RenderLines(canvas, tile, tileScale, 14, CancellationToken.None);
 
         // y = 128 付近に国道が描画されていること
         SKColor roadPixel = bitmap.GetPixel(128, 128);
@@ -245,7 +245,7 @@ public sealed class GsiVectorStyleTests
 
         float tileScale = 256f / 4096f;
         canvas.Scale(tileScale, tileScale);
-        style.RenderLines(canvas, tile, tileScale, 14);
+        style.RenderLines(canvas, tile, tileScale, 14, CancellationToken.None);
 
         // y = 128 付近の道路中心ピクセル色をサンプリング
         SKColor roadPixel = bitmap.GetPixel(128, 128);
@@ -290,7 +290,7 @@ public sealed class GsiVectorStyleTests
             ],
         };
 
-        style.RenderLabels(canvas, tile, matrix, 14, collisionGrid, viewport);
+        style.RenderLabels(canvas, tile, matrix, 14, collisionGrid, viewport, CancellationToken.None);
 
         bool foundText = false;
         for (int y = 120; y <= 135; y++)

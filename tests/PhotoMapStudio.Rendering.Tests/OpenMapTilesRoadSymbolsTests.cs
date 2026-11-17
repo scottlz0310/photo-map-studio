@@ -317,11 +317,11 @@ public sealed class OpenMapTilesRoadSymbolsTests
 
         if (symbols)
         {
-            style.RenderSymbols(canvas, tile, matrix, zoom, grid, viewport);
+            style.RenderSymbols(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
         }
         else
         {
-            style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport);
+            style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
         }
 
         return bitmap;

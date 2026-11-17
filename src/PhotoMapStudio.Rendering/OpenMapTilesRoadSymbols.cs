@@ -145,7 +145,7 @@ internal static class OpenMapTilesRoadSymbols
         int zoom,
         LabelCollisionGrid collisionGrid,
         SKRect viewport,
-        SKFont shieldFont)
+        SKFont shieldFont, CancellationToken cancellationToken)
     {
         VectorTileLayer? layer = tile.GetLayer(LayerName);
         if (zoom < ShieldMinZoom || layer is null)
@@ -157,6 +157,7 @@ internal static class OpenMapTilesRoadSymbols
         var candidates = new Dictionary<(RouteShieldKind Kind, string Text), (SKPoint Anchor, float Length)>();
         for (int i = 0; i < layer.Features.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             VectorTileFeature feature = layer.Features[i];
             if (feature.GeometryType != VectorGeometryType.LineString)
             {
@@ -201,7 +202,7 @@ internal static class OpenMapTilesRoadSymbols
     /// <summary>細街路を含む道路名を、ズームに応じて道路に沿って描画する。</summary>
     internal static void RenderNames(
         SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
-        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint)
+        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint, CancellationToken cancellationToken)
     {
         VectorTileLayer? layer = tile.GetLayer(LayerName);
         if (layer is null) { return; }
@@ -209,6 +210,7 @@ internal static class OpenMapTilesRoadSymbols
             .Where(f => f.GeometryType == VectorGeometryType.LineString && GetNameRank(f.GetString("class"), zoom) >= 0)
             .OrderByDescending(f => GetNameRank(f.GetString("class"), zoom)))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string? name = feature.GetString("name:ja") ?? feature.GetString("name");
             if (string.IsNullOrWhiteSpace(name)) { continue; }
             PathLabelRenderer.Render(canvas, feature, tileToCanvasMatrix, name, font,

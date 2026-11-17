@@ -48,7 +48,11 @@
 
 ## 公開が必要かの判断
 
-アプリのリリース準備（`Prepare Release`）の `package-check` ジョブ（`PhotoMapStudio.Rendering` と共通）が、最新の正式版のタグ（`tiles-vX.Y.Z`。`-rc.N` などの先行版は除く）から HEAD までの `src/PhotoMapStudio.Tiles` の変更を調べ、公開が要りそうなときに警告（アノテーションとジョブのサマリー）を出します。ローカルでは `pwsh -File .\scripts\Test-TilesUnpublishedChanges.ps1` で同じ確認ができます。警告だけで、リリース準備は止めず、公開もしません。
+アプリのリリース準備（`Prepare Release`）の `package-check` ジョブ（`PhotoMapStudio.Rendering` と共通）が、最新の正式版のタグ（`tiles-vX.Y.Z`。`-rc.N` などの先行版は除く）から HEAD までの `src/PhotoMapStudio.Tiles` の変更を調べ、公開が要りそうなときに警告（アノテーションとジョブのサマリー）を出します。ローカルでは次のコマンドで同じ確認ができます。警告だけで、リリース準備は止めず、公開もしません。
+
+```shell
+pwsh -File .\scripts\Test-PackageUnpublishedChanges.ps1 -PackageId PhotoMapStudio.Tiles -PackagePath src/PhotoMapStudio.Tiles -TagPrefix tiles-v -ReleaseGuide docs/development/releasing-tiles.md
+```
 
 | 分類 | 内容 | 判断 |
 | --- | --- | --- |

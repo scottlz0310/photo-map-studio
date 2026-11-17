@@ -5,7 +5,7 @@ using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// 国土地理院の最適化ベクトルタイル（optimal_bvmap-v1）スキーマに対応した標準ベクター地図スタイル。

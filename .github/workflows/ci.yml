@@ -46,6 +46,9 @@ jobs:
           dotnet pack src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj -c Release --no-build -o "$env:RUNNER_TEMP/nupkg"
           if ($LASTEXITCODE -ne 0) { throw 'dotnet pack failed' }
 
+      - name: Test (Rendering)
+        run: dotnet test tests/PhotoMapStudio.Rendering.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
+
       - name: Test (Core)
         run: dotnet test tests/PhotoMapStudio.Core.Tests -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
 

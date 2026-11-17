@@ -1,6 +1,6 @@
 using PhotoMapStudio.Core.Geo;
 using PhotoMapStudio.Core.Maps;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
@@ -614,7 +614,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
 
         public Task RenderToCanvasAsync(
             SKCanvas canvas,
-            GeoCoordinate center,
+            double latitude, double longitude,
             int zoom,
             int width,
             int height,
@@ -623,7 +623,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             this.RenderCalled = true;
-            this.LastCenter = center;
+            this.LastCenter = new GeoCoordinate(latitude, longitude);
             this.LastZoom = zoom;
             this.LastWidth = width;
             this.LastHeight = height;
@@ -636,16 +636,16 @@ public sealed class SkiaMapImageComposerTests : IDisposable
 
         public Task RenderToCanvasAsync(
             SKCanvas canvas,
-            GeoCoordinate center,
+            double latitude, double longitude,
             int zoom,
             int width,
             int height,
             TileFetchSession? session,
             CancellationToken cancellationToken = default)
-            => this.RenderToCanvasAsync(canvas, center, zoom, width, height, session, tileSource: null, cancellationToken);
+            => this.RenderToCanvasAsync(canvas, latitude, longitude, zoom, width, height, session, tileSource: null, cancellationToken);
 
         public Task<SKBitmap> RenderMapAsync(
-            GeoCoordinate center,
+            double latitude, double longitude,
             int zoom,
             int width,
             int height,
@@ -655,7 +655,7 @@ public sealed class SkiaMapImageComposerTests : IDisposable
             => throw new NotSupportedException();
 
         public Task<SKBitmap> RenderMapAsync(
-            GeoCoordinate center,
+            double latitude, double longitude,
             int zoom,
             int width,
             int height,

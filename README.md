@@ -84,13 +84,14 @@ OpenStreetMap を利用する場合は、ローカル PC 上にタイルサー�
 ```shell
 dotnet build PhotoMapStudio.slnx
 dotnet test tests/PhotoMapStudio.Tiles.Tests
+dotnet test tests/PhotoMapStudio.Rendering.Tests
 dotnet test tests/PhotoMapStudio.Core.Tests
 dotnet test tests/PhotoMapStudio.App.Tests
 ```
 
 ## アーキテクチャ
 
-Windows App SDK（WinUI 3）によるデスクトップアプリケーションです。ドメインロジック（EXIF 読み取り、Web メルカトル座標変換、画像合成）は `PhotoMapStudio.Core`（.NET 10 クラスライブラリ）に、タイルの取得・キャッシュ・デコードは `PhotoMapStudio.Tiles` に分離されており、どちらも UI レイヤーに依存しません。`PhotoMapStudio.Tiles` は描画（SkiaSharp）にも依存せず、NuGet パッケージとして他のアプリからも使えます。
+Windows App SDK（WinUI 3）によるデスクトップアプリケーションです。ドメインロジック（EXIF 読み取り、Web メルカトル座標変換、画像合成）は `PhotoMapStudio.Core`（.NET 10 クラスライブラリ）に、タイルの取得・キャッシュ・デコードは `PhotoMapStudio.Tiles` に、ベクター地図の描画（スタイル・注記配置）は `PhotoMapStudio.Rendering` に分離されており、いずれも UI レイヤーに依存しません。`PhotoMapStudio.Tiles` は描画（SkiaSharp）にも依存せず、NuGet パッケージとして他のアプリからも使えます。
 
 設計・仕様・検証の記録は [docs/development](docs/development/README.md) にあります。ベクタータイル直接描画の設計仕様は [vector-map-architecture.md](docs/development/vector-map-architecture.md) を参照してください。
 
@@ -98,11 +99,13 @@ Windows App SDK（WinUI 3）によるデスクトップアプリケーション�
 PhotoMapStudio/
 ├── src/
 │   ├── PhotoMapStudio.App/     # WinUI 3 デスクトップアプリケーション
-│   ├── PhotoMapStudio.Core/    # コアドメインライブラリ（EXIF・地図合成・ベクター描画）
+│   ├── PhotoMapStudio.Core/    # コアドメインライブラリ（EXIF・地図合成）
+│   ├── PhotoMapStudio.Rendering/ # ベクター地図の描画（スタイル・注記配置。SkiaSharp 依存）
 │   └── PhotoMapStudio.Tiles/   # タイルの取得・キャッシュ・デコード（NuGet パッケージ。描画に依存しない）
 ├── tests/
 │   ├── PhotoMapStudio.App.Tests/
 │   ├── PhotoMapStudio.Core.Tests/
+│   ├── PhotoMapStudio.Rendering.Tests/
 │   └── PhotoMapStudio.Tiles.Tests/
 └── docs/                       # ユーザーガイド・プライバシーポリシー（設計・検証の記録は development/）
 ```

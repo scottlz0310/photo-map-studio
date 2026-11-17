@@ -3,7 +3,7 @@ using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>画面内の折れ線へ、読み進められる向きと曲率で注記を配置する。</summary>
 internal static class PathLabelRenderer

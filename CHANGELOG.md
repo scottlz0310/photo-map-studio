@@ -10,6 +10,10 @@
 
 - `Prepare Release` に、`PhotoMapStudio.Tiles` の未公開の変更を確認するジョブ `tiles-check`（`scripts/Test-TilesUnpublishedChanges.ps1`）を追加した。最新の正式版のタグ（`tiles-vX.Y.Z`）からの `src/PhotoMapStudio.Tiles` の差分を「変更なし」「依存の更新だけ」「変更あり」に分類し、公開が要りそうなときは警告を出す。警告だけで、リリース準備は止めず、パッケージの公開も自動では行わない（公開は従来どおり `tiles-vX.Y.Z` のタグで行う）。判断の基準は `docs/development/releasing-tiles.md` に追記した。
 
+### Changed
+
+- ベクター地図の描画層（`VectorMapRenderer`・スタイル・注記配置など）を `PhotoMapStudio.Core` から新しいプロジェクト `PhotoMapStudio.Rendering`（名前空間 `PhotoMapStudio.Rendering`。`Tiles` に依存し、`Core` には依存しない）へ移した（#130 の PR A）。描画層の NuGet 化に備えた構成変更で、まだ公開しない（`IsPackable=false`）。描画のテストは `PhotoMapStudio.Rendering.Tests` へ移し、CI に追加した。レンダラーの引数は `GeoCoordinate` から緯度経度（`double`）に変わり、メルカトルの式は `Rendering` の内部に持つ（`Core.Geo.WebMercator` との一致は `Core.Tests` で検証する）。保存済みタイルで移行前後の出力を比較し、ズーム 16〜19 の 4 枚の PNG が完全に一致した。アプリの動作は変わらない。
+
 ## [0.3.3] - 2026-11-15
 
 ### Added

@@ -1,5 +1,5 @@
 using PhotoMapStudio.Core.Geo;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
@@ -60,7 +60,8 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
             var context = new VectorMapRenderContext(request.AllowIncompleteVectorMaps);
             await this.vectorMapRenderer.RenderToCanvasAsync(
                 canvas,
-                request.Center,
+                request.Center.Latitude,
+                request.Center.Longitude,
                 request.Zoom,
                 request.Width,
                 request.Height,
@@ -336,7 +337,7 @@ public sealed class SkiaMapImageComposer : IMapImageComposer
 
     // 出典表示は利用者が入力する（日本語と英数字が混在し得る）ため、先頭の 1 文字ではなく日本語に対応した書体を使う。
     // 書体は読み取りだけで共有するため、プロセスの終了まで保持する
-    private static readonly Lazy<SKTypeface> AttributionTypeface = new(Tiles.Vector.VectorMapFontHelper.CreateJapaneseTypeface);
+    private static readonly Lazy<SKTypeface> AttributionTypeface = new(VectorMapFontHelper.CreateJapaneseTypeface);
 
     internal static SKFont CreateAttributionFont(string text, int width)
     {

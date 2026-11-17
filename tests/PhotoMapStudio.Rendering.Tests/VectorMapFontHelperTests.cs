@@ -1,4 +1,4 @@
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 
@@ -6,7 +6,7 @@ using SkiaSharp;
 
 using Xunit;
 
-namespace PhotoMapStudio.Core.Tests.Tiles.Vector;
+namespace PhotoMapStudio.Rendering.Tests;
 
 public sealed class VectorMapFontHelperTests
 {

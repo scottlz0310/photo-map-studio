@@ -3,7 +3,7 @@ using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// OpenMapTiles / OpenFreeMap スキーマに対応した標準ベクター地図スタイル。

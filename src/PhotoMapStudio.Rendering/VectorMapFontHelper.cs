@@ -3,12 +3,12 @@ using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// ベクター地図描画用のフォント生成ヘルパー。
 /// </summary>
-internal static class VectorMapFontHelper
+public static class VectorMapFontHelper
 {
     private static readonly string[] PreferredJapaneseFamilies =
     [

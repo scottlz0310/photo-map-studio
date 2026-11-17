@@ -3,7 +3,7 @@ using PhotoMapStudio.Tiles.Vector;
 
 using SkiaSharp;
 
-namespace PhotoMapStudio.Core.Tiles.Vector;
+namespace PhotoMapStudio.Rendering;
 
 /// <summary>
 /// ベクタータイルの描画スタイル（配色・線幅・階層・注記ルール）を規定するインターフェース。

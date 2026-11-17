@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoMapStudio.Core.Maps;
 using PhotoMapStudio.Core.Photos;
 using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles;
 using PhotoMapStudio.Tiles.Vector;
 

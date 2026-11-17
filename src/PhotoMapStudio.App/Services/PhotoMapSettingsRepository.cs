@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using PhotoMapStudio.App.Models;
 using PhotoMapStudio.Core.Maps;
-using PhotoMapStudio.Core.Tiles.Vector;
+using PhotoMapStudio.Rendering;
 using PhotoMapStudio.Tiles.Vector;
 
 namespace PhotoMapStudio.App.Services;

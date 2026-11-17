@@ -37,8 +37,11 @@ flowchart TD
         BatchService["一括生成オーケストレーター"]
     end
 
-    subgraph Core ["PhotoMapStudio.Core (ドメイン・描画層。SkiaSharp 依存)"]
+    subgraph Core ["PhotoMapStudio.Core (ドメイン層。SkiaSharp 依存)"]
         Composer["SkiaMapImageComposer (合成エンジン)"]
+    end
+
+    subgraph Rendering ["PhotoMapStudio.Rendering (描画層。SkiaSharp 依存。Core・WinUI 非依存)"]
         Renderer["VectorMapRenderer (直接ベクター描画)"]
 
         subgraph Styles ["スタイル・スキーマ解釈層 (IVectorMapStyle)"]
@@ -62,6 +65,18 @@ flowchart TD
     Renderer --> Sources
     Renderer --> Styles
 ```
+
+### 2.3 パッケージ構成
+
+| プロジェクト | 役割 | 依存 |
+|---|---|---|
+| `PhotoMapStudio.Tiles` | タイルの取得・キャッシュ・レート制御・デコード。NuGet パッケージ | SkiaSharp・WinUI 非依存 |
+| `PhotoMapStudio.Rendering` | ベクター地図の描画（`VectorMapRenderer`・スタイル・注記配置）。公開は #130 の PR B で行う（それまでは `IsPackable=false`） | `Tiles`・SkiaSharp。`Core`・WinUI には依存しない |
+| `PhotoMapStudio.Core` | EXIF・地図合成（ラスター経路と、ベクター描画の呼び出し）・設定の型 | `Tiles`・`Rendering`・SkiaSharp |
+| `PhotoMapStudio.App` | WinUI 3 の UI | `Core` |
+
+- `Rendering` の公開 API は緯度経度（`double`）で位置を受ける。`Core.Geo`（`GeoCoordinate`・`WebMercator`）は `Core` に残し、`Rendering` はメルカトルの式を内部に持つ（`Tiles` の再公開を避け、公開を 1 回にするため）。式が 2 か所になるので、`Core.Tests` の `MercatorProjectionParityTests` で一致を検証する。
+- `CustomVectorSourceFactory`（取得元に描画スタイルを組み合わせる）は、取得と描画の両方を知るため `Core` に置く。
 
 ---
 

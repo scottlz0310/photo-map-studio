@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj" />
+    <ProjectReference Include="../PhotoMapStudio.Rendering/PhotoMapStudio.Rendering.csproj" />
   </ItemGroup>
 
 </Project>

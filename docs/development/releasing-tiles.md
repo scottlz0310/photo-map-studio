@@ -41,7 +41,7 @@
 
 4. Actions の `Publish Tiles Package` が起動する。`pack` ジョブは、タグを検証し、テストと依存の検査（描画・UI のパッケージへ推移的にも依存していないこと）をして、タグの版で nupkg を作る。
 5. `publish` ジョブが、環境 `nuget` の承認待ちになる。`pack` の結果（版・依存）を確認して承認する。
-6. nuget.org に `PhotoMapStudio.Tiles` の新しい版が現れることを確認する（検証のため、反映に数分かかることがある）。
+6. nuget.org に `PhotoMapStudio.Tiles` の新しい版が現れることを確認する。push の後、nuget.org の**検証とインデックスに最大 1 時間**かかる。その間、パッケージのページには「This package has not been published yet」と出て、README も表示されず、API（`https://api.nuget.org/v3-flatcontainer/photomapstudio.tiles/index.json`）は 404 を返す。これは失敗ではない。API が 200 を返し、版が一覧に出たら、公開の完了とする。
   公開した版を、`src/PhotoMapStudio.Tiles/PhotoMapStudio.Tiles.csproj` の既定の `<Version>` へ反映する（`PhotoMapStudio.Rendering` が宣言する Tiles への依存の最小の版になる。[releasing-rendering.md](releasing-rendering.md#tiles-への依存の版)）。
 
 同じ版は公開し直せません。公開が失敗したときの再実行は、同じ run の「Re-run failed jobs」で行います。版が既に公開されている場合は失敗します（`--skip-duplicate` は、公開済みの版の見落としを避けるため使っていません）。

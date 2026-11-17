@@ -112,11 +112,12 @@ PhotoMapStudio/
 
 ### NuGet パッケージ
 
-[![NuGet](https://img.shields.io/nuget/v/PhotoMapStudio.Tiles.svg)](https://www.nuget.org/packages/PhotoMapStudio.Tiles/)
+[![NuGet Tiles](https://img.shields.io/nuget/v/PhotoMapStudio.Tiles.svg?label=Tiles)](https://www.nuget.org/packages/PhotoMapStudio.Tiles/)
+[![NuGet Rendering](https://img.shields.io/nuget/v/PhotoMapStudio.Rendering.svg?label=Rendering)](https://www.nuget.org/packages/PhotoMapStudio.Rendering/)
 
 タイルの取得・キャッシュ・レート制御・デコードは、NuGet パッケージ [`PhotoMapStudio.Tiles`](https://www.nuget.org/packages/PhotoMapStudio.Tiles/) として公開しています（SkiaSharp・WinUI に依存しません）。使い方は [パッケージの README](src/PhotoMapStudio.Tiles/README.md)、公開手順は [releasing-tiles.md](docs/development/releasing-tiles.md) を参照してください。
 
-ベクタータイルの描画は、NuGet パッケージ `PhotoMapStudio.Rendering`（`PhotoMapStudio.Tiles` に依存。WinUI・Core に依存しません）として公開する予定です。使い方は [パッケージの README](src/PhotoMapStudio.Rendering/README.md)、公開手順は [releasing-rendering.md](docs/development/releasing-rendering.md) を参照してください（公開後に、ここへ NuGet のバッジを追加します）。
+ベクタータイルの描画は、NuGet パッケージ [`PhotoMapStudio.Rendering`](https://www.nuget.org/packages/PhotoMapStudio.Rendering/) として公開しています（`PhotoMapStudio.Tiles` と SkiaSharp に依存。WinUI・Core に依存しません）。使い方は [パッケージの README](src/PhotoMapStudio.Rendering/README.md)、公開手順は [releasing-rendering.md](docs/development/releasing-rendering.md) を参照してください。
 
 ## ライセンス
 

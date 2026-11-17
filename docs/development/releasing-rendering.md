@@ -56,7 +56,7 @@ Rendering の nupkg は、`PhotoMapStudio.Tiles` への依存を `>= <Tiles の 
 
 5. Actions の `Publish Rendering Package` が起動する。`pack` ジョブは、タグを検証し、テストと依存の検査（WinUI・Windows App SDK・Core へ依存しないこと、SkiaSharp は宣言した版だけであること、nupkg が宣言する依存が Tiles と SkiaSharp だけで、Tiles への依存の版が nuget.org に公開済みであること）をして、タグの版で nupkg を作る。
 6. `publish` ジョブが、環境 `nuget` の承認待ちになる。`pack` の結果（版・依存）を確認して承認する。
-7. nuget.org に `PhotoMapStudio.Rendering` の新しい版が現れることを確認する（検証のため、反映に数分かかることがある）。
+7. nuget.org に `PhotoMapStudio.Rendering` の新しい版が現れることを確認する。push の後、nuget.org の**検証とインデックスに最大 1 時間**かかる。その間、パッケージのページには「This package has not been published yet」と出て、README も表示されず、API（`https://api.nuget.org/v3-flatcontainer/photomapstudio.rendering/index.json`）は 404 を返す。これは失敗ではない。API が 200 を返し、版が一覧に出たら、公開の完了とする。
 
 同じ版は公開し直せません。公開が失敗したときの再実行は、同じ run の「Re-run failed jobs」で行います。版が既に公開されている場合は失敗します（`--skip-duplicate` は、公開済みの版の見落としを避けるため使っていません）。先行版（rc）は使いません。予行演習が要る場合は、事前にリポジトリの所有者と合意してください（先行版も nuget.org に残り、削除はできず、非表示にするだけです）。
 

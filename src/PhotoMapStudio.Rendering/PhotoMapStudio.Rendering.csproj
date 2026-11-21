@@ -36,7 +36,7 @@
 
   <ItemGroup>
     <!-- ベクタータイルの描画・文字描画。利用側（PhotoGeoExplorer など）は、Skia 系のパッケージを同じ版で明示する -->
-    <PackageReference Include="SkiaSharp" Version="4.156.1" />
+    <PackageReference Include="SkiaSharp" Version="4.157.0" />
   </ItemGroup>
 
   <ItemGroup>

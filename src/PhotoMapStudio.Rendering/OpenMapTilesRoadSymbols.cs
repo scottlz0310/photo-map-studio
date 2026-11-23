@@ -218,6 +218,9 @@ internal static class OpenMapTilesRoadSymbols
         }
     }
 
+    /// <summary>林道の名前を描く最小のズーム。名前のある林道は少なく混雑しにくいため、他の小道（17）より低いズームから描く。</summary>
+    private const int TrackNameMinZoom = 14;
+
     private static int GetNameRank(string? roadClass, int zoom) => roadClass switch
     {
         "motorway" or "trunk" => zoom >= 12 ? 5 : -1,
@@ -226,7 +229,8 @@ internal static class OpenMapTilesRoadSymbols
         "tertiary" => zoom >= 14 ? 2 : -1,
         "minor" or "residential" or "unclassified" or "service" => zoom >= 15 ? 1 : -1,
         "aerialway" => zoom >= 14 ? 1 : -1,
-        "track" or "path" or "pedestrian" or "footway" or "cycleway" or "steps" or "living_street" => zoom >= 17 ? 0 : -1,
+        "track" => zoom >= TrackNameMinZoom ? 0 : -1,
+        "path" or "pedestrian" or "footway" or "cycleway" or "steps" or "living_street" => zoom >= 17 ? 0 : -1,
         _ => -1,
     };
 

@@ -157,10 +157,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         using SKPaint railway = this.railwayPaint.Clone();
         railway.StrokeWidth = 2.5f / tileScale;
 
-        using SKPaint river = this.railwayPaint.Clone();
-        river.Color = this.waterPaint.Color;
-        river.StrokeWidth = 2.5f * ZoomScale(zoom) / tileScale;
-        RenderLayerLines(canvas, tile.GetLayer("waterway"), river, view);
+        RenderWaterways(canvas, tile.GetLayer("waterway"), this.railwayPaint, this.waterPaint.Color, tileScale, zoom, view);
         using SKPaint boundary = this.railwayPaint.Clone();
         boundary.Color = new SKColor(0xB0, 0x8F, 0xB5);
         boundary.StrokeWidth = 1.8f / tileScale;
@@ -199,12 +196,22 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             cyclePath.Color = CyclePathColor;
             using SKPaint footPath = path.Clone();
             footPath.Color = FootPathColor;
-            RenderDashedPaths(canvas, roadLayer, path, pathDashOn, pathDashOff, view, feature => GetPathKind(feature) switch
+            RenderDashedPaths(canvas, roadLayer, path, pathDashOn, pathDashOff, view, IsPath, feature => GetPathKind(feature) switch
             {
                 PathKind.Cycle => cyclePath,
                 PathKind.Foot => footPath,
                 _ => path,
             });
+
+            // 林道は、小道より少し太く長い茶色の破線で、舗装路（casing つきの実線）とは区別して描く
+            using SKPaint track = railway.Clone();
+            track.Color = TrackColor;
+            track.StrokeWidth = 1.6f * Math.Max(1f, ZoomScale(zoom) * 0.45f) / tileScale;
+            float trackDashOn = TrackDashOn / tileScale;
+            float trackDashOff = TrackDashOff / tileScale;
+            using SKPathEffect trackDash = SKPathEffect.CreateDash([trackDashOn, trackDashOff], 0);
+            track.PathEffect = trackDash;
+            RenderDashedPaths(canvas, roadLayer, track, trackDashOn, trackDashOff, view, IsTrack);
             if (zoom >= AerialwayMinZoom)
             {
                 RenderAerialways(canvas, roadLayer, tileScale, view);
@@ -521,7 +528,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     /// 元のパスの始点からの距離で破線の位相を合わせて描く（見た目は同じ）。
     /// Skia は破線をパスの全長に対して生成するため、深いズームで長い小道の大半が画面外になると、画面外の区間の処理が支配的になる。
     /// </summary>
-    private static void RenderDashedPaths(SKCanvas canvas, VectorTileLayer layer, SKPaint paint, float dashOn, float dashOff, in TileView view, Func<VectorTileFeature, SKPaint>? paintFor = null)
+    private static void RenderDashedPaths(SKCanvas canvas, VectorTileLayer layer, SKPaint paint, float dashOn, float dashOff, in TileView view, Func<string?, bool> includeClass, Func<VectorTileFeature, SKPaint>? paintFor = null)
     {
         LayerBounds bounds = LayerBounds.For(layer);
         float margin = view.StrokeMargin(paint.StrokeWidth);
@@ -530,7 +537,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         {
             view.ThrowIfCancellationRequested();
             VectorTileFeature feature = layer.Features[i];
-            if (feature.GeometryType != VectorGeometryType.LineString || !IsPath(feature.GetString("class")) || !view.IsVisible(bounds, i, margin))
+            if (feature.GeometryType != VectorGeometryType.LineString || !includeClass(feature.GetString("class")) || !view.IsVisible(bounds, i, margin))
             {
                 continue;
             }
@@ -622,7 +629,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             }
 
             string roadClass = feature.GetString("class") ?? string.Empty;
-            if (IsPath(roadClass)) { continue; }
+            if (IsPath(roadClass) || IsTrack(roadClass)) { continue; }
             var (order, casingColor, fillColor, casingWidth, fillWidth) = GetRoadStyle(roadClass, zoom);
             if (fillWidth > 0f && view.IsVisible(bounds, i, view.StrokeMargin(Math.Max(casingWidth, fillWidth) / tileScale)))
             {
@@ -682,7 +689,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             "secondary" => (60, 7f, "#ffe27a", "#cfa21f"),
             "tertiary" => (50, 6f, "#fff3c4", "#d8c27a"),
             "minor" or "residential" or "unclassified" or "living_street" => (40, 4.5f, "#ffffff", "#cfc9bf"),
-            "service" or "track" => (30, 3.5f, "#ffffff", "#d5cfc5"),
+            "service" => (30, 3.5f, "#ffffff", "#d5cfc5"),
             _ => (0, 0f, "#00000000", "#00000000"),
         };
         return (order, SKColor.Parse(casing), SKColor.Parse(fill), width > 0 ? (width * scale) + 2f : 0f, width * scale);
@@ -693,6 +700,14 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
     private static readonly SKColor CyclePathColor = new(0x4F, 0x86, 0xD6, 190);
     private static readonly SKColor FootPathColor = new(0xC9, 0x7F, 0x6E, 170);
+
+    /// <summary>林道（<c>class=track</c>）の線の色。小道より濃い茶色で、舗装路の白い道とは別物に見える。</summary>
+    private static readonly SKColor TrackColor = new(0x9A, 0x6B, 0x3A, 230);
+
+    /// <summary>林道の破線の、線と間の長さ（論理ピクセル）。小道（4 と 3）より線が長い。</summary>
+    private const float TrackDashOn = 6f;
+
+    private const float TrackDashOff = 3f;
 
     /// <summary>小道の種類。色を分ける。</summary>
     internal enum PathKind
@@ -742,6 +757,67 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     }
 
     private static bool IsPath(string? roadClass) => roadClass is "path" or "pedestrian" or "footway" or "cycleway" or "steps";
+
+    private static bool IsTrack(string? roadClass) => roadClass == "track";
+
+    /// <summary>川・運河の線幅（論理ピクセル。<see cref="ZoomScale"/> を掛ける）。</summary>
+    private const float RiverWidth = 4f;
+
+    /// <summary>運河の線幅。川より少し細い。</summary>
+    private const float CanalWidth = 3f;
+
+    /// <summary>沢・溝・排水路など、細い水路の線幅。</summary>
+    private const float StreamWidth = 1.8f;
+
+    internal static float GetWaterwayWidth(string? waterwayClass) => waterwayClass switch
+    {
+        "river" => RiverWidth,
+        "canal" => CanalWidth,
+        _ => StreamWidth,
+    };
+
+    /// <summary>水路（<c>waterway</c>）を、<c>class</c> ごとの太さで描く。線幅は <see cref="ZoomScale"/> と同じ伸び方。</summary>
+    private static void RenderWaterways(SKCanvas canvas, VectorTileLayer? layer, SKPaint basePaint, SKColor color, float tileScale, int zoom, in TileView view)
+    {
+        if (layer is null) { return; }
+
+        // 共有のペイントは書き換えず、太さごとに複製を使う（並行して描画しても線幅が混ざらない）
+        var paints = new Dictionary<float, SKPaint>();
+        try
+        {
+            LayerBounds bounds = LayerBounds.For(layer);
+            for (int i = 0; i < layer.Features.Count; i++)
+            {
+                view.ThrowIfCancellationRequested();
+                VectorTileFeature feature = layer.Features[i];
+                if (feature.GeometryType != VectorGeometryType.LineString)
+                {
+                    continue;
+                }
+
+                float width = GetWaterwayWidth(feature.GetString("class"));
+                if (!paints.TryGetValue(width, out SKPaint? paint))
+                {
+                    paint = basePaint.Clone();
+                    paint.Color = color;
+                    paint.StrokeWidth = width * ZoomScale(zoom) / tileScale;
+                    paints[width] = paint;
+                }
+
+                if (view.IsVisible(bounds, i, view.StrokeMargin(paint.StrokeWidth)))
+                {
+                    DrawFeatureLines(canvas, feature, paint);
+                }
+            }
+        }
+        finally
+        {
+            foreach (SKPaint paint in paints.Values)
+            {
+                paint.Dispose();
+            }
+        }
+    }
 
     private static float ZoomScale(int zoom) => (float)Math.Pow(2, (zoom - 16) * 0.75);
 

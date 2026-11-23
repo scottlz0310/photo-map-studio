@@ -202,6 +202,9 @@ public sealed class OpenMapTilesRoadSymbolsTests
     [InlineData("tertiary", 13)]
     [InlineData("minor", 14)]
     [InlineData("path", 16)]
+    [InlineData("footway", 16)]
+    [InlineData("track", 13)]
+    [InlineData("track", 12)]
     public void 道路名はズームと道路種別に応じて表示を絞る(string roadClass, int zoom)
     {
         using SKBitmap bitmap = RenderLabels(zoom, Line(roadClass, reference: null, name: "桜田通り", y: 2048));
@@ -215,6 +218,9 @@ public sealed class OpenMapTilesRoadSymbolsTests
     [InlineData("unclassified", 15)]
     [InlineData("service", 15)]
     [InlineData("path", 17)]
+    [InlineData("track", 14)]
+    [InlineData("track", 15)]
+    [InlineData("track", 16)]
     [InlineData("track", 17)]
     [InlineData("pedestrian", 17)]
     [InlineData("living_street", 17)]
@@ -222,6 +228,22 @@ public sealed class OpenMapTilesRoadSymbolsTests
     {
         using SKBitmap bitmap = RenderLabels(zoom, Line(roadClass, reference: null, name: "北２丁目通り", y: 2048));
         Assert.True(CountDark(bitmap) >= 8);
+    }
+
+    [Theory]
+    [InlineData("tertiary", 14)]
+    [InlineData("minor", 15)]
+    public void 林道の名前は同じ位置の道路名より後に置き重なる所には描かない(string roadClass, int zoom)
+    {
+        // 林道を先に並べても、道路名が先に置かれ、林道の名前は重なって描かれない（道路名だけのときと同じ画像になる）
+        VectorTileFeature road = Line(roadClass, reference: null, name: "桜田通り", y: 2048);
+        VectorTileFeature track = Line("track", reference: null, name: "フラヌイ林道", y: 2048);
+
+        using SKBitmap roadOnly = RenderLabels(zoom, road);
+        using SKBitmap both = RenderLabels(zoom, track, road);
+
+        Assert.True(CountDark(roadOnly) >= 8);
+        Assert.Equal(CountDark(roadOnly), CountDark(both));
     }
 
     // 過拡大（OpenFreeMap は最大ズーム 14 のタイルを拡大する）では、1 つのタイルが画面より大きくなる。

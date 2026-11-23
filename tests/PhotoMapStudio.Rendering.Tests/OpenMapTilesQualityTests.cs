@@ -79,6 +79,7 @@ public sealed class OpenMapTilesQualityTests
         var river = new VectorTileFeature
         {
             GeometryType = VectorGeometryType.LineString,
+            Properties = new Dictionary<string, object> { ["class"] = "river" },
             GeometryParts = [[new(150, 0), new(150, 300)]],
         };
         var tile = new VectorTile { Layers = [Layer("transportation", Line("secondary")), Layer("waterway", river)] };

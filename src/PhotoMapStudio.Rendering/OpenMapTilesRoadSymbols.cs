@@ -225,6 +225,7 @@ internal static class OpenMapTilesRoadSymbols
         "secondary" => zoom >= 13 ? 3 : -1,
         "tertiary" => zoom >= 14 ? 2 : -1,
         "minor" or "residential" or "unclassified" or "service" => zoom >= 15 ? 1 : -1,
+        "aerialway" => zoom >= 14 ? 1 : -1,
         "track" or "path" or "pedestrian" or "footway" or "cycleway" or "steps" or "living_street" => zoom >= 17 ? 0 : -1,
         _ => -1,
     };

@@ -340,6 +340,17 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             activeStyle.RenderLabels(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport, cancellationToken);
         }
 
+        // 優先度の最も低い注記（番地など）は、全タイルの通常の注記を置いた後に置く（先に走査したタイルが、隣のタイルの注記を押しのけないように）
+        for (int i = 0; i < loadedTiles.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var item = loadedTiles[i];
+            SKMatrix tileToCanvasMatrix = SKMatrix.CreateTranslation(item.dx, item.dy);
+            tileToCanvasMatrix = tileToCanvasMatrix.PreConcat(SKMatrix.CreateScale(item.scale, item.scale));
+
+            activeStyle.RenderLowPriorityLabels(canvas, item.tile, tileToCanvasMatrix, styleZoom, collisionGrid, viewport, cancellationToken);
+        }
+
         // 最後のパスの途中でキャンセルされた場合も、完成した画像として返さない
         cancellationToken.ThrowIfCancellationRequested();
     }
@@ -482,6 +493,12 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 style.RenderLabels(target, item.tile, SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy), styleZoom, collisionGrid, viewport, cancellationToken);
+            }
+
+            foreach (var item in tiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                style.RenderLowPriorityLabels(target, item.tile, SKMatrix.CreateScaleTranslation(item.scale, item.scale, item.dx, item.dy), styleZoom, collisionGrid, viewport, cancellationToken);
             }
         }
 

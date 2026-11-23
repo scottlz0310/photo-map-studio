@@ -64,7 +64,8 @@ public sealed class OpenMapTilesQualityTests
             Properties = new Dictionary<string, object> { ["class"] = kind },
             GeometryParts = [[new(0, 0), new(300, 0), new(300, 300), new(0, 300), new(0, 0)]],
         };
-        style.RenderPolygons(canvas, Tile(layer, area), 1f, 16, CancellationToken.None);
+        // 樹木の模様（ズーム 14 以上）が重ならないズームで、塗りの色そのものを確認する
+        style.RenderPolygons(canvas, Tile(layer, area), 1f, OpenMapTilesTreeTexture.MinZoom - 1, CancellationToken.None);
         Assert.Equal(SKColor.Parse(color), bitmap.GetPixel(150, 150));
     }
 

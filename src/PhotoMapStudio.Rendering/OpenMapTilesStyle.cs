@@ -122,8 +122,10 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         var view = this.CreateView(canvas, tileScale, cancellationToken);
 
         // 1. 緑地・土地利用（landcover / landuse / park）
-        RenderLandcover(canvas, tile.GetLayer("landcover"), landuse: false, view);
-        RenderLandcover(canvas, tile.GetLayer("landuse"), landuse: true, view);
+        // 森の樹木の模様は、ズーム 14 以上で、植生（landcover）の森にだけ重ねる
+        bool trees = zoom >= OpenMapTilesTreeTexture.MinZoom;
+        RenderLandcover(canvas, tile.GetLayer("landcover"), landuse: false, view, trees, tileScale);
+        RenderLandcover(canvas, tile.GetLayer("landuse"), landuse: true, view, false, tileScale);
         RenderLayerPolygons(canvas, tile.GetLayer("park"), this.parkPaint, view, include: feature => OpenMapTilesLandPalette.ShouldFillPark(feature.GetString("class")));
 
         // 2. 水域（water）
@@ -193,7 +195,21 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             float pathDashOff = 3f / tileScale;
             using SKPathEffect pathDash = SKPathEffect.CreateDash([pathDashOn, pathDashOff], 0);
             path.PathEffect = pathDash;
-            RenderDashedPaths(canvas, roadLayer, path, pathDashOn, pathDashOff, view);
+            using SKPaint cyclePath = path.Clone();
+            cyclePath.Color = CyclePathColor;
+            using SKPaint footPath = path.Clone();
+            footPath.Color = FootPathColor;
+            RenderDashedPaths(canvas, roadLayer, path, pathDashOn, pathDashOff, view, feature => GetPathKind(feature) switch
+            {
+                PathKind.Cycle => cyclePath,
+                PathKind.Foot => footPath,
+                _ => path,
+            });
+            if (zoom >= AerialwayMinZoom)
+            {
+                RenderAerialways(canvas, roadLayer, tileScale, view);
+            }
+
             RenderTransportationRailways(canvas, roadLayer, railway, view);
             using SKPaint ties = railway.Clone();
             ties.Color = SKColors.White;
@@ -301,6 +317,9 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                 this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, zoom, poi: true);
             }
         }
+
+        // 番地は最も優先度が低く、先に置かれた注記と重ならない所だけに描く
+        OpenMapTilesHouseNumbers.Render(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.placeTypeface, cancellationToken);
     }
 
     private void RenderPointLabel(SKCanvas canvas, VectorTileFeature feature, SKMatrix matrix, SKFont font,
@@ -308,7 +327,10 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     {
         if (feature.GeometryType != VectorGeometryType.Point || feature.GeometryParts.Count == 0 || feature.GeometryParts[0].Count == 0) { return; }
         string? name = feature.GetString("name:ja") ?? feature.GetString("name");
-        PoiCategory category = poi ? OpenMapTilesPoiSymbols.GetCategory(feature.GetString("class")) : PoiCategory.Other;
+        string? poiClass = poi ? feature.GetString("class") : null;
+        PoiCategory category = OpenMapTilesPoiSymbols.GetCategory(poiClass);
+        PoiMarker marker = OpenMapTilesPoiSymbols.GetMarker(poiClass);
+        if (poi && zoom < OpenMapTilesPoiSymbols.GetMinZoom(marker)) { return; }
         bool nameless = string.IsNullOrWhiteSpace(name);
         if (nameless && !(poi && category == PoiCategory.Parking && zoom >= OpenMapTilesPoiSymbols.NamelessParkingMinZoom)) { return; }
         VectorPoint point = feature.GeometryParts[0][0];
@@ -319,7 +341,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             float half = OpenMapTilesPoiSymbols.MarkerHalfSize;
             if (grid.TryPlace([new SKRect(anchor.X - half, anchor.Y - half, anchor.X + half, anchor.Y + half)], viewport))
             {
-                OpenMapTilesPoiSymbols.DrawMarker(canvas, anchor, category, this.textHaloPaint, this.shieldFont);
+                OpenMapTilesPoiSymbols.DrawMarker(canvas, anchor, marker, category, this.textHaloPaint, this.shieldFont);
             }
 
             return;
@@ -334,7 +356,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         using SKPaint? categoryText = poi ? this.placeFillPaint.Clone() : null;
         if (poi)
         {
-            OpenMapTilesPoiSymbols.DrawMarker(canvas, anchor, category, this.textHaloPaint, this.shieldFont);
+            OpenMapTilesPoiSymbols.DrawMarker(canvas, anchor, marker, category, this.textHaloPaint, this.shieldFont);
             categoryText!.Color = OpenMapTilesPoiSymbols.GetTextColor(category);
             textPaint = categoryText;
         }
@@ -342,7 +364,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         canvas.DrawText(name, anchor.X, baseline, SKTextAlign.Center, font, textPaint);
     }
 
-    private static void RenderLandcover(SKCanvas canvas, VectorTileLayer? layer, bool landuse, in TileView view)
+    private static void RenderLandcover(SKCanvas canvas, VectorTileLayer? layer, bool landuse, in TileView view, bool trees, float tileScale)
     {
         if (layer is null) { return; }
         using var paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
@@ -358,6 +380,14 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
             if (OpenMapTilesLandPalette.GetFill(landuse, feature.GetString("class")) is not { } color) { continue; }
             paint.Color = color;
+            if (trees && feature.GetString("class") == "wood")
+            {
+                using SKPath outline = BuildPolygonPath(feature);
+                canvas.DrawPath(outline, paint);
+                OpenMapTilesTreeTexture.Draw(canvas, outline, tileScale);
+                continue;
+            }
+
             RenderPolygon(canvas, feature, paint);
         }
     }
@@ -391,6 +421,16 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
     private static void RenderPolygon(SKCanvas canvas, VectorTileFeature feature, SKPaint fillPaint, SKPaint? strokePaint = null)
     {
+        using SKPath path = BuildPolygonPath(feature);
+        canvas.DrawPath(path, fillPaint);
+        if (strokePaint is not null)
+        {
+            canvas.DrawPath(path, strokePaint);
+        }
+    }
+
+    private static SKPath BuildPolygonPath(VectorTileFeature feature)
+    {
         using var builder = new SKPathBuilder { FillType = SKPathFillType.EvenOdd };
         for (int r = 0; r < feature.GeometryParts.Count; r++)
         {
@@ -408,12 +448,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             builder.Close();
         }
 
-        using SKPath path = builder.Detach();
-        canvas.DrawPath(path, fillPaint);
-        if (strokePaint is not null)
-        {
-            canvas.DrawPath(path, strokePaint);
-        }
+        return builder.Detach();
     }
 
     private static void RenderLayerLines(SKCanvas canvas, VectorTileLayer? layer, SKPaint paint, in TileView view)
@@ -477,7 +512,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     /// 元のパスの始点からの距離で破線の位相を合わせて描く（見た目は同じ）。
     /// Skia は破線をパスの全長に対して生成するため、深いズームで長い小道の大半が画面外になると、画面外の区間の処理が支配的になる。
     /// </summary>
-    private static void RenderDashedPaths(SKCanvas canvas, VectorTileLayer layer, SKPaint paint, float dashOn, float dashOff, in TileView view)
+    private static void RenderDashedPaths(SKCanvas canvas, VectorTileLayer layer, SKPaint paint, float dashOn, float dashOff, in TileView view, Func<VectorTileFeature, SKPaint>? paintFor = null)
     {
         LayerBounds bounds = LayerBounds.For(layer);
         float margin = view.StrokeMargin(paint.StrokeWidth);
@@ -492,13 +527,14 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             }
 
             SKRect extent = bounds.Of(i);
+            SKPaint featurePaint = paintFor?.Invoke(feature) ?? paint;
             if (extent.Left >= area.Left && extent.Right <= area.Right && extent.Top >= area.Top && extent.Bottom <= area.Bottom)
             {
-                DrawFeatureLines(canvas, feature, paint);
+                DrawFeatureLines(canvas, feature, featurePaint);
                 continue;
             }
 
-            DrawClippedDashedLines(canvas, feature, paint, dashOn, dashOff, area);
+            DrawClippedDashedLines(canvas, feature, featurePaint, dashOn, dashOff, area);
         }
     }
 
@@ -641,6 +677,59 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             _ => (0, 0f, "#00000000", "#00000000"),
         };
         return (order, SKColor.Parse(casing), SKColor.Parse(fill), width > 0 ? (width * scale) + 2f : 0f, width * scale);
+    }
+
+    /// <summary>ロープウェイ・ゴンドラなどの索道を描く最小のズーム。</summary>
+    private const int AerialwayMinZoom = 12;
+
+    private static readonly SKColor CyclePathColor = new(0x4F, 0x86, 0xD6, 190);
+    private static readonly SKColor FootPathColor = new(0xC9, 0x7F, 0x6E, 170);
+
+    /// <summary>小道の種類。色を分ける。</summary>
+    internal enum PathKind
+    {
+        /// <summary>踏み分け道・山道など（茶色）。</summary>
+        Trail,
+
+        /// <summary>自転車道（青）。</summary>
+        Cycle,
+
+        /// <summary>歩道・歩行者専用道・階段（ピンクがかった茶色）。</summary>
+        Foot,
+    }
+
+    /// <summary>
+    /// 小道の種類を決める。OpenMapTiles では、<c>class</c> が <c>path</c> で、<c>subclass</c> が細目（<c>footway</c>・<c>cycleway</c> など）。
+    /// </summary>
+    internal static PathKind GetPathKind(VectorTileFeature feature)
+        => (feature.GetString("subclass") ?? feature.GetString("class")) switch
+        {
+            "cycleway" => PathKind.Cycle,
+            "footway" or "pedestrian" or "steps" or "corridor" or "platform" => PathKind.Foot,
+            _ => PathKind.Trail,
+        };
+
+    /// <summary>索道（<c>transportation</c> の <c>class=aerialway</c>）を、灰色の線と等間隔の点で描く。</summary>
+    private static void RenderAerialways(SKCanvas canvas, VectorTileLayer layer, float tileScale, in TileView view)
+    {
+        using var line = new SKPaint { Color = new SKColor(0x55, 0x55, 0x55), Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f / tileScale, IsAntialias = true };
+        using var ticks = new SKPaint { Color = new SKColor(0x33, 0x33, 0x33), Style = SKPaintStyle.Stroke, StrokeWidth = 3.6f / tileScale, StrokeCap = SKStrokeCap.Round, IsAntialias = true };
+        using SKPathEffect tickDash = SKPathEffect.CreateDash([0.01f / tileScale, 8f / tileScale], 0);
+        ticks.PathEffect = tickDash;
+        LayerBounds bounds = LayerBounds.For(layer);
+        float margin = view.StrokeMargin(ticks.StrokeWidth);
+        for (int i = 0; i < layer.Features.Count; i++)
+        {
+            view.ThrowIfCancellationRequested();
+            VectorTileFeature feature = layer.Features[i];
+            if (feature.GeometryType != VectorGeometryType.LineString || feature.GetString("class") != "aerialway" || !view.IsVisible(bounds, i, margin))
+            {
+                continue;
+            }
+
+            DrawFeatureLines(canvas, feature, line);
+            DrawFeatureLines(canvas, feature, ticks);
+        }
     }
 
     private static bool IsPath(string? roadClass) => roadClass is "path" or "pedestrian" or "footway" or "cycleway" or "steps";

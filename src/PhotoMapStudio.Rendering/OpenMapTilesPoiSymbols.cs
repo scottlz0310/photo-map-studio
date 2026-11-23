@@ -36,6 +36,25 @@ internal enum PoiCategory
     Recreation,
 }
 
+/// <summary>POI の記号の形。</summary>
+internal enum PoiMarker
+{
+    /// <summary>円。</summary>
+    Dot,
+
+    /// <summary>青い角丸の四角に白い「P」（駐車場）。</summary>
+    Parking,
+
+    /// <summary>白い十字の入った円（医療）。</summary>
+    Medical,
+
+    /// <summary>角丸の四角に白いバス（バス停）。</summary>
+    BusStop,
+
+    /// <summary>角丸の四角に白い輪（鉄道駅）。</summary>
+    Station,
+}
+
 /// <summary>
 /// OpenMapTiles スキーマの <c>poi</c> レイヤーの記号。<c>class</c> から分類し、分類ごとの色と形で描き分ける。
 /// </summary>
@@ -44,6 +63,9 @@ internal enum PoiCategory
 /// </remarks>
 internal static class OpenMapTilesPoiSymbols
 {
+    /// <summary>バス停の記号を描く最小のズーム。バス停は数が多く、低いズームでは他の施設を押しのけるため、駅より高くする。</summary>
+    internal const int BusStopMinZoom = 16;
+
     /// <summary>名前のない駐車場の記号を描く最小のズーム。名前のない施設で描くのは駐車場だけにする（他は無名だと何かが分からない）。</summary>
     internal const int NamelessParkingMinZoom = 16;
 
@@ -71,6 +93,19 @@ internal static class OpenMapTilesPoiSymbols
         _ => PoiCategory.Other,
     };
 
+    /// <summary>POI の <c>class</c> から記号の形を決める。</summary>
+    /// <param name="poiClass">地物の <c>class</c> 属性。</param>
+    internal static PoiMarker GetMarker(string? poiClass) => poiClass switch
+    {
+        "parking" => PoiMarker.Parking,
+        "bus" => PoiMarker.BusStop,
+        "railway" => PoiMarker.Station,
+        _ => GetCategory(poiClass) == PoiCategory.Medical ? PoiMarker.Medical : PoiMarker.Dot,
+    };
+
+    /// <summary>記号を描く最小のズーム（<c>poi</c> レイヤー全体の最小ズームより高い場合だけ意味を持つ）。</summary>
+    internal static int GetMinZoom(PoiMarker marker) => marker == PoiMarker.BusStop ? BusStopMinZoom : 0;
+
     /// <summary>分類の記号の色。</summary>
     internal static SKColor GetColor(PoiCategory category) => category switch
     {
@@ -93,19 +128,44 @@ internal static class OpenMapTilesPoiSymbols
         return new SKColor((byte)(color.Red * 0.62f), (byte)(color.Green * 0.62f), (byte)(color.Blue * 0.62f));
     }
 
-    /// <summary>記号の中心 <paramref name="center"/> に、分類の記号を描く。</summary>
+    /// <summary>記号の中心 <paramref name="center"/> に、記号を描く。</summary>
     /// <param name="canvas">描画先。</param>
     /// <param name="center">記号の中心（画面座標）。</param>
-    /// <param name="category">分類。</param>
+    /// <param name="marker">記号の形。</param>
+    /// <param name="category">分類（色を決める）。</param>
     /// <param name="halo">縁取りのペイント（白）。</param>
     /// <param name="glyphFont">駐車場の「P」を描くフォント。</param>
-    internal static void DrawMarker(SKCanvas canvas, SKPoint center, PoiCategory category, SKPaint halo, SKFont glyphFont)
+    internal static void DrawMarker(SKCanvas canvas, SKPoint center, PoiMarker marker, PoiCategory category, SKPaint halo, SKFont glyphFont)
     {
         using var fill = new SKPaint { Color = GetColor(category), Style = SKPaintStyle.Fill, IsAntialias = true };
         using var white = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill, IsAntialias = true };
-        switch (category)
+        switch (marker)
         {
-            case PoiCategory.Parking:
+            case PoiMarker.BusStop:
+                {
+                    var square = new SKRect(center.X - SquareHalfSize + 0.5f, center.Y - SquareHalfSize + 0.5f, center.X + SquareHalfSize - 0.5f, center.Y + SquareHalfSize - 0.5f);
+                    canvas.DrawRoundRect(new SKRect(square.Left - 1f, square.Top - 1f, square.Right + 1f, square.Bottom + 1f), 2f, 2f, halo);
+                    canvas.DrawRoundRect(square, 1.5f, 1.5f, fill);
+
+                    // 白い車体（窓の帯と 2 つの車輪つき）
+                    canvas.DrawRoundRect(new SKRect(center.X - 2.6f, center.Y - 2.2f, center.X + 2.6f, center.Y + 1.4f), 0.8f, 0.8f, white);
+                    canvas.DrawRect(new SKRect(center.X - 1.8f, center.Y - 1.5f, center.X + 1.8f, center.Y - 0.3f), fill);
+                    canvas.DrawCircle(center.X - 1.6f, center.Y + 2.3f, 0.8f, white);
+                    canvas.DrawCircle(center.X + 1.6f, center.Y + 2.3f, 0.8f, white);
+                    break;
+                }
+
+            case PoiMarker.Station:
+                {
+                    var square = new SKRect(center.X - SquareHalfSize, center.Y - SquareHalfSize, center.X + SquareHalfSize, center.Y + SquareHalfSize);
+                    canvas.DrawRoundRect(new SKRect(square.Left - 1f, square.Top - 1f, square.Right + 1f, square.Bottom + 1f), 2f, 2f, halo);
+                    canvas.DrawRoundRect(square, 1.5f, 1.5f, fill);
+                    canvas.DrawCircle(center, 2.4f, white);
+                    canvas.DrawCircle(center, 1.1f, fill);
+                    break;
+                }
+
+            case PoiMarker.Parking:
                 {
                     var square = new SKRect(center.X - SquareHalfSize, center.Y - SquareHalfSize, center.X + SquareHalfSize, center.Y + SquareHalfSize);
                     var outline = new SKRect(square.Left - 1f, square.Top - 1f, square.Right + 1f, square.Bottom + 1f);
@@ -115,7 +175,7 @@ internal static class OpenMapTilesPoiSymbols
                     break;
                 }
 
-            case PoiCategory.Medical:
+            case PoiMarker.Medical:
                 {
                     canvas.DrawCircle(center, DotRadius + 1.6f, halo);
                     canvas.DrawCircle(center, DotRadius + 0.6f, fill);

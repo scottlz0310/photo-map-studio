@@ -278,7 +278,8 @@ public sealed class OpenMapTilesSymbolsTests
             ],
         };
 
-        style.RenderPolygons(canvas, tile, 1f, 14, CancellationToken.None);
+        // 樹木の模様（ズーム 14 以上）が重ならないズームで、塗りの色そのものを確認する
+        style.RenderPolygons(canvas, tile, 1f, OpenMapTilesTreeTexture.MinZoom - 1, CancellationToken.None);
 
         Assert.Equal(SKColor.Parse(expected), bitmap.GetPixel(100, 100));
     }

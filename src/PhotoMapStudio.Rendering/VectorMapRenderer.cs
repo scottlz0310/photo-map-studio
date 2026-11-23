@@ -72,13 +72,17 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             throw new ArgumentOutOfRangeException(nameof(request), request.Zoom, "ズームは 0 以上の有限値で指定してください。");
         }
         ArgumentOutOfRangeException.ThrowIfLessThan(request.BandCount, 1, nameof(request));
+        if (!double.IsFinite(request.PixelRatio) || request.PixelRatio <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), request.PixelRatio, "PixelRatio は 0 より大きい有限値で指定してください。");
+        }
 
         var context = new VectorMapRenderContext(request.AllowIncompleteMaps);
         using var bitmap = new SKBitmap(request.PixelWidth, request.PixelHeight, request.ColorType ?? SKImageInfo.PlatformColorType, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(bitmap))
         {
             await this.RenderCoreAsync(
-                canvas, request.CenterLatitude, request.CenterLongitude, request.Zoom, request.PixelWidth, request.PixelHeight,
+                canvas, request.CenterLatitude, request.CenterLongitude, request.Zoom, request.PixelRatio, request.PixelWidth, request.PixelHeight,
                 request.Session, request.TileSource, context,
                 request.BandCount > 1 || request.ParallelLabels ? new ParallelDraw(bitmap, request.BandCount, request.ParallelLabels) : null,
                 cancellationToken).ConfigureAwait(false);
@@ -129,7 +133,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private async Task RenderCoreAsync(SKCanvas canvas, double latitude, double longitude, double zoom, int width, int height,
+    private async Task RenderCoreAsync(SKCanvas canvas, double latitude, double longitude, double zoom, double pixelRatio, int width, int height,
         TileFetchSession? session, TileSource? tileSource, VectorMapRenderContext renderContext,
         ParallelDraw? parallel, CancellationToken cancellationToken)
     {
@@ -143,20 +147,25 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             : (this.defaultTileSource, this.defaultStyle);
 
         // 1. タイル取得用ズームとスケール比の決定（過拡大対応）。最大ズームを確定してから求める。
-        // 取得ズームは整数、表示倍率は連続値。スタイルの判定には切り捨てた整数のズームを使う
+        // 取得ズームは整数、表示倍率は連続値。スタイルの判定には、画素密度を除いた論理ズームを切り捨てた整数を使う。
+        // 位置・拡大率・衝突判定の範囲は論理ピクセルで求め、キャンバスを画素密度倍に拡大して描く（スタイルの大きさが論理ピクセルで一定になる）。
+        // 取得ズームは、物理ピクセルのズームから決める（画素密度が 1.0 のときの取得と同じ）
         cancellationToken.ThrowIfCancellationRequested();
         await activeSource.PrepareAsync(session, cancellationToken).ConfigureAwait(false);
-        int styleZoom = (int)Math.Floor(zoom);
-        int tileZoom = Math.Min(styleZoom, activeSource.MaxZoom);
-        double scaleRatio = Math.Pow(2.0, zoom - tileZoom);
+        double logicalZoom = zoom - Math.Log2(pixelRatio);
+        int styleZoom = Math.Max(0, (int)Math.Floor(logicalZoom));
+        int tileZoom = Math.Min((int)Math.Floor(zoom), activeSource.MaxZoom);
+        double scaleRatio = Math.Pow(2.0, logicalZoom - tileZoom);
         int maxTiles = 1 << tileZoom;
+        double logicalWidth = width / pixelRatio;
+        double logicalHeight = height / pixelRatio;
 
-        // 2. 世界ピクセル座標系での表示範囲計算
-        (double centerWorldX, double centerWorldY) = MercatorProjection.ToWorldPixel(latitude, longitude, zoom);
-        double left = centerWorldX - (width / 2.0);
-        double top = centerWorldY - (height / 2.0);
-        double right = left + width;
-        double bottom = top + height;
+        // 2. 世界ピクセル座標系（論理ピクセル）での表示範囲計算
+        (double centerWorldX, double centerWorldY) = MercatorProjection.ToWorldPixel(latitude, longitude, logicalZoom);
+        double left = centerWorldX - (logicalWidth / 2.0);
+        double top = centerWorldY - (logicalHeight / 2.0);
+        double right = left + logicalWidth;
+        double bottom = top + logicalHeight;
 
         // 3. 必要なタイルの座標範囲計算
         double tileLeft = left / scaleRatio;
@@ -253,15 +262,16 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
         // 5. SkiaSharp によるキャンバス描画
         if (parallel is not null)
         {
-            await DrawParallelAsync(parallel, canvas, loadedTiles, activeStyle, styleZoom, cancellationToken).ConfigureAwait(false);
+            await DrawParallelAsync(parallel, canvas, loadedTiles, activeStyle, styleZoom, (float)pixelRatio, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             return;
         }
 
-        // 背景クリア
+        // 背景クリア（行列に影響されないので、拡大の前でも後でも同じ）。以降は論理ピクセルで描く
         canvas.Clear(activeStyle.BackgroundColor);
+        canvas.Scale((float)pixelRatio);
 
-        var viewport = new SKRect(0, 0, width, height);
+        var viewport = new SKRect(0, 0, (float)logicalWidth, (float)logicalHeight);
         var collisionGrid = new LabelCollisionGrid();
 
         // パス 1: 全タイルの面（ポリゴン）
@@ -435,12 +445,15 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
         IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)> tiles,
         IVectorMapStyle style,
         int styleZoom,
+        float pixelRatio,
         CancellationToken cancellationToken)
     {
         SKBitmap bitmap = parallel.Bitmap;
         int width = bitmap.Width;
         int height = bitmap.Height;
-        var viewport = new SKRect(0, 0, width, height);
+
+        // スタイルへ渡す座標（衝突判定の範囲を含む）は論理ピクセル。画像は物理ピクセルのまま、描くキャンバスを pixelRatio 倍に拡大する
+        var viewport = new SKRect(0, 0, width / pixelRatio, height / pixelRatio);
         var collisionGrid = new LabelCollisionGrid();
 
         void DrawLabels(SKCanvas target)
@@ -478,19 +491,24 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
                     {
                         using var labelCanvas = new SKCanvas(labelTarget);
                         labelCanvas.Clear(SKColors.Transparent);
+                        labelCanvas.Scale(pixelRatio);
                         DrawLabels(labelCanvas);
                     },
                     CancellationToken.None);
             }
 
-            await DrawBandsAsync(bitmap, tiles, style, styleZoom, Math.Min(parallel.BandCount, height), cancellationToken).ConfigureAwait(false);
+            await DrawBandsAsync(bitmap, tiles, style, styleZoom, pixelRatio, Math.Min(parallel.BandCount, height), cancellationToken).ConfigureAwait(false);
 
             if (labelTask is null)
             {
+                canvas.Save();
+                canvas.Scale(pixelRatio);
                 DrawLabels(canvas);
+                canvas.Restore();
                 return;
             }
 
+            // 注記の画像は物理ピクセルのまま、拡大しない本体のキャンバスへ重ねる
             await labelTask.ConfigureAwait(false);
             using SKImage labelImage = SKImage.FromBitmap(labelBitmap!);
             canvas.DrawImage(labelImage, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
@@ -512,6 +530,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
         IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)> tiles,
         IVectorMapStyle style,
         int styleZoom,
+        float pixelRatio,
         int bandCount,
         CancellationToken cancellationToken)
     {
@@ -536,7 +555,10 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
                 ?? throw new InvalidOperationException("帯の描画先を作れませんでした。");
             SKCanvas bandCanvas = surface.Canvas;
             bandCanvas.Clear(background);
+
+            // 帯の位置は物理ピクセルの行。先に帯の位置へ移動してから、論理ピクセルへ拡大する
             bandCanvas.Translate(0, -top);
+            bandCanvas.Scale(pixelRatio);
 
             // 面 → 線の順に、全タイルを描く（逐次の描画と同じ）
             foreach (var item in tiles)

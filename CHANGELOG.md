@@ -8,13 +8,13 @@
 
 ### Added
 
-- `OpenMapTilesStyle` に、山頂（`mountain_peak`）の描画を追加した（#146。PhotoGeoExplorer #352 の OSM ラスタとの比較で、山地の表現が乏しかったことへの対応）。三角の記号・山名・標高（`ele`。無い場合は山名だけ）を描き、火山（`class=volcano`）は赤、それ以外は茶色にする。名前のない地物（`class=cliff` など）は描かない。ズーム 11 未満は描かず、ズーム 11〜13 は `rank`（タイル内の標高順）の上位だけ（11: 2 位、12: 3 位、13: 6 位）、ズーム 14 以上は全て描く。注記の衝突判定を通り、先に置いた注記と重ならない。寸法は論理ピクセルなので、`PixelRatio` に追従する。
+- `OpenMapTilesStyle` に、山頂（`mountain_peak`）の描画を追加した（#146。PhotoGeoExplorer #352 の OSM ラスタとの比較で、山地の表現が乏しかったことへの対応）。三角の記号・山名・標高（`ele`。無い場合は山名だけ）を描き、火山（`class=volcano`）は赤、それ以外は茶色にする。描くのは `class` が `peak`・`volcano` の地物だけで、峠・鞍部（`saddle`）や崖（`cliff`）、名前のない地物は描かない。ズーム 11 未満は描かず、ズーム 11〜13 は `rank`（タイル内の標高順）の上位だけ（11: 2 位、12: 3 位、13: 6 位）、ズーム 14 以上は全て描く。注記の衝突判定を通り、先に置いた注記と重ならない。寸法は論理ピクセルなので、`PixelRatio` に追従する。
 - `OpenMapTilesStyle` の POI（`poi`）を、`class` から 10 分類（交通・駐車場・医療・飲食・買い物・宿泊・教育・文化・公園運動・その他）に分け、分類ごとの色で描くようにした（これまでは病院・学校・駅以外は全て同じオレンジの点）。駐車場は青い角丸の四角に白い「P」、医療は白い十字の入った円、その他は円。注記の文字色は、記号の色を暗くした色にする。名前のない駐車場は、ズーム 16 以上で記号だけを描く（名前のない他の施設は、何かが分からないため従来どおり描かない）。
 - 面の塗り色に、`landcover` の `farmland`（農地）・`rock`（岩・ガレ場・露岩）、`landuse` の `retail`・`commercial`（商業系）・`kindergarten`・`education`・`library`（施設用地）・`playground`・`stadium` を追加した。色は `OpenMapTilesLandPalette` にまとめた。
 
 ### Changed
 
-- `OpenMapTilesStyle` は、`park` レイヤーの国立公園・保護区・自然保護区（`class` が `national_park`・`protected_area`・`nature_reserve`・`aboriginal_lands`）を塗りつぶさないようにした。指定区域は範囲を示すだけで、塗ると範囲内の植生・岩（`landcover`）が全面に隠れ、山地（例: 旭岳・層雲峡）が淡い一色になっていた。
+- `OpenMapTilesStyle` は、`park` レイヤーのうち、用途を表す `recreation_ground`（運動場など）と `historic`（史跡）だけを塗り、国立公園・保護区・自然保護区などの指定区域は塗りつぶさないようにした。指定区域は範囲を示すだけで、塗ると範囲内の植生・岩（`landcover`）が全面に隠れ、山地（例: 旭岳・層雲峡）が淡い一色になっていた。指定区域の `class` は `national_park`・`nature_reserve`・`conservation`・`wilderness_preserve`・`wildlife_refuge`・`sustainable`・`marine` のほか、保護区の名称の自由記述の値まで広がるため、塗る区分を列挙している。
 - 森（`wood`）を `#c8dfb8` から `#b5d6a2`、草地（`grass`）を `#d8e8c8` から `#d3e8c0` へ、彩度を上げた。`pitch`・`track` は `#cfe6c4` から `#bfe4cf` にし、`stadium` も同じ色にした。地名の注記のフォントを、地物ごとに作らず、種別ごとに 1 回だけ作る（出力は変わらない）。
 
 - `VectorViewRequest` に `PixelRatio`（表示の画素密度。`MinPixelRatio`（1/16）以上 `MaxPixelRatio`（16）以下で、既定は 1.0。範囲外は `ArgumentOutOfRangeException`）を追加した（#144。PhotoGeoExplorer #359）。これまでスタイルの大きさ（文字 11 px・縁取り・点・盾・線幅。道路幅は `幅 × ZoomScale(整数ズーム)`）が物理ピクセルで決まるため、画素密度の高い表示では画面上（論理ピクセル）で小さくなっていた（PhotoGeoExplorer の実測で、150% で OSM の約 0.7 倍、200% で約 0.55 倍。200% は整数ズームの境界で道路幅が段差状に太くなる）。`PixelRatio` を指定すると、スタイルの判定に使うズーム・タイルの拡大率・表示範囲・注記の衝突判定の範囲を論理ピクセル（`Zoom` から log2(`PixelRatio`) を引いた論理ズーム、画像寸法 ÷ `PixelRatio`）で求め、キャンバスを `PixelRatio` 倍に拡大して描く（MapLibre の pixelRatio と同じ考え方）。文字・線幅が論理ピクセルでは画素密度によらず一定になり、画像は物理ピクセルのまま鮮明に描かれる。`Zoom` と画像寸法は従来どおり物理ピクセルで指定し、取得するタイルのズームも従来どおり `floor(Zoom)`。`IVectorMapStyle` は変更しない（スタイルの実装は無改修）。**既定の 1.0 では、従来と画素単位で同じ画像になる**（既存のテストと、指定しない要求との一致テストで確認）。逐次・帯の並列・注記の並列の全経路を、スタイルへ渡る値（ズーム・倍率・範囲）、描かれた図形の物理ピクセル寸法、地理的な位置のテストで確認した。

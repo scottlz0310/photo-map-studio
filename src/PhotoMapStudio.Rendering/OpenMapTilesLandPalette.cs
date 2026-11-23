@@ -37,12 +37,19 @@ internal static class OpenMapTilesLandPalette
         => landuse ? GetLanduseFill(featureClass) : GetLandcoverFill(featureClass);
 
     /// <summary>
-    /// <c>park</c> レイヤーの地物を塗りつぶすか。国立公園・保護区などの指定区域は、土地の用途ではなく範囲を示すため塗らない
-    /// （塗ると、その範囲の植生・岩（<c>landcover</c>）が全面に隠れ、山地が一色になる）。
+    /// <c>park</c> レイヤーの地物を塗りつぶすか。塗るのは、土地の用途を表す <c>recreation_ground</c>（運動場など）と
+    /// <c>historic</c>（史跡）だけにする。
     /// </summary>
+    /// <remarks>
+    /// このレイヤーの大半は、国立公園・保護区・自然保護区といった指定区域で、範囲を示すだけである。塗ると、その範囲の植生・岩
+    /// （<c>landcover</c>）が全面に隠れ、山地が一色になる。指定区域の <c>class</c> は、<c>national_park</c>・<c>nature_reserve</c>・
+    /// <c>conservation</c>・<c>wilderness_preserve</c>・<c>wildlife_refuge</c>・<c>sustainable</c>・<c>marine</c> のほか、
+    /// OSM の <c>protected_area</c> や保護の名称の自由記述の値まで広がり、値を列挙して除くことができない。そのため、塗る区分を列挙する
+    /// （Planetiler の <c>Park.java</c> の <c>parkClass</c>。<c>class</c> が無い地物も、塗らない側に倒す）。
+    /// </remarks>
     /// <param name="parkClass"><c>park</c> レイヤーの地物の <c>class</c> 属性。</param>
     internal static bool ShouldFillPark(string? parkClass)
-        => parkClass is not ("national_park" or "protected_area" or "nature_reserve" or "aboriginal_lands");
+        => parkClass is "recreation_ground" or "historic";
 
     private static SKColor? GetLandcoverFill(string? featureClass) => featureClass switch
     {

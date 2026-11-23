@@ -25,6 +25,13 @@ internal static class OpenMapTilesPeakSymbols
     private static readonly SKColor VolcanoColor = new(0xC0, 0x30, 0x2A);
 
     /// <summary>
+    /// 山頂の記号を描く種類か。<c>mountain_peak</c> には、峠・鞍部（<c>saddle</c>）や崖（<c>cliff</c>）も入るため、
+    /// 山頂（<c>peak</c>）と火山（<c>volcano</c>）だけにする。
+    /// </summary>
+    /// <param name="peakClass">地物の <c>class</c> 属性。</param>
+    internal static bool IsPeak(string? peakClass) => peakClass is "peak" or "volcano";
+
+    /// <summary>
     /// 山頂を、ズームに応じて描くか。OpenMapTiles の <c>rank</c> は、タイル内の標高の高い順（1 が最高）。
     /// 低いズームでは、タイルに多数の山頂が入るため、上位だけを描いて記号と注記が密集しないようにする。
     /// </summary>
@@ -87,6 +94,7 @@ internal static class OpenMapTilesPeakSymbols
                 || feature.GeometryParts.Count == 0
                 || feature.GeometryParts[0].Count == 0
                 || string.IsNullOrWhiteSpace(name)
+                || !IsPeak(feature.GetString("class"))
                 || !ShouldShow(zoom, feature.GetInt64("rank")))
             {
                 continue;

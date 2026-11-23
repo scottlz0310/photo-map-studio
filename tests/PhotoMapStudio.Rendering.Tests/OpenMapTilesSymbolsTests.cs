@@ -111,6 +111,33 @@ public sealed class OpenMapTilesSymbolsTests
         Assert.False(HasInk(lowRank, 0, 0, Size, Size));
     }
 
+    [Theory]
+    [InlineData("saddle")]
+    [InlineData("cliff")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void 峠や崖など山頂と火山以外は名前があっても山頂の記号を描かない(string? peakClass)
+    {
+        using var style = new OpenMapTilesStyle();
+        var properties = new Dictionary<string, object> { ["name:ja"] = "三国峠", ["ele"] = "1139", ["rank"] = 1L };
+        if (peakClass is not null)
+        {
+            properties["class"] = peakClass;
+        }
+
+        using SKBitmap bitmap = Render(style, "mountain_peak", 14, Point(100, 100, properties));
+
+        Assert.False(HasInk(bitmap, 0, 0, Size, Size));
+    }
+
+    [Theory]
+    [InlineData("peak", true)]
+    [InlineData("volcano", true)]
+    [InlineData("saddle", false)]
+    [InlineData("cliff", false)]
+    [InlineData(null, false)]
+    public void 山頂の記号を描く種類は山頂と火山だけ(string? peakClass, bool expected)
+        => Assert.Equal(expected, OpenMapTilesPeakSymbols.IsPeak(peakClass));
     [Fact]
     public void 標高のない山頂は山名だけを描く()
     {
@@ -205,21 +232,33 @@ public sealed class OpenMapTilesSymbolsTests
     }
 
     [Theory]
-    [InlineData("national_park", false)]
-    [InlineData("protected_area", false)]
-    [InlineData("nature_reserve", false)]
-    [InlineData("aboriginal_lands", false)]
+    [InlineData("recreation_ground", true)]
     [InlineData("historic", true)]
-    [InlineData("park", true)]
-    [InlineData(null, true)]
-    public void 国立公園や保護区の範囲は塗りつぶさない(string? parkClass, bool filled)
+    [InlineData("national_park", false)]
+    [InlineData("nature_reserve", false)]
+    [InlineData("protected_area", false)]
+    [InlineData("conservation", false)]
+    [InlineData("wilderness_preserve", false)]
+    [InlineData("wildlife_refuge", false)]
+    [InlineData("sustainable", false)]
+    [InlineData("marine", false)]
+    [InlineData("aboriginal_lands", false)]
+    [InlineData("国定公園", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void 指定区域は塗りつぶさず用途を表す公園だけを塗る(string? parkClass, bool filled)
         => Assert.Equal(filled, OpenMapTilesLandPalette.ShouldFillPark(parkClass));
 
     [Theory]
     [InlineData("national_park", "#b5d6a2")]
-    [InlineData("protected_area", "#b5d6a2")]
+    [InlineData("nature_reserve", "#b5d6a2")]
+    [InlineData("conservation", "#b5d6a2")]
+    [InlineData("wilderness_preserve", "#b5d6a2")]
+    [InlineData("wildlife_refuge", "#b5d6a2")]
+    [InlineData("国定公園", "#b5d6a2")]
+    [InlineData("recreation_ground", "#d8e8c8")]
     [InlineData("historic", "#d8e8c8")]
-    public void 保護区の範囲は下の植生を隠さず公園は上に塗る(string parkClass, string expected)
+    public void 指定区域は下の植生を隠さず用途を表す公園は上に塗る(string parkClass, string expected)
     {
         using var style = new OpenMapTilesStyle();
         using var bitmap = new SKBitmap(Size, Size);

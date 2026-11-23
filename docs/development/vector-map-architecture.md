@@ -45,7 +45,7 @@ flowchart TD
         Renderer["VectorMapRenderer (直接ベクター描画)"]
 
         subgraph Styles ["スタイル・スキーマ解釈層 (IVectorMapStyle)"]
-            OFMStyle["OpenMapTilesStyle<br>(道路階層・盾・日本語地名・店舗POI)"]
+            OFMStyle["OpenMapTilesStyle<br>(道路階層・盾・日本語地名・分類別POI・山頂・植生と土地利用)"]
             GsiStyle["GsiVectorStyle<br>(公的測量記号・RdEdg・RdCL・等高線・注記)"]
         end
     end
@@ -109,6 +109,10 @@ flowchart TD
   - 道路階層判定: `class`（`motorway`, `trunk`, `primary`, `secondary`, `tertiary`, `minor`, `service`, `path` 等）に基づく色分け・線幅。
   - 経路番号の盾: 高速（緑の角丸）・国道（青の逆三角）・都道府県道（白の五角形）。種別は、道路が属する路線関係の経路網で決めます。OpenFreeMap は `route_1_network`〜`route_4_network`・`route_N_ref` に OSM の路線関係を持ち（`JP:national` は国道、`JP:prefectural` は都道府県道、`JP:E`・`JP:expressway*` は高速）、Protomaps 系のタイルは `network`（`jp-national` など）に持ちます。複数の路線を持つ道路は高速、国道、都道府県道の順に優先し、番号は選んだ路線の `ref` を使います。路線関係を持たない道路には、`class` からの推定は行わず盾を描きません（推定は国道の盾を取り違えるため。根拠は [road-class-validation.md](road-class-validation.md)）。経路番号を盾として優先配置します。道路が過拡大で画面外へ延びる場合も、可視区間の中点に置きます。
   - ラベル: `name:ja` 優先、次いで `name`。道路沿いの傾き配置および施設アイコン。
+  - 山頂（`mountain_peak`）: 三角の記号・山名・標高（`ele`）。火山は赤、他は茶色。ズーム 11 未満は描かず、11〜13 は `rank`（タイル内の標高順）の上位だけ、14 以上は全て描く。描くのは `class` が `peak`・`volcano` の地物だけで、峠・鞍部（`saddle`）、崖（`cliff`）、名前のない地物は描きません（`OpenMapTilesPeakSymbols`）。
+  - POI（`poi`）: `class` を 10 分類（交通・駐車場・医療・飲食・買い物・宿泊・教育・文化・公園運動・その他）に分け、分類ごとの色と形（駐車場は「P」の四角、医療は十字の円、他は円）で描きます。注記の文字色は記号の色を暗くした色です。名前のない施設は描きませんが、駐車場だけは、ズーム 16 以上で記号だけを描きます（`OpenMapTilesPoiSymbols`）。
+  - 面の色（`landcover`・`landuse`）は `OpenMapTilesLandPalette` にまとめています。`park` レイヤーは、用途を表す `recreation_ground`・`historic` だけを塗ります。国立公園・保護区などの指定区域（`national_park`・`nature_reserve`・`conservation`・`wilderness_preserve`・`wildlife_refuge`・`marine`、保護区の名称の自由記述の値など）は範囲を示すだけなので塗りません（塗ると、範囲内の植生・岩が全面に隠れて山地が一色になります）。値が自由記述まで広がるため、除く値ではなく塗る区分を列挙しています。
+  - 記号・注記の寸法は論理ピクセルで、`PixelRatio` で拡大されます。物理ピクセルの固定値は持ちません。
 - **`GsiVectorStyle` (国土地理院系)**:
   - レイヤー: `RdEdg`（道路縁）, `RdCL`（道路中心線）, `BldA`（建物）, `WA`（水域）, `Anno`（注記・地名）, 等高線。
   - 地理院地図調の配色・境界線・標高表示。

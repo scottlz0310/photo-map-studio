@@ -124,7 +124,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         // 1. 緑地・土地利用（landcover / landuse / park）
         RenderLandcover(canvas, tile.GetLayer("landcover"), landuse: false, view);
         RenderLandcover(canvas, tile.GetLayer("landuse"), landuse: true, view);
-        RenderLayerPolygons(canvas, tile.GetLayer("park"), this.parkPaint, view);
+        RenderLayerPolygons(canvas, tile.GetLayer("park"), this.parkPaint, view, include: feature => OpenMapTilesLandPalette.ShouldFillPark(feature.GetString("class")));
 
         // 2. 水域（water）
         RenderLayerPolygons(canvas, tile.GetLayer("water"), this.waterPaint, view);
@@ -266,22 +266,28 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             }
         }
 
+        OpenMapTilesPeakSymbols.Render(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.placeTypeface, this.textHaloPaint, cancellationToken);
+
         VectorTileLayer? placeLayer = tile.GetLayer("place");
         if (placeLayer is not null)
         {
+            using var cityFont = new SKFont(this.placeTypeface, 16f);
+            cityFont.Embolden = true;
+            using var townFont = new SKFont(this.placeTypeface, 14f);
+            townFont.Embolden = true;
+            using var villageFont = new SKFont(this.placeTypeface, 12.5f);
+            using var otherFont = new SKFont(this.placeTypeface, 11.5f);
             foreach (VectorTileFeature feature in placeLayer.Features.OrderBy(f => f.GetInt64("rank") ?? long.MaxValue))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string? kind = feature.GetString("class");
-                float size = kind switch
+                SKFont font = feature.GetString("class") switch
                 {
-                    "city" => 16f,
-                    "town" => 14f,
-                    "village" => 12.5f,
-                    _ => 11.5f,
+                    "city" => cityFont,
+                    "town" => townFont,
+                    "village" => villageFont,
+                    _ => otherFont,
                 };
-                using var font = new SKFont(this.placeTypeface, size) { Embolden = kind is "city" or "town" };
-                this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, poi: false);
+                this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, zoom, poi: false);
             }
         }
 
@@ -292,39 +298,48 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             foreach (VectorTileFeature feature in poiLayer.Features.OrderBy(f => f.GetInt64("rank") ?? long.MaxValue))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, poi: true);
+                this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, zoom, poi: true);
             }
         }
     }
 
     private void RenderPointLabel(SKCanvas canvas, VectorTileFeature feature, SKMatrix matrix, SKFont font,
-        LabelCollisionGrid grid, SKRect viewport, bool poi)
+        LabelCollisionGrid grid, SKRect viewport, int zoom, bool poi)
     {
         if (feature.GeometryType != VectorGeometryType.Point || feature.GeometryParts.Count == 0 || feature.GeometryParts[0].Count == 0) { return; }
         string? name = feature.GetString("name:ja") ?? feature.GetString("name");
-        if (string.IsNullOrWhiteSpace(name)) { return; }
+        PoiCategory category = poi ? OpenMapTilesPoiSymbols.GetCategory(feature.GetString("class")) : PoiCategory.Other;
+        bool nameless = string.IsNullOrWhiteSpace(name);
+        if (nameless && !(poi && category == PoiCategory.Parking && zoom >= OpenMapTilesPoiSymbols.NamelessParkingMinZoom)) { return; }
         VectorPoint point = feature.GeometryParts[0][0];
         SKPoint anchor = matrix.MapPoint(new SKPoint(point.X, point.Y));
+        if (nameless)
+        {
+            // 名前のない駐車場は記号だけを描く（注記と同じ衝突判定を通す）
+            float half = OpenMapTilesPoiSymbols.MarkerHalfSize;
+            if (grid.TryPlace([new SKRect(anchor.X - half, anchor.Y - half, anchor.X + half, anchor.Y + half)], viewport))
+            {
+                OpenMapTilesPoiSymbols.DrawMarker(canvas, anchor, category, this.textHaloPaint, this.shieldFont);
+            }
+
+            return;
+        }
+
         float width = font.MeasureText(name);
         float baseline = anchor.Y + (poi ? 15f : font.Size * 0.35f);
         var bounds = new SKRect(anchor.X - (width / 2f) - 2f, baseline - font.Size - 2f, anchor.X + (width / 2f) + 2f, baseline + 4f);
-        if (poi) { bounds.Top = Math.Min(bounds.Top, anchor.Y - 5f); }
+        if (poi) { bounds.Top = Math.Min(bounds.Top, anchor.Y - OpenMapTilesPoiSymbols.MarkerHalfSize - 1f); }
         if (!grid.TryPlace([bounds], viewport, (poi ? "poi:" : "place:") + name, poi ? 140f : 220f)) { return; }
+        SKPaint textPaint = this.placeFillPaint;
+        using SKPaint? categoryText = poi ? this.placeFillPaint.Clone() : null;
         if (poi)
         {
-            using SKPaint dot = this.placeFillPaint.Clone();
-            dot.Color = feature.GetString("class") switch
-            {
-                "hospital" => new SKColor(0xDA, 0x00, 0x00),
-                "school" or "college" => new SKColor(0x39, 0x73, 0x9D),
-                "station" or "railway" => new SKColor(0x79, 0x55, 0x48),
-                _ => new SKColor(0xD5, 0x7B, 0x35),
-            };
-            canvas.DrawCircle(anchor, 4.5f, this.textHaloPaint);
-            canvas.DrawCircle(anchor, 3.5f, dot);
+            OpenMapTilesPoiSymbols.DrawMarker(canvas, anchor, category, this.textHaloPaint, this.shieldFont);
+            categoryText!.Color = OpenMapTilesPoiSymbols.GetTextColor(category);
+            textPaint = categoryText;
         }
         canvas.DrawText(name, anchor.X, baseline, SKTextAlign.Center, font, this.textHaloPaint);
-        canvas.DrawText(name, anchor.X, baseline, SKTextAlign.Center, font, this.placeFillPaint);
+        canvas.DrawText(name, anchor.X, baseline, SKTextAlign.Center, font, textPaint);
     }
 
     private static void RenderLandcover(SKCanvas canvas, VectorTileLayer? layer, bool landuse, in TileView view)
@@ -341,22 +356,8 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                 continue;
             }
 
-            string? color = (landuse, feature.GetString("class")) switch
-            {
-                (false, "wood") => "#c8dfb8",
-                (false, "grass") => "#d8e8c8",
-                (false, "wetland") => "#cfe2d6",
-                (false, "sand") => "#f2e8c4",
-                (false, "ice") => "#f4f8fb",
-                (true, "pitch" or "track") => "#cfe6c4",
-                (true, "cemetery") => "#d3dfcb",
-                (true, "school" or "college" or "university" or "hospital") => "#ebe3cf",
-                (true, "industrial" or "railway") => "#dfdad5",
-                (true, "residential") => "#e6e1d8",
-                _ => null,
-            };
-            if (color is null) { continue; }
-            paint.Color = SKColor.Parse(color);
+            if (OpenMapTilesLandPalette.GetFill(landuse, feature.GetString("class")) is not { } color) { continue; }
+            paint.Color = color;
             RenderPolygon(canvas, feature, paint);
         }
     }
@@ -366,7 +367,8 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         VectorTileLayer? layer,
         SKPaint fillPaint,
         in TileView view,
-        SKPaint? strokePaint = null)
+        SKPaint? strokePaint = null,
+        Func<VectorTileFeature, bool>? include = null)
     {
         if (layer is null)
         {
@@ -378,7 +380,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         {
             view.ThrowIfCancellationRequested();
             VectorTileFeature feature = layer.Features[i];
-            if (feature.GeometryType != VectorGeometryType.Polygon || !view.IsVisible(bounds, i, view.Margin))
+            if (feature.GeometryType != VectorGeometryType.Polygon || !view.IsVisible(bounds, i, view.Margin) || include?.Invoke(feature) == false)
             {
                 continue;
             }

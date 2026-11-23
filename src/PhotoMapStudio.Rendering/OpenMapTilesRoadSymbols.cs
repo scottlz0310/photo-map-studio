@@ -199,15 +199,19 @@ internal static class OpenMapTilesRoadSymbols
         }
     }
 
-    /// <summary>細街路を含む道路名を、ズームに応じて道路に沿って描画する。</summary>
+    /// <summary>
+    /// 道路名を、ズームに応じて道路に沿って描画する。小道・林道など最低ランクの名前（<paramref name="minor"/>）は、
+    /// 全タイルの地名・施設名の後に呼び分けて置く（ランクの並べ替えはタイル内だけで、衝突グリッドは全タイルで共有するため、
+    /// 同じ段階に置くと、先に走査したタイルの林道名が、隣のタイルの上位の道路名を押しのける）。
+    /// </summary>
     internal static void RenderNames(
         SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
-        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint, CancellationToken cancellationToken)
+        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint, bool minor, CancellationToken cancellationToken)
     {
         VectorTileLayer? layer = tile.GetLayer(LayerName);
         if (layer is null) { return; }
         foreach (VectorTileFeature feature in layer.Features
-            .Where(f => f.GeometryType == VectorGeometryType.LineString && GetNameRank(f.GetString("class"), zoom) >= 0)
+            .Where(f => f.GeometryType == VectorGeometryType.LineString && IsInTier(GetNameRank(f.GetString("class"), zoom), minor))
             .OrderByDescending(f => GetNameRank(f.GetString("class"), zoom)))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -221,6 +225,11 @@ internal static class OpenMapTilesRoadSymbols
     /// <summary>林道の名前を描く最小のズーム。名前のある林道は少なく混雑しにくいため、他の小道（17）より低いズームから描く。</summary>
     private const int TrackNameMinZoom = 14;
 
+    /// <summary>最低のランク（林道・小道など）。優先度の最も低い注記の段階で置く。</summary>
+    private const int MinorNameRank = 0;
+
+    private static bool IsInTier(int rank, bool minor) => rank >= 0 && (rank == MinorNameRank) == minor;
+
     private static int GetNameRank(string? roadClass, int zoom) => roadClass switch
     {
         "motorway" or "trunk" => zoom >= 12 ? 5 : -1,
@@ -229,8 +238,8 @@ internal static class OpenMapTilesRoadSymbols
         "tertiary" => zoom >= 14 ? 2 : -1,
         "minor" or "residential" or "unclassified" or "service" => zoom >= 15 ? 1 : -1,
         "aerialway" => zoom >= 14 ? 1 : -1,
-        "track" => zoom >= TrackNameMinZoom ? 0 : -1,
-        "path" or "pedestrian" or "footway" or "cycleway" or "steps" or "living_street" => zoom >= 17 ? 0 : -1,
+        "track" => zoom >= TrackNameMinZoom ? MinorNameRank : -1,
+        "path" or "pedestrian" or "footway" or "cycleway" or "steps" or "living_street" => zoom >= 17 ? MinorNameRank : -1,
         _ => -1,
     };
 

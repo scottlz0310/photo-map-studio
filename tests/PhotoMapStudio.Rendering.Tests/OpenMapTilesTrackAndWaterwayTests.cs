@@ -62,6 +62,28 @@ public sealed class OpenMapTilesTrackAndWaterwayTests
     }
 
     [Fact]
+    public void 林道と舗装路の交差部は舗装路の中塗りが残る()
+    {
+        // 横の林道（破線の線の部分が x=100 に当たる）と、縦の主要道路が直交する
+        using var style = new OpenMapTilesStyle();
+        using var bitmap = new SKBitmap(Size, Size);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+        var primary = new VectorTileFeature
+        {
+            GeometryType = VectorGeometryType.LineString,
+            Properties = new Dictionary<string, object> { ["class"] = "primary" },
+            GeometryParts = [[new(100, 0), new(100, Size)]],
+        };
+        VectorTileFeature track = Tile("transportation", "track").Layers[0].Features[0];
+        var tile = new VectorTile { Layers = [new VectorTileLayer { Name = "transportation", Extent = Size, Features = [track, primary] }] };
+
+        style.RenderLines(canvas, tile, 1f, 16, CancellationToken.None);
+
+        Assert.Equal(SKColor.Parse("#ffe27a"), bitmap.GetPixel(100, LineY));
+    }
+
+    [Fact]
     public void 林道は舗装路より細く道路網より目立たない()
     {
         using SKBitmap track = RenderRoad("track", zoom: 16, scale: 1f);

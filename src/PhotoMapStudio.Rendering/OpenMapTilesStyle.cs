@@ -183,7 +183,8 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         VectorTileLayer? roadLayer = tile.GetLayer("transportation");
         if (roadLayer is not null)
         {
-            // 道路の後に鉄道の枕木を重ねる。
+            // 林道は舗装路の下に描く（交差部で舗装路の中塗りが残る）。道路の後に鉄道の枕木を重ねる。
+            RenderTracks(canvas, roadLayer, railway, tileScale, zoom, view);
             RenderRoads(canvas, roadLayer, tileScale, zoom, view);
             using SKPaint path = railway.Clone();
             path.Color = new SKColor(0xB9, 0x9C, 0x80, 160);
@@ -202,16 +203,6 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                 PathKind.Foot => footPath,
                 _ => path,
             });
-
-            // 林道は、小道より少し太く長い茶色の破線で、舗装路（casing つきの実線）とは区別して描く
-            using SKPaint track = railway.Clone();
-            track.Color = TrackColor;
-            track.StrokeWidth = 1.6f * Math.Max(1f, ZoomScale(zoom) * 0.45f) / tileScale;
-            float trackDashOn = TrackDashOn / tileScale;
-            float trackDashOff = TrackDashOff / tileScale;
-            using SKPathEffect trackDash = SKPathEffect.CreateDash([trackDashOn, trackDashOff], 0);
-            track.PathEffect = trackDash;
-            RenderDashedPaths(canvas, roadLayer, track, trackDashOn, trackDashOff, view, IsTrack);
             if (zoom >= AerialwayMinZoom)
             {
                 RenderAerialways(canvas, roadLayer, tileScale, view);
@@ -260,7 +251,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         ArgumentNullException.ThrowIfNull(tile);
         ArgumentNullException.ThrowIfNull(collisionGrid);
         OpenMapTilesRoadSymbols.RenderNames(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport,
-            this.roadNameFont, this.roadNameFillPaint, this.roadNameHaloPaint, cancellationToken);
+            this.roadNameFont, this.roadNameFillPaint, this.roadNameHaloPaint, minor: false, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -334,7 +325,9 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         ArgumentNullException.ThrowIfNull(tile);
         ArgumentNullException.ThrowIfNull(collisionGrid);
 
-        // 番地は最も優先度が低く、全タイルの通常の注記を置いた後に、重ならない所だけに描く
+        // 小道・林道の名前と番地は最も優先度が低く、全タイルの通常の注記を置いた後に、重ならない所だけに描く
+        OpenMapTilesRoadSymbols.RenderNames(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport,
+            this.roadNameFont, this.roadNameFillPaint, this.roadNameHaloPaint, minor: true, cancellationToken);
         OpenMapTilesHouseNumbers.Render(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.placeTypeface, cancellationToken);
     }
 
@@ -552,6 +545,19 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
             DrawClippedDashedLines(canvas, feature, featurePaint, dashOn, dashOff, area);
         }
+    }
+
+    /// <summary>林道を、小道より少し太く長い茶色の破線で描く。舗装路（casing つきの実線）とは区別できる。</summary>
+    private static void RenderTracks(SKCanvas canvas, VectorTileLayer layer, SKPaint basePaint, float tileScale, int zoom, in TileView view)
+    {
+        using SKPaint track = basePaint.Clone();
+        track.Color = TrackColor;
+        track.StrokeWidth = 1.6f * Math.Max(1f, ZoomScale(zoom) * 0.45f) / tileScale;
+        float dashOn = TrackDashOn / tileScale;
+        float dashOff = TrackDashOff / tileScale;
+        using SKPathEffect dash = SKPathEffect.CreateDash([dashOn, dashOff], 0);
+        track.PathEffect = dash;
+        RenderDashedPaths(canvas, layer, track, dashOn, dashOff, view, IsTrack);
     }
 
     private static void DrawClippedDashedLines(SKCanvas canvas, VectorTileFeature feature, SKPaint paint, float dashOn, float dashOff, SKRect area)

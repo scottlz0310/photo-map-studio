@@ -246,6 +246,48 @@ public sealed class OpenMapTilesRoadSymbolsTests
         Assert.Equal(CountDark(roadOnly), CountDark(both));
     }
 
+    [Theory]
+    [InlineData("track", 14)]
+    [InlineData("path", 17)]
+    public void 林道や小道の名前は隣のタイルの上位の道路名を押しのけない(string minorClass, int zoom)
+    {
+        // 左のタイルの林道名と、右のタイルの主要道路名が、タイルの境界付近（画面 x=256）で重なる。
+        // タイルごとに全ての名前を置くと、先に走査した左のタイルの林道名が、右のタイルの主要道路名を消す
+        VectorTile left = new() { Layers = [Layer(Line(minorClass, reference: null, name: "フラヌイ林道", y: 2048, x0: 3840, x1: 5280))] };
+        VectorTile right = new() { Layers = [Layer(Line("primary", reference: null, name: "桜田通り", y: 2048, x0: 0, x1: 1300))] };
+        SKMatrix leftMatrix = SKMatrix.CreateScale(256f / 4096f, 256f / 4096f);
+        SKMatrix rightMatrix = SKMatrix.CreateScaleTranslation(256f / 4096f, 256f / 4096f, 256f, 0f);
+
+        using SKBitmap rightOnly = RenderTiles(zoom, (right, rightMatrix));
+        using SKBitmap both = RenderTiles(zoom, (left, leftMatrix), (right, rightMatrix));
+
+        Assert.True(CountDark(rightOnly) >= 8, "主要道路名が単独で描かれる必要があります。");
+        Assert.Equal(CountDark(rightOnly), CountDark(both));
+    }
+
+    /// <summary>複数のタイルを VectorMapRenderer と同じ順（全タイルの道路名、続けて全タイルの低い優先度の注記）で置く。</summary>
+    private static SKBitmap RenderTiles(int zoom, params (VectorTile Tile, SKMatrix Matrix)[] tiles)
+    {
+        using var style = new OpenMapTilesStyle();
+        var bitmap = new SKBitmap(512, 256, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.White);
+        var grid = new LabelCollisionGrid();
+        var viewport = new SKRect(0, 0, 512, 256);
+
+        foreach ((VectorTile tile, SKMatrix matrix) in tiles)
+        {
+            style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
+        }
+
+        foreach ((VectorTile tile, SKMatrix matrix) in tiles)
+        {
+            style.RenderLowPriorityLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
+        }
+
+        return bitmap;
+    }
+
     // 過拡大（OpenFreeMap は最大ズーム 14 のタイルを拡大する）では、1 つのタイルが画面より大きくなる。
     // 画面幅 512、倍率 2、平行移動 (-1024, -3970): 道路 (0,2048)→(4096,2048) は画面を横切るが、区間全体の中点は画面外。
     private static readonly SKMatrix OverzoomMatrix = SKMatrix.CreateScaleTranslation(2f, 2f, -1024f, -3970f);
@@ -343,7 +385,9 @@ public sealed class OpenMapTilesRoadSymbolsTests
         }
         else
         {
+            // VectorMapRenderer と同じ順（道路名の後に、優先度の最も低い注記）
             style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
+            style.RenderLowPriorityLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
         }
 
         return bitmap;

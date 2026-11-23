@@ -102,4 +102,28 @@ public interface IVectorMapStyle
         LabelCollisionGrid collisionGrid,
         SKRect viewport,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 優先度の最も低い注記（番地など）を描画する。全タイルの <see cref="RenderLabels"/> の後に、全タイルへ順に呼ばれる。
+    /// タイルごとに <see cref="RenderLabels"/> の中で置くと、先に走査したタイルの低い優先度の注記が、隣のタイルの
+    /// 地名・施設名を境界付近で押しのけるため、別の段階にしている。
+    /// </summary>
+    /// <remarks>低い優先度の注記を持たないスタイルは、既定の実装（何も描画しない）のままでよい。</remarks>
+    /// <param name="canvas">描画先 SkiaSharp キャンバス（画面座標系）。</param>
+    /// <param name="tile">対象ベクタータイルデータ。</param>
+    /// <param name="tileToCanvasMatrix">タイルローカル座標から画面ピクセル座標への変換行列。</param>
+    /// <param name="zoom">現在の表示ズームレベル。</param>
+    /// <param name="collisionGrid">ラベル衝突判定グリッド（通常の注記と共有する）。</param>
+    /// <param name="viewport">描画画面全体の矩形。</param>
+    /// <param name="cancellationToken">キャンセルトークン。</param>
+    void RenderLowPriorityLabels(
+        SKCanvas canvas,
+        VectorTile tile,
+        SKMatrix tileToCanvasMatrix,
+        int zoom,
+        LabelCollisionGrid collisionGrid,
+        SKRect viewport,
+        CancellationToken cancellationToken)
+    {
+    }
 }

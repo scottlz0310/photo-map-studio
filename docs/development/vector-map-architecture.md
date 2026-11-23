@@ -115,7 +115,7 @@ flowchart TD
   - 森の樹木の模様: ズーム 14 以上で、植生の森（`landcover` の `wood`）を面でクリップし、格子上の樹冠と幹を 1 回の `DrawPoints` で描きます（`OpenMapTilesTreeTexture`）。繰り返しパターンのシェーダーで面全体を塗る方式は、面の全画素を塗り直すため、森が画面の大半を占める表示で描画時間が数倍になるので採りません（実測は [CHANGELOG](../../CHANGELOG.md) を参照）。
   - バス停・鉄道駅は、円とは違う四角の記号で描きます。バス停はズーム 16 以上、駅はズーム 15 以上です。
   - ロープウェイ（`transportation` の `class=aerialway`）は灰色の線と点、小道は種類（`subclass`）で色を分けます（自転車道は青、歩道・階段などは赤みのある茶色、それ以外は茶色）。
-  - 番地（`housenumber`）は、ズーム 17 以上で、8 文字以下で空白を含まない値だけを、最も低い優先度で描きます（`OpenMapTilesHouseNumbers`）。
+  - 番地（`housenumber`）は、ズーム 17 以上で、8 文字以下で空白を含まない値だけを、最も低い優先度で描きます（`OpenMapTilesHouseNumbers`）。全タイルの通常の注記を置いた後に置くため、`IVectorMapStyle.RenderLowPriorityLabels`（既定の実装は何も描かない）で描き、`RenderLabels` の中では描きません（タイルごとに置くと、先に走査したタイルの番地が隣のタイルの駅・施設名を押しのけるため）。
   - 記号・注記の寸法は論理ピクセルで、`PixelRatio` で拡大されます。物理ピクセルの固定値は持ちません。
 - **`GsiVectorStyle` (国土地理院系)**:
   - レイヤー: `RdEdg`（道路縁）, `RdCL`（道路中心線）, `BldA`（建物）, `WA`（水域）, `Anno`（注記・地名）, 等高線。

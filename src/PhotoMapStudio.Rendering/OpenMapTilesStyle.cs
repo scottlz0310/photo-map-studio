@@ -317,8 +317,17 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
                 this.RenderPointLabel(canvas, feature, tileToCanvasMatrix, font, collisionGrid, viewport, zoom, poi: true);
             }
         }
+    }
 
-        // 番地は最も優先度が低く、先に置かれた注記と重ならない所だけに描く
+    /// <inheritdoc />
+    public void RenderLowPriorityLabels(SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
+        LabelCollisionGrid collisionGrid, SKRect viewport, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(tile);
+        ArgumentNullException.ThrowIfNull(collisionGrid);
+
+        // 番地は最も優先度が低く、全タイルの通常の注記を置いた後に、重ならない所だけに描く
         OpenMapTilesHouseNumbers.Render(canvas, tile, tileToCanvasMatrix, zoom, collisionGrid, viewport, this.placeTypeface, cancellationToken);
     }
 

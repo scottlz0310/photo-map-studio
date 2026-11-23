@@ -246,7 +246,7 @@ public sealed class OpenMapTilesTreesAndTransitTests
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
 
-        style.RenderLabels(canvas, Tile("housenumber", Point(100, 100, new() { ["housenumber"] = "12" })), SKMatrix.Identity, zoom, new LabelCollisionGrid(), Viewport, CancellationToken.None);
+        style.RenderLowPriorityLabels(canvas, Tile("housenumber", Point(100, 100, new() { ["housenumber"] = "12" })), SKMatrix.Identity, zoom, new LabelCollisionGrid(), Viewport, CancellationToken.None);
 
         Assert.Equal(drawn, CountOpaque(bitmap, 90, 88, 112, 104) > 0);
     }
@@ -261,7 +261,7 @@ public sealed class OpenMapTilesTreesAndTransitTests
         var grid = new LabelCollisionGrid();
         Assert.True(grid.TryPlace(new SKRect(80, 80, 120, 120), Viewport));
 
-        style.RenderLabels(canvas, Tile("housenumber", Point(100, 100, new() { ["housenumber"] = "12" })), SKMatrix.Identity, 17, grid, Viewport, CancellationToken.None);
+        style.RenderLowPriorityLabels(canvas, Tile("housenumber", Point(100, 100, new() { ["housenumber"] = "12" })), SKMatrix.Identity, 17, grid, Viewport, CancellationToken.None);
 
         Assert.Equal(0, CountOpaque(bitmap, 0, 0, Size, Size));
     }
@@ -274,7 +274,7 @@ public sealed class OpenMapTilesTreesAndTransitTests
         using var canvas = new SKCanvas(longText);
         canvas.Clear(SKColors.Transparent);
 
-        style.RenderLabels(canvas, Tile("housenumber", Point(100, 100, new() { ["housenumber"] = "5 ○○タワー1F" })), SKMatrix.Identity, 18, new LabelCollisionGrid(), Viewport, CancellationToken.None);
+        style.RenderLowPriorityLabels(canvas, Tile("housenumber", Point(100, 100, new() { ["housenumber"] = "5 ○○タワー1F" })), SKMatrix.Identity, 18, new LabelCollisionGrid(), Viewport, CancellationToken.None);
 
         Assert.Equal(0, CountOpaque(longText, 0, 0, Size, Size));
     }

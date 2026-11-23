@@ -20,8 +20,15 @@ namespace PhotoMapStudio.Rendering;
 /// <param name="PixelHeight">画像の高さ（物理ピクセル）。</param>
 public sealed record VectorViewRequest(double CenterLatitude, double CenterLongitude, double Zoom, int PixelWidth, int PixelHeight)
 {
+    /// <summary><see cref="PixelRatio"/> に指定できる最小の値（1/16）。</summary>
+    public const double MinPixelRatio = 0.0625;
+
+    /// <summary><see cref="PixelRatio"/> に指定できる最大の値（16。500% DPI でも 5.0）。</summary>
+    public const double MaxPixelRatio = 16.0;
+
     /// <summary>
-    /// 表示の画素密度（物理ピクセル ÷ 論理ピクセル。例: 150% DPI は 1.5）。0 より大きい有限値で、既定は 1.0。
+    /// 表示の画素密度（物理ピクセル ÷ 論理ピクセル。例: 150% DPI は 1.5）。
+    /// <see cref="MinPixelRatio"/> 以上 <see cref="MaxPixelRatio"/> 以下で、既定は 1.0（範囲の外は <see cref="ArgumentOutOfRangeException"/>）。
     /// <see cref="Zoom"/> と画像の寸法は、これまでどおり物理ピクセルで指定する。
     /// </summary>
     /// <remarks>
@@ -30,7 +37,7 @@ public sealed record VectorViewRequest(double CenterLatitude, double CenterLongi
     /// キャンバスをこの倍率に拡大して描く（MapLibre の pixelRatio と同じ考え方）。このため、これらの大きさは論理ピクセルでは
     /// 画素密度によらず一定で、物理ピクセルでは <see cref="PixelRatio"/> 倍になる。地理的な位置・縮尺は変わらず、
     /// 画像の鮮明さは物理ピクセルのまま保たれる。<see cref="PixelRatio"/> が 1.0 のときは、指定しない場合と画素単位で同じ画像になる。
-    /// 取得するタイルのズームは、これまでどおり <see cref="Zoom"/>（物理ピクセルのズーム）から決める。
+    /// 取得するタイルのズームと範囲は、これまでどおり <see cref="Zoom"/>・画像寸法（物理ピクセル）から決める（取得するタイルの集合は <see cref="PixelRatio"/> に依らない）。
     /// </remarks>
     public double PixelRatio { get; init; } = 1.0;
 

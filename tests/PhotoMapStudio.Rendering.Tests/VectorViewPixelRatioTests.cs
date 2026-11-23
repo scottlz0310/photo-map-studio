@@ -167,11 +167,64 @@ public class VectorViewPixelRatioTests
     }
 
     [Theory]
+    [InlineData(1.25)]
+    [InlineData(1.5)]
+    [InlineData(1.75)]
+    [InlineData(2.0)]
+    [InlineData(3.0)]
+    public async Task 取得するタイルの集合は同じ物理範囲なら画素密度に依らない(double ratio)
+    {
+        // タイルの境界ちょうどの表示範囲（緯度 0・経度 0、ズーム 18、512×128）。範囲を論理ピクセルへ換算してから求めると、
+        // 浮動小数点の誤差（131071 → 131070.99999999999）で、画面外のタイルを余分に取得して、取得の失敗で描画全体が失敗し得た
+        HashSet<(int X, int Y)> baseline = await FetchedTilesAsync(1.0);
+        HashSet<(int X, int Y)> scaled = await FetchedTilesAsync(ratio);
+
+        Assert.NotEmpty(baseline);
+        Assert.Equal(baseline.OrderBy(static t => t).ToArray(), scaled.OrderBy(static t => t).ToArray());
+
+        async Task<HashSet<(int X, int Y)>> FetchedTilesAsync(double pixelRatio)
+        {
+            var fetched = new System.Collections.Concurrent.ConcurrentBag<(int X, int Y)>();
+            byte[] water = MvtTestTile.CreateWater();
+            var renderer = new VectorMapRenderer(new MockVectorTileSource(18, (_, x, y) => { fetched.Add((x, y)); return water; }), new RecordingStyle());
+
+            using VectorViewResult result = await renderer.RenderViewAsync(new VectorViewRequest(0, 0, 18, 512, 128) { PixelRatio = pixelRatio }).ConfigureAwait(false);
+            return [.. fetched];
+        }
+    }
+
+    [Theory]
+    [InlineData(VectorViewRequest.MinPixelRatio)]
+    [InlineData(VectorViewRequest.MaxPixelRatio)]
+    public async Task 画素密度の有効範囲の端でも背景だけでなく地図を描く(double ratio)
+    {
+        // どのタイルにも水域を返す取得元で、範囲の端（極端な倍率）でも、中心が背景色でなく水域の色になること
+        using var style = new OpenMapTilesStyle();
+        byte[] water = MvtTestTile.CreateWater();
+        var renderer = new VectorMapRenderer(new MockVectorTileSource(BaseZoom, (_, _, _) => water), style);
+        (double latitude, double longitude) = TileToLatLon(TileX + 0.5, TileY + 0.5, BaseZoom);
+        int width = Math.Max(1, (int)Math.Round(40 * ratio));
+        int height = Math.Max(1, (int)Math.Round(20 * ratio));
+
+        using VectorViewResult result = await renderer.RenderViewAsync(
+            new VectorViewRequest(latitude, longitude, 15.0 + Math.Log2(ratio), width, height) { PixelRatio = ratio });
+        using SKBitmap bitmap = SKBitmap.FromImage(result.Image);
+
+        Assert.Equal(width, bitmap.Width);
+        Assert.NotEqual(style.BackgroundColor, bitmap.GetPixel(width / 2, height / 2));
+    }
+
+    [Theory]
     [InlineData(0.0)]
     [InlineData(-1.0)]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
-    public async Task 不正な画素密度は引数の例外にする(double ratio)
+    [InlineData(double.NegativeInfinity)]
+    [InlineData(double.Epsilon)]
+    [InlineData(double.MaxValue)]
+    [InlineData(0.0624)]
+    [InlineData(16.01)]
+    public async Task 有効範囲の外の画素密度は引数の例外にする(double ratio)
     {
         var renderer = new VectorMapRenderer(SingleTileSource(MvtTestTile.CreateWater()), new RecordingStyle());
         (double latitude, double longitude) = TileToLatLon(TileX + 0.5, TileY + 0.5, BaseZoom);

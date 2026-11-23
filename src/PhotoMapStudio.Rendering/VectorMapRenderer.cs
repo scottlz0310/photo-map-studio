@@ -72,9 +72,15 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             throw new ArgumentOutOfRangeException(nameof(request), request.Zoom, "ズームは 0 以上の有限値で指定してください。");
         }
         ArgumentOutOfRangeException.ThrowIfLessThan(request.BandCount, 1, nameof(request));
-        if (!double.IsFinite(request.PixelRatio) || request.PixelRatio <= 0)
+
+        // 範囲の外（極端に小さい・大きい値）では、論理寸法・座標が非有限になったり、Skia へ渡す float の倍率が 0 や無限大になったりして、
+        // 背景だけの画像が成功として返る。描画の前に、有効な範囲として検証する（NaN も範囲外になる）
+        if (!(request.PixelRatio >= VectorViewRequest.MinPixelRatio && request.PixelRatio <= VectorViewRequest.MaxPixelRatio))
         {
-            throw new ArgumentOutOfRangeException(nameof(request), request.PixelRatio, "PixelRatio は 0 より大きい有限値で指定してください。");
+            throw new ArgumentOutOfRangeException(
+                nameof(request),
+                request.PixelRatio,
+                string.Create(CultureInfo.InvariantCulture, $"PixelRatio は {VectorViewRequest.MinPixelRatio} 以上 {VectorViewRequest.MaxPixelRatio} 以下で指定してください。"));
         }
 
         var context = new VectorMapRenderContext(request.AllowIncompleteMaps);
@@ -148,24 +154,25 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
 
         // 1. タイル取得用ズームとスケール比の決定（過拡大対応）。最大ズームを確定してから求める。
         // 取得ズームは整数、表示倍率は連続値。スタイルの判定には、画素密度を除いた論理ズームを切り捨てた整数を使う。
-        // 位置・拡大率・衝突判定の範囲は論理ピクセルで求め、キャンバスを画素密度倍に拡大して描く（スタイルの大きさが論理ピクセルで一定になる）。
-        // 取得ズームは、物理ピクセルのズームから決める（画素密度が 1.0 のときの取得と同じ）
+        // 取得するタイルの範囲は、物理ピクセルで求める（画素密度に依らず、従来と同じ計算。論理ピクセルへ変換してから求めると、
+        // タイルの境界ちょうどの範囲で浮動小数点の誤差が出て、画面外のタイルを余分に取得し得る）。
+        // 描くときの位置・拡大率・衝突判定の範囲だけを論理ピクセルへ換算し、キャンバスを画素密度倍に拡大して描く
+        // （スタイルの大きさが論理ピクセルで一定になる）
         cancellationToken.ThrowIfCancellationRequested();
         await activeSource.PrepareAsync(session, cancellationToken).ConfigureAwait(false);
-        double logicalZoom = zoom - Math.Log2(pixelRatio);
-        int styleZoom = Math.Max(0, (int)Math.Floor(logicalZoom));
+        int styleZoom = Math.Max(0, (int)Math.Floor(zoom - Math.Log2(pixelRatio)));
         int tileZoom = Math.Min((int)Math.Floor(zoom), activeSource.MaxZoom);
-        double scaleRatio = Math.Pow(2.0, logicalZoom - tileZoom);
+        double scaleRatio = Math.Pow(2.0, zoom - tileZoom);
         int maxTiles = 1 << tileZoom;
         double logicalWidth = width / pixelRatio;
         double logicalHeight = height / pixelRatio;
 
-        // 2. 世界ピクセル座標系（論理ピクセル）での表示範囲計算
-        (double centerWorldX, double centerWorldY) = MercatorProjection.ToWorldPixel(latitude, longitude, logicalZoom);
-        double left = centerWorldX - (logicalWidth / 2.0);
-        double top = centerWorldY - (logicalHeight / 2.0);
-        double right = left + logicalWidth;
-        double bottom = top + logicalHeight;
+        // 2. 世界ピクセル座標系（物理ピクセル）での表示範囲計算
+        (double centerWorldX, double centerWorldY) = MercatorProjection.ToWorldPixel(latitude, longitude, zoom);
+        double left = centerWorldX - (width / 2.0);
+        double top = centerWorldY - (height / 2.0);
+        double right = left + width;
+        double bottom = top + height;
 
         // 3. 必要なタイルの座標範囲計算
         double tileLeft = left / scaleRatio;
@@ -181,13 +188,13 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
         // 4. タイルの非同期取得とデコード
         var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)>();
 
-        // タイルを、表示範囲の画素へ置く拡大率と位置を決める
+        // タイルを、表示範囲の画素へ置く拡大率と位置を決める。物理ピクセルの値を画素密度で割り、論理ピクセル（キャンバスの拡大の前の座標）にする
         (int Tx, int Ty, VectorTile Tile, float Scale, float Dx, float Dy) Place(VectorTile placed, int tx, int ty)
         {
             uint extent = placed.Layers.Count > 0 ? placed.Layers[0].Extent : 4096;
-            float scale = (float)((MercatorProjection.TileSize * scaleRatio) / extent);
-            float dx = (float)((tx * MercatorProjection.TileSize * scaleRatio) - left);
-            float dy = (float)((ty * MercatorProjection.TileSize * scaleRatio) - top);
+            float scale = (float)((MercatorProjection.TileSize * scaleRatio) / extent / pixelRatio);
+            float dx = (float)(((tx * MercatorProjection.TileSize * scaleRatio) - left) / pixelRatio);
+            float dy = (float)(((ty * MercatorProjection.TileSize * scaleRatio) - top) / pixelRatio);
             return (tx, ty, placed, scale, dx, dy);
         }
 

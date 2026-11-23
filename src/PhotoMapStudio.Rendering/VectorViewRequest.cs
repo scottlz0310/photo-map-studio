@@ -9,8 +9,9 @@ namespace PhotoMapStudio.Rendering;
 /// </summary>
 /// <remarks>
 /// <see cref="Zoom"/> は 256px タイルを物理ピクセルで数えた連続ズーム、画像の寸法は物理ピクセルで指定する。
-/// 画素密度の高い表示（例: 200% DPI）では、呼び出し側が表示の物理ピクセルに合わせた寸法とズームを渡す
-/// （ウィンドウの DPI との丸めの差を避けるため、描画側は密度を持たない）。
+/// 画素密度の高い表示（例: 200% DPI）では、呼び出し側が表示の物理ピクセルに合わせた寸法とズームを渡し、
+/// 密度を <see cref="PixelRatio"/> で伝える。伝えないと、文字・線幅など物理ピクセルで決まるスタイルの大きさが、
+/// 画素密度が高いほど、画面上（論理ピクセル）では小さくなる。
 /// </remarks>
 /// <param name="CenterLatitude">画像の中心の緯度（北緯が正）。</param>
 /// <param name="CenterLongitude">画像の中心の経度（東経が正）。</param>
@@ -19,6 +20,27 @@ namespace PhotoMapStudio.Rendering;
 /// <param name="PixelHeight">画像の高さ（物理ピクセル）。</param>
 public sealed record VectorViewRequest(double CenterLatitude, double CenterLongitude, double Zoom, int PixelWidth, int PixelHeight)
 {
+    /// <summary><see cref="PixelRatio"/> に指定できる最小の値（1/16）。</summary>
+    public const double MinPixelRatio = 0.0625;
+
+    /// <summary><see cref="PixelRatio"/> に指定できる最大の値（16。500% DPI でも 5.0）。</summary>
+    public const double MaxPixelRatio = 16.0;
+
+    /// <summary>
+    /// 表示の画素密度（物理ピクセル ÷ 論理ピクセル。例: 150% DPI は 1.5）。
+    /// <see cref="MinPixelRatio"/> 以上 <see cref="MaxPixelRatio"/> 以下で、既定は 1.0（範囲の外は <see cref="ArgumentOutOfRangeException"/>）。
+    /// <see cref="Zoom"/> と画像の寸法は、これまでどおり物理ピクセルで指定する。
+    /// </summary>
+    /// <remarks>
+    /// 文字・縁取り・記号・線幅などスタイルの大きさと、スタイルが判定に使うズームを、論理ピクセル
+    /// （<see cref="Zoom"/> から log2(<see cref="PixelRatio"/>) を引いた論理ズーム、画像寸法を <see cref="PixelRatio"/> で割った論理寸法）で扱い、
+    /// キャンバスをこの倍率に拡大して描く（MapLibre の pixelRatio と同じ考え方）。このため、これらの大きさは論理ピクセルでは
+    /// 画素密度によらず一定で、物理ピクセルでは <see cref="PixelRatio"/> 倍になる。地理的な位置・縮尺は変わらず、
+    /// 画像の鮮明さは物理ピクセルのまま保たれる。<see cref="PixelRatio"/> が 1.0 のときは、指定しない場合と画素単位で同じ画像になる。
+    /// 取得するタイルのズームと範囲は、これまでどおり <see cref="Zoom"/>・画像寸法（物理ピクセル）から決める（取得するタイルの集合は <see cref="PixelRatio"/> に依らない）。
+    /// </remarks>
+    public double PixelRatio { get; init; } = 1.0;
+
     /// <summary>描画対象のタイル配信元。リゾルバーを持つレンダラーが、配信元に応じて取得元とスタイルを選ぶ。</summary>
     public TileSource? TileSource { get; init; }
 

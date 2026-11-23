@@ -11,7 +11,7 @@
 
 - **表示範囲全体を 1 枚の画像として描く**（256px のタイルに分割しないので、注記がタイルの境界で切れません）
 - **連続ズーム**: `Zoom` は `double`。取得するタイルのズームは整数、表示倍率は連続値です
-- **物理ピクセルの画像寸法**: 画素密度（DPI）は呼び出し側が決めます
+- **物理ピクセルの画像寸法と画素密度**: 画像の寸法とズームは物理ピクセルで指定し、表示の画素密度（DPI）は `PixelRatio` で伝えます。文字・線幅などが、画素密度によらず画面上（論理ピクセル）で同じ大きさになります
 - **キャンセル**: 取得と描画の途中（スタイルの中を含む）で確認し、キャンセルされたら `OperationCanceledException` で終わります（画像を返しません）
 - **欠落タイルの判別**: オフライン・配信範囲外のタイルを、結果の集計（`UnavailableTileCount`・`AbsentTileCount`・`IsComplete`）で判別できます。失敗を黙って隠しません
 - **画像の所有権**: 描画のたびに新しい画像を返します。`VectorViewResult` が所有し、`TakeImage()` で引き取れます
@@ -45,6 +45,7 @@ var request = new VectorViewRequest(CenterLatitude: 35.681, CenterLongitude: 139
     AllowIncompleteMaps = true,   // 一時的な通信失敗のタイルを欠落として許し、結果で判別する
     BandCount = Math.Clamp(Environment.ProcessorCount, 1, 8),
     ParallelLabels = true,
+    PixelRatio = 1.0,             // 表示の画素密度（150% DPI なら 1.5）。Zoom と寸法は物理ピクセルのまま渡す
 };
 
 using VectorViewResult result = await renderer.RenderViewAsync(request, CancellationToken.None);
@@ -56,7 +57,7 @@ if (!result.IsComplete)
 SKImage image = result.Image;           // この結果が所有する。引き取るときは result.TakeImage()
 ```
 
-- ズームは、256px のタイルを物理ピクセルで数えた連続値です。画素密度の高い表示（例: 200% DPI）では、表示の物理ピクセルに合わせた寸法とズームを渡してください
+- ズームは、256px のタイルを物理ピクセルで数えた連続値です。画素密度の高い表示（例: 200% DPI）では、表示の物理ピクセルに合わせた寸法とズームを渡し、画素密度を `PixelRatio`（200% なら 2.0）で伝えてください。伝えないと、文字・線幅などが物理ピクセルで固定のため、画素密度が高いほど画面上では小さくなります。`PixelRatio` は 1.0 が既定で、そのときの出力は従来と同じです。指定できるのは `VectorViewRequest.MinPixelRatio`（1/16）以上 `MaxPixelRatio`（16）以下で、範囲外は `ArgumentOutOfRangeException` になります
 - `BandCount` の最良値はコア数に近く、コア数より多いと遅くなり得ます。並列にすると、線や注記の縁の半透明画素が、並列にしない場合と最大 20 程度（/255）ずれ得ます（見た目は同じ）
 - 描画の途中でキャンセルされたとき、画像は返りません。`OperationCanceledException` になります
 

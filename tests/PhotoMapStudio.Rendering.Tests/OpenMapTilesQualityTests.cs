@@ -43,10 +43,16 @@ public sealed class OpenMapTilesQualityTests
     }
 
     [Theory]
-    [InlineData("landcover", "wood", "#c8dfb8")]
-    [InlineData("landcover", "grass", "#d8e8c8")]
+    [InlineData("landcover", "wood", "#b5d6a2")]
+    [InlineData("landcover", "grass", "#d3e8c0")]
+    [InlineData("landcover", "farmland", "#ecefcf")]
+    [InlineData("landcover", "rock", "#dcd2c6")]
     [InlineData("landuse", "school", "#ebe3cf")]
+    [InlineData("landuse", "kindergarten", "#ebe3cf")]
     [InlineData("landuse", "residential", "#e6e1d8")]
+    [InlineData("landuse", "retail", "#f3ddd2")]
+    [InlineData("landuse", "commercial", "#efdcd9")]
+    [InlineData("landuse", "pitch", "#bfe4cf")]
     public void 土地利用を単一色にせず種類別に塗る(string layer, string kind, string color)
     {
         using var style = new OpenMapTilesStyle();

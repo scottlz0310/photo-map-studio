@@ -202,6 +202,9 @@ public sealed class OpenMapTilesRoadSymbolsTests
     [InlineData("tertiary", 13)]
     [InlineData("minor", 14)]
     [InlineData("path", 16)]
+    [InlineData("footway", 16)]
+    [InlineData("track", 13)]
+    [InlineData("track", 12)]
     public void 道路名はズームと道路種別に応じて表示を絞る(string roadClass, int zoom)
     {
         using SKBitmap bitmap = RenderLabels(zoom, Line(roadClass, reference: null, name: "桜田通り", y: 2048));
@@ -215,6 +218,9 @@ public sealed class OpenMapTilesRoadSymbolsTests
     [InlineData("unclassified", 15)]
     [InlineData("service", 15)]
     [InlineData("path", 17)]
+    [InlineData("track", 14)]
+    [InlineData("track", 15)]
+    [InlineData("track", 16)]
     [InlineData("track", 17)]
     [InlineData("pedestrian", 17)]
     [InlineData("living_street", 17)]
@@ -222,6 +228,64 @@ public sealed class OpenMapTilesRoadSymbolsTests
     {
         using SKBitmap bitmap = RenderLabels(zoom, Line(roadClass, reference: null, name: "北２丁目通り", y: 2048));
         Assert.True(CountDark(bitmap) >= 8);
+    }
+
+    [Theory]
+    [InlineData("tertiary", 14)]
+    [InlineData("minor", 15)]
+    public void 林道の名前は同じ位置の道路名より後に置き重なる所には描かない(string roadClass, int zoom)
+    {
+        // 林道を先に並べても、道路名が先に置かれ、林道の名前は重なって描かれない（道路名だけのときと同じ画像になる）
+        VectorTileFeature road = Line(roadClass, reference: null, name: "桜田通り", y: 2048);
+        VectorTileFeature track = Line("track", reference: null, name: "フラヌイ林道", y: 2048);
+
+        using SKBitmap roadOnly = RenderLabels(zoom, road);
+        using SKBitmap both = RenderLabels(zoom, track, road);
+
+        Assert.True(CountDark(roadOnly) >= 8);
+        Assert.Equal(CountDark(roadOnly), CountDark(both));
+    }
+
+    [Theory]
+    [InlineData("track", 14)]
+    [InlineData("path", 17)]
+    public void 林道や小道の名前は隣のタイルの上位の道路名を押しのけない(string minorClass, int zoom)
+    {
+        // 左のタイルの林道名と、右のタイルの主要道路名が、タイルの境界付近（画面 x=256）で重なる。
+        // タイルごとに全ての名前を置くと、先に走査した左のタイルの林道名が、右のタイルの主要道路名を消す
+        VectorTile left = new() { Layers = [Layer(Line(minorClass, reference: null, name: "フラヌイ林道", y: 2048, x0: 3840, x1: 5280))] };
+        VectorTile right = new() { Layers = [Layer(Line("primary", reference: null, name: "桜田通り", y: 2048, x0: 0, x1: 1300))] };
+        SKMatrix leftMatrix = SKMatrix.CreateScale(256f / 4096f, 256f / 4096f);
+        SKMatrix rightMatrix = SKMatrix.CreateScaleTranslation(256f / 4096f, 256f / 4096f, 256f, 0f);
+
+        using SKBitmap rightOnly = RenderTiles(zoom, (right, rightMatrix));
+        using SKBitmap both = RenderTiles(zoom, (left, leftMatrix), (right, rightMatrix));
+
+        Assert.True(CountDark(rightOnly) >= 8, "主要道路名が単独で描かれる必要があります。");
+        Assert.Equal(CountDark(rightOnly), CountDark(both));
+    }
+
+    /// <summary>複数のタイルを VectorMapRenderer と同じ順（全タイルの道路名、続けて全タイルの低い優先度の注記）で置く。</summary>
+    private static SKBitmap RenderTiles(int zoom, params (VectorTile Tile, SKMatrix Matrix)[] tiles)
+    {
+        using var style = new OpenMapTilesStyle();
+        var bitmap = new SKBitmap(512, 256, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.White);
+        var grid = new LabelCollisionGrid();
+        var viewport = new SKRect(0, 0, 512, 256);
+
+        foreach ((VectorTile tile, SKMatrix matrix) in tiles)
+        {
+            style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
+        }
+
+        foreach ((VectorTile tile, SKMatrix matrix) in tiles)
+        {
+            style.RenderLowPriorityLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
+        }
+
+        return bitmap;
     }
 
     // 過拡大（OpenFreeMap は最大ズーム 14 のタイルを拡大する）では、1 つのタイルが画面より大きくなる。
@@ -321,7 +385,9 @@ public sealed class OpenMapTilesRoadSymbolsTests
         }
         else
         {
+            // VectorMapRenderer と同じ順（道路名の後に、優先度の最も低い注記）
             style.RenderLineLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
+            style.RenderLowPriorityLabels(canvas, tile, matrix, zoom, grid, viewport, CancellationToken.None);
         }
 
         return bitmap;

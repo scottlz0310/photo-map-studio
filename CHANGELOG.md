@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-24
+
 ### Added
 
 - `OpenMapTilesStyle` に、森の樹木の模様・バス停と駅の記号・ロープウェイの線・小道の色分け・番地を追加した（#147。#146 に続く、OSM ラスタとのにぎやかさの差を埋める第 2 弾）。
@@ -149,5 +151,6 @@
 - 下位フォルダの再帰探索、各写真フォルダ基準の相対出力、出力名の先頭・末尾文字の設定と永続化（[#34](https://github.com/scottlz0310/photo-map-studio/issues/34)）
 - 写真一覧の段階読み込み、列挙・GPS確認・一括生成の進捗、経過時間、処理結果とタイル取得／キャッシュ件数、キャンセル後の候補保持
 
-[Unreleased]: https://github.com/scottlz0310/photo-map-studio/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/scottlz0310/photo-map-studio/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/scottlz0310/photo-map-studio/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/scottlz0310/photo-map-studio/compare/v0.3.2...v0.3.3

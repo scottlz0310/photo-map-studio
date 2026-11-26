@@ -255,6 +255,98 @@ public sealed class GsiVectorStyleTests
         Assert.Equal(255, roadPixel.Alpha);
     }
 
+    [Theory]
+    [InlineData("国道", 45L, "市区町村道等", 43L, 230, 81, 0)]
+    [InlineData("都道府県道", 44L, "市区町村道等", 43L, 245, 127, 23)]
+    [InlineData("高速自動車国道等", 46L, "国道", 45L, 76, 175, 80)]
+    [InlineData("国道", null, "市区町村道等", null, 230, 81, 0)]
+    [InlineData("都道府県道", null, "市区町村道等", null, 245, 127, 23)]
+    [InlineData("高速自動車国道等", null, "国道", null, 76, 175, 80)]
+    public void 同じ階層の交差部は描画順が上の道路の塗りが地物の順によらず途切れない(
+        string upperCategory,
+        long? upperDrawOrder,
+        string lowerCategory,
+        long? lowerDrawOrder,
+        byte expectedR,
+        byte expectedG,
+        byte expectedB)
+    {
+        // 上になる道路を先に並べ、地物の順に描くと下の道路に上書きされる配置にする
+        using SKBitmap bitmap = RenderRoadCrossing(
+            Road(Horizontal, upperCategory, level: 0, upperDrawOrder),
+            Road(Vertical, lowerCategory, level: 0, lowerDrawOrder));
+
+        Assert.Equal(new SKColor(expectedR, expectedG, expectedB), bitmap.GetPixel(128, 128));
+    }
+
+    [Fact]
+    public void 上の階層の道路は下の階層の道路をcasingごと覆う()
+    {
+        using SKBitmap bitmap = RenderRoadCrossing(
+            Road(Vertical, "市区町村道等", level: 1, drawOrder: 53),
+            Road(Horizontal, "国道", level: 0, drawOrder: 45));
+
+        // 交差部の中央は上の道路の塗り、その左右の縁は上の道路の casing
+        Assert.Equal(SKColors.White, bitmap.GetPixel(128, 128));
+        Assert.Equal(new SKColor(0xB0, 0xB0, 0xB0), bitmap.GetPixel(116, 128));
+    }
+
+    [Fact]
+    public void 交差部で区切られた道路の継ぎ目から下の道路が透けない()
+    {
+        // 上の道路は、画素の中心にある交差点で 2 つの地物に分かれる（実データは交差点ごとに分かれる）
+        using SKBitmap bitmap = RenderRoadCrossing(
+            Road([new(0, 2056), new(2056, 2056)], "国道", level: 0, drawOrder: 45),
+            Road([new(2056, 2056), new(4096, 2056)], "国道", level: 0, drawOrder: 45),
+            Road(Vertical, "市区町村道等", level: 0, drawOrder: 43));
+
+        Assert.Equal(new SKColor(0xE6, 0x51, 0x00), bitmap.GetPixel(128, 128));
+    }
+
+    private static readonly VectorPoint[] Horizontal = [new(0, 2056), new(4096, 2056)];
+
+    private static readonly VectorPoint[] Vertical = [new(2056, 0), new(2056, 4096)];
+
+    private static VectorTileFeature Road(VectorPoint[] line, string category, long level, long? drawOrder)
+    {
+        var properties = new Dictionary<string, object>
+        {
+            ["vt_rdctg"] = category,
+            ["vt_rnkwidth"] = "19.5m以上",
+            ["vt_lvorder"] = level,
+        };
+        if (drawOrder is not null)
+        {
+            properties["vt_drworder"] = drawOrder.Value;
+        }
+
+        return new VectorTileFeature
+        {
+            GeometryType = VectorGeometryType.LineString,
+            GeometryParts = [[.. line]],
+            Properties = properties,
+        };
+    }
+
+    private static SKBitmap RenderRoadCrossing(params VectorTileFeature[] roads)
+    {
+        using var style = new GsiVectorStyle();
+        var bitmap = new SKBitmap(256, 256);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+        var tile = new VectorTile
+        {
+            Layers = [new VectorTileLayer { Name = "RdCL", Extent = 4096, Features = [.. roads] }],
+        };
+
+        const float tileScale = 256f / 4096f;
+        canvas.Scale(tileScale, tileScale);
+
+        // 線幅を 4 倍にして、casing の縁を画素の中心で判定できるようにする
+        style.RenderLines(canvas, tile, tileScale / 4f, 14, CancellationToken.None);
+        return bitmap;
+    }
+
     [Fact]
     public void Annoレイヤーの実スキーマ注記が描画される()
     {

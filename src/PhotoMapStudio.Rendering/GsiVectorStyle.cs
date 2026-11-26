@@ -297,31 +297,37 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         var strokes = new Dictionary<(GsiRoadKind Kind, float Width, bool Casing), SKPaint>();
         try
         {
-            // 道路は casing (外枠) を先にすべて描き、その上に fill (中塗り) を描く
-            for (int i = 0; i < roadLayer.Features.Count; i++)
+            // 地物はタイル内で描画順に並んでいないため、地理院の公式スタイル（std.json）と同じ vt_drworder の順に並べる。
+            // 属性が無い場合は道路種別の順にする（GsiRoadKind は上位ほど値が小さいので降順）
+            var levels = roadLayer.Features
+                .Where(feature => feature.GeometryType == VectorGeometryType.LineString)
+                .Select(feature => (
+                    Feature: feature,
+                    Category: GetRoadCategory(feature),
+                    Level: feature.GetInt64("vt_lvorder") ?? 0,
+                    DrawOrder: feature.GetInt64("vt_drworder") ?? 0))
+                .OrderBy(road => road.Level)
+                .ThenBy(road => road.DrawOrder)
+                .ThenByDescending(road => road.Category.Kind)
+                .GroupBy(road => road.Level);
+
+            // 階層ごとに casing (外枠) をすべて描いてから fill (中塗り) を描く。同じ階層の交差部はつながり、
+            // 上の階層（橋など）は下の階層の道路を外枠ごと覆う
+            foreach (var level in levels)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                VectorTileFeature feature = roadLayer.Features[i];
-                if (feature.GeometryType != VectorGeometryType.LineString)
+                foreach (var road in level)
                 {
-                    continue;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var (kind, width) = road.Category;
+                    RenderFeatureLine(canvas, road.Feature, this.GetRoadStroke(strokes, kind, width + 1.6f, tileScale, casing: true));
                 }
 
-                var (kind, width) = GetRoadCategory(feature);
-                RenderFeatureLine(canvas, feature, this.GetRoadStroke(strokes, kind, width + 1.6f, tileScale, casing: true));
-            }
-
-            for (int i = 0; i < roadLayer.Features.Count; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                VectorTileFeature feature = roadLayer.Features[i];
-                if (feature.GeometryType != VectorGeometryType.LineString)
+                foreach (var road in level)
                 {
-                    continue;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var (kind, width) = road.Category;
+                    RenderFeatureLine(canvas, road.Feature, this.GetRoadStroke(strokes, kind, width, tileScale, casing: false));
                 }
-
-                var (kind, width) = GetRoadCategory(feature);
-                RenderFeatureLine(canvas, feature, this.GetRoadStroke(strokes, kind, width, tileScale, casing: false));
             }
         }
         finally
@@ -344,6 +350,11 @@ public sealed class GsiVectorStyle : IVectorMapStyle, IDisposable
         if (!strokes.TryGetValue(key, out SKPaint? paint))
         {
             paint = StrokeOf(casing ? this.GetCasingPaint(kind) : this.GetFillPaint(kind), width / tileScale);
+            paint.StrokeJoin = SKStrokeJoin.Round;
+
+            // 道路は交差点ごとに別の地物に分かれるため、塗りの端を丸めて重ね、継ぎ目から下の道路が透けないようにする。
+            // 外枠の端は伸ばさない（階層が切り替わる橋の端で、下の道路を横切る弧が出るため）
+            paint.StrokeCap = casing ? SKStrokeCap.Butt : SKStrokeCap.Round;
             strokes.Add(key, paint);
         }
 

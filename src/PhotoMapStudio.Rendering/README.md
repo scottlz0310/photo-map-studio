@@ -18,7 +18,7 @@
 - **事前デコード**: 描画せずに、中心を囲む 2×2 枚のタイルを取得・デコードしてデコード済みキャッシュへ入れます（`IVectorMapPrefetcher.PrefetchAsync`。次の描画でデコードのコストを払わずに済みます）
 - **高速化**: 表示範囲外の地物を描かない最適化（常に有効）、帯の並列描画・注記の並列（`BandCount`・`ParallelLabels`。既定は無効）、デコード済みタイルのキャッシュ（`DecodedTileCache`）
 - **スタイル**: OpenMapTiles スキーマ（`OpenMapTilesStyle`）と国土地理院の最適化ベクトル（`GsiVectorStyle`）。`IVectorMapStyle` で差し替えられます
-- **道路だけの重ね表示**: `OpenMapTilesRoadOverlayStyle` は、背景を透明にして、道路の芯線・道路名（白フチ）・経路番号の盾だけを描きます。航空写真などの上へ、同じ中心・ズーム・寸法・画素密度で描いた画像を重ねて使います。トンネルの道路は破線にし、歩道・階段・通路・ホームは描きません。出典（OpenFreeMap / OpenMapTiles / OpenStreetMap）の表示は、重ねる側の画像の出典と併せて必要です
+- **道路だけの重ね表示**: `OpenMapTilesRoadOverlayStyle` は、背景を透明にして、道路の芯線・道路名（白フチ）・経路番号の盾だけを描きます。航空写真などの上へ、同じ中心・ズーム・寸法・画素密度で描いた画像を重ねて使います。トンネルの道路は破線にし、歩道・階段・通路・ホームは描きません。隣り合うタイルがバッファに持つ同じ道路を二重に描かないように、線はタイルの範囲で切り抜きます（`IVectorMapStyle.ClipsLinesToTile`。自作の重ね表示のスタイルでも使えます）。出典（OpenFreeMap / OpenMapTiles / OpenStreetMap）の表示は、重ねる側の画像の出典と併せて必要です
 
 ## 使い方
 

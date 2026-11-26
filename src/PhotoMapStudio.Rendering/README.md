@@ -5,7 +5,7 @@
 [PhotoMapStudio](https://github.com/scottlz0310/photo-map-studio)（撮影地点の地図画像を生成するアプリ）の描画層を切り出したもので、他のアプリ（PhotoGeoExplorer など）からも使えます。タイルの取得・デコードは [`PhotoMapStudio.Tiles`](https://www.nuget.org/packages/PhotoMapStudio.Tiles/) が担います。
 
 - 対象: .NET 10
-- 依存: `PhotoMapStudio.Tiles`、`SkiaSharp`（4.156.0）
+- 依存: `PhotoMapStudio.Tiles`、`SkiaSharp`（4.157.0）
 
 ## できること
 
@@ -18,6 +18,7 @@
 - **事前デコード**: 描画せずに、中心を囲む 2×2 枚のタイルを取得・デコードしてデコード済みキャッシュへ入れます（`IVectorMapPrefetcher.PrefetchAsync`。次の描画でデコードのコストを払わずに済みます）
 - **高速化**: 表示範囲外の地物を描かない最適化（常に有効）、帯の並列描画・注記の並列（`BandCount`・`ParallelLabels`。既定は無効）、デコード済みタイルのキャッシュ（`DecodedTileCache`）
 - **スタイル**: OpenMapTiles スキーマ（`OpenMapTilesStyle`）と国土地理院の最適化ベクトル（`GsiVectorStyle`）。`IVectorMapStyle` で差し替えられます
+- **道路だけの重ね表示**: `OpenMapTilesRoadOverlayStyle` は、背景を透明にして、道路の芯線・道路名（白フチ）・経路番号の盾だけを描きます。航空写真などの上へ、同じ中心・ズーム・寸法・画素密度で描いた画像を重ねて使います。トンネルの道路は破線にし、歩道・階段・通路・ホームは描きません。出典（OpenFreeMap / OpenMapTiles / OpenStreetMap）の表示は、重ねる側の画像の出典と併せて必要です
 
 ## 使い方
 
@@ -82,7 +83,7 @@ await prefetcher.PrefetchAsync(new VectorPrefetchRequest(CenterLatitude: 35.681,
 
 ## SkiaSharp のバージョン
 
-このパッケージは SkiaSharp 4.156.0 に依存します。利用側のアプリは、Skia 系のパッケージ（`SkiaSharp.Views.WinUI`・`SkiaSharp.HarfBuzz`・`SkiaSharp.NativeAssets.*` など）を**同じ版で明示**してください。別のライブラリが古い SkiaSharp を引くと、版の不一致で実行時に失敗することがあります。
+このパッケージは SkiaSharp 4.157.0 に依存します。利用側のアプリは、Skia 系のパッケージ（`SkiaSharp.Views.WinUI`・`SkiaSharp.HarfBuzz`・`SkiaSharp.NativeAssets.*` など）を**同じ版で明示**してください。別のライブラリが古い SkiaSharp を引くと、版の不一致で実行時に失敗することがあります。
 
 ## ライセンスと出典
 

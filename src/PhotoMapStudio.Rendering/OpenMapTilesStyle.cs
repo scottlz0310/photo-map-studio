@@ -197,7 +197,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
             cyclePath.Color = CyclePathColor;
             using SKPaint footPath = path.Clone();
             footPath.Color = FootPathColor;
-            RenderDashedPaths(canvas, roadLayer, path, pathDashOn, pathDashOff, view, IsPath, feature => GetPathKind(feature) switch
+            RenderDashedPaths(canvas, roadLayer, path, pathDashOn, pathDashOff, view, feature => IsPath(feature.GetString("class")), feature => GetPathKind(feature) switch
             {
                 PathKind.Cycle => cyclePath,
                 PathKind.Foot => footPath,
@@ -521,7 +521,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
     /// 元のパスの始点からの距離で破線の位相を合わせて描く（見た目は同じ）。
     /// Skia は破線をパスの全長に対して生成するため、深いズームで長い小道の大半が画面外になると、画面外の区間の処理が支配的になる。
     /// </summary>
-    private static void RenderDashedPaths(SKCanvas canvas, VectorTileLayer layer, SKPaint paint, float dashOn, float dashOff, in TileView view, Func<string?, bool> includeClass, Func<VectorTileFeature, SKPaint>? paintFor = null)
+    internal static void RenderDashedPaths(SKCanvas canvas, VectorTileLayer layer, SKPaint paint, float dashOn, float dashOff, in TileView view, Func<VectorTileFeature, bool> include, Func<VectorTileFeature, SKPaint>? paintFor = null)
     {
         LayerBounds bounds = LayerBounds.For(layer);
         float margin = view.StrokeMargin(paint.StrokeWidth);
@@ -530,7 +530,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         {
             view.ThrowIfCancellationRequested();
             VectorTileFeature feature = layer.Features[i];
-            if (feature.GeometryType != VectorGeometryType.LineString || !includeClass(feature.GetString("class")) || !view.IsVisible(bounds, i, margin))
+            if (feature.GeometryType != VectorGeometryType.LineString || !include(feature) || !view.IsVisible(bounds, i, margin))
             {
                 continue;
             }
@@ -557,7 +557,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         float dashOff = TrackDashOff / tileScale;
         using SKPathEffect dash = SKPathEffect.CreateDash([dashOn, dashOff], 0);
         track.PathEffect = dash;
-        RenderDashedPaths(canvas, layer, track, dashOn, dashOff, view, IsTrack);
+        RenderDashedPaths(canvas, layer, track, dashOn, dashOff, view, feature => IsTrack(feature.GetString("class")));
     }
 
     private static void DrawClippedDashedLines(SKCanvas canvas, VectorTileFeature feature, SKPaint paint, float dashOn, float dashOff, SKRect area)
@@ -684,7 +684,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         }
     }
 
-    private static (int order, SKColor casingColor, SKColor fillColor, float casingWidth, float fillWidth) GetRoadStyle(string roadClass, int zoom)
+    internal static (int order, SKColor casingColor, SKColor fillColor, float casingWidth, float fillWidth) GetRoadStyle(string roadClass, int zoom)
     {
         float scale = ZoomScale(zoom);
         var (order, width, fill, casing) = roadClass switch
@@ -762,9 +762,9 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
         }
     }
 
-    private static bool IsPath(string? roadClass) => roadClass is "path" or "pedestrian" or "footway" or "cycleway" or "steps";
+    internal static bool IsPath(string? roadClass) => roadClass is "path" or "pedestrian" or "footway" or "cycleway" or "steps";
 
-    private static bool IsTrack(string? roadClass) => roadClass == "track";
+    internal static bool IsTrack(string? roadClass) => roadClass == "track";
 
     /// <summary>川・運河の線幅（論理ピクセル。<see cref="ZoomScale"/> を掛ける）。</summary>
     private const float RiverWidth = 4f;
@@ -827,7 +827,7 @@ public sealed class OpenMapTilesStyle : IVectorMapStyle, IDisposable
 
     private static float ZoomScale(int zoom) => (float)Math.Pow(2, (zoom - 16) * 0.75);
 
-    private static void DrawFeatureLines(SKCanvas canvas, VectorTileFeature feature, SKPaint paint)
+    internal static void DrawFeatureLines(SKCanvas canvas, VectorTileFeature feature, SKPaint paint)
     {
         using var builder = new SKPathBuilder();
         for (int p = 0; p < feature.GeometryParts.Count; p++)

@@ -206,12 +206,14 @@ internal static class OpenMapTilesRoadSymbols
     /// </summary>
     internal static void RenderNames(
         SKCanvas canvas, VectorTile tile, SKMatrix tileToCanvasMatrix, int zoom,
-        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint, bool minor, CancellationToken cancellationToken)
+        LabelCollisionGrid collisionGrid, SKRect viewport, SKFont font, SKPaint fillPaint, SKPaint haloPaint, bool minor, CancellationToken cancellationToken,
+        Func<VectorTileFeature, bool>? include = null)
     {
         VectorTileLayer? layer = tile.GetLayer(LayerName);
         if (layer is null) { return; }
         foreach (VectorTileFeature feature in layer.Features
-            .Where(f => f.GeometryType == VectorGeometryType.LineString && IsInTier(GetNameRank(f.GetString("class"), zoom), minor))
+            .Where(f => f.GeometryType == VectorGeometryType.LineString && IsInTier(GetNameRank(f.GetString("class"), zoom), minor)
+                && (include is null || include(f)))
             .OrderByDescending(f => GetNameRank(f.GetString("class"), zoom)))
         {
             cancellationToken.ThrowIfCancellationRequested();

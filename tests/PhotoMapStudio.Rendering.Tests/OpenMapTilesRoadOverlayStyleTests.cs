@@ -258,6 +258,64 @@ public sealed class OpenMapTilesRoadOverlayStyleTests
         Assert.Equal(255, bitmap.GetPixel(32, 32).Alpha);
     }
 
+    // 隣り合う MVT は、境界の外側（バッファ）にも同じ道路を持つ。重ねて描くと、破線の隙間が埋まり、
+    // 後のタイルの縁の丸い端が、先のタイルの芯線を上書きする
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(4, true)]
+    public async Task 隣り合うタイルが重ねて持つ道路でも破線の隙間が残る(int bandCount, bool parallelLabels)
+    {
+        using SKBitmap bitmap = await RenderAcrossTileBoundaryAsync("track", bandCount, parallelLabels);
+
+        int longestRun = 0;
+        int run = 0;
+        int gaps = 0;
+        for (int x = 0; x < bitmap.Width; x++)
+        {
+            bool painted = bitmap.GetPixel(x, bitmap.Height / 2).Alpha > 127;
+            run = painted ? run + 1 : 0;
+            gaps += painted ? 0 : 1;
+            longestRun = Math.Max(longestRun, run);
+        }
+
+        // 線 6 と間 3 の繰り返し。境界では位相が切り替わるので、線は 2 本分まで続き得る
+        Assert.InRange(longestRun, 1, 13);
+        Assert.InRange(gaps, bitmap.Width / 5, bitmap.Width / 2);
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(4, true)]
+    public async Task 隣り合うタイルが重ねて持つ道路でも芯線に継ぎ目が出ない(int bandCount, bool parallelLabels)
+    {
+        using SKBitmap bitmap = await RenderAcrossTileBoundaryAsync("primary", bandCount, parallelLabels);
+
+        Assert.All(
+            Enumerable.Range(0, bitmap.Width),
+            x => Assert.Equal(SKColor.Parse("#ffe27a"), bitmap.GetPixel(x, bitmap.Height / 2)));
+    }
+
+    // 取得ズーム 14 のタイルをズーム 16 で表示し、中央を 2 枚のタイルの境界にする。道路は両方のタイルが境界の外へ 80 単位はみ出して持つ
+    private static async Task<SKBitmap> RenderAcrossTileBoundaryAsync(string roadClass, int bandCount, bool parallelLabels)
+    {
+        const int TileZoom = 14;
+        const int TileX = 100;
+        const int TileY = 100;
+        byte[] left = MvtTestTile.CreateTransportation((roadClass, [(0, 2048), (4176, 2048)]));
+        byte[] right = MvtTestTile.CreateTransportation((roadClass, [(-80, 2048), (4096, 2048)]));
+        using var style = new OpenMapTilesRoadOverlayStyle();
+        var renderer = new VectorMapRenderer(
+            new MockVectorTileSource(TileZoom, (_, x, y) => y != TileY ? null : x == TileX ? left : x == TileX + 1 ? right : null),
+            style);
+        double n = Math.Pow(2, TileZoom);
+        double longitude = ((TileX + 1) / n * 360.0) - 180.0;
+        double latitude = Math.Atan(Math.Sinh(Math.PI * (1 - (2 * (TileY + 0.5) / n)))) * 180.0 / Math.PI;
+        var request = new VectorViewRequest(latitude, longitude, 16, 256, 64) { BandCount = bandCount, ParallelLabels = parallelLabels };
+
+        using VectorViewResult result = await renderer.RenderViewAsync(request).ConfigureAwait(false);
+        return SKBitmap.FromImage(result.Image);
+    }
+
     private static SKBitmap RenderLines(int zoom, VectorTile tile)
     {
         using var style = new OpenMapTilesRoadOverlayStyle();

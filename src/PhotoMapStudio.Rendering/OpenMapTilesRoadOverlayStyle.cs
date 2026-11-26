@@ -92,6 +92,11 @@ public sealed class OpenMapTilesRoadOverlayStyle : IVectorMapStyle, IDisposable
             return;
         }
 
+        // 隣り合うタイルは、境界の外側（バッファ）にも同じ道路を持つ。重ねて描くと、破線の隙間が埋まり、後のタイルの縁が
+        // 先のタイルの芯線を上書きするため、各タイルは自分の範囲だけを描く。境界の画素がどちらか一方に属するように、縁はぼかさない
+        using var restore = new SKAutoCanvasRestore(canvas);
+        canvas.ClipRect(SKRect.Create(roadLayer.Extent, roadLayer.Extent), SKClipOperation.Intersect, antialias: false);
+
         var view = new TileView(canvas.LocalClipBounds, 2f / tileScale, cancellationToken);
 
         // 破線の林道・小道は舗装路の下に描く

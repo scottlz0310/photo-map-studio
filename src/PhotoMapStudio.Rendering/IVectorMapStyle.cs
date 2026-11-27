@@ -22,6 +22,15 @@ public interface IVectorMapStyle
     /// <summary>地図キャンバスの背景色。</summary>
     SKColor BackgroundColor { get; }
 
+    /// <summary>各タイルの線（<see cref="RenderLines"/>）を、そのタイルの範囲の画素にだけ描くか。</summary>
+    /// <remarks>
+    /// 隣り合うタイルは、境界の外側にも同じ地物を持つ。重ねて描くと見え方が変わるスタイル（破線や縁つきの線を、
+    /// 透明な背景へ描くもの）は <see langword="true"/> にする。<see cref="VectorMapRenderer"/> が物理ピクセルの整数の
+    /// 範囲で切り抜き、隣り合うタイルは同じ境界を共有する（画素は、どちらか一方のタイルだけに属する）。
+    /// 既定は <see langword="false"/>（切り抜かない）。
+    /// </remarks>
+    bool ClipsLinesToTile => false;
+
     /// <summary>
     /// 面（ポリゴン: 水域、緑地、建物等）を描画する。
     /// </summary>

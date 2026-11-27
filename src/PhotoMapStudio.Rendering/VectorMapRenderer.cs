@@ -186,16 +186,19 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
         int maxTy = (int)Math.Floor(tileBottom / MercatorProjection.TileSize);
 
         // 4. タイルの非同期取得とデコード
-        var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)>();
+        var loadedTiles = new List<(int tx, int ty, VectorTile tile, float scale, float dx, float dy, SKRectI bounds)>();
 
         // タイルを、表示範囲の画素へ置く拡大率と位置を決める。物理ピクセルの値を画素密度で割り、論理ピクセル（キャンバスの拡大の前の座標）にする
-        (int Tx, int Ty, VectorTile Tile, float Scale, float Dx, float Dy) Place(VectorTile placed, int tx, int ty)
+        (int Tx, int Ty, VectorTile Tile, float Scale, float Dx, float Dy, SKRectI Bounds) Place(VectorTile placed, int tx, int ty)
         {
             uint extent = placed.Layers.Count > 0 ? placed.Layers[0].Extent : 4096;
             float scale = (float)((MercatorProjection.TileSize * scaleRatio) / extent / pixelRatio);
             float dx = (float)(((tx * MercatorProjection.TileSize * scaleRatio) - left) / pixelRatio);
             float dy = (float)(((ty * MercatorProjection.TileSize * scaleRatio) - top) / pixelRatio);
-            return (tx, ty, placed, scale, dx, dy);
+            // タイルの範囲（物理ピクセル）。隣のタイルと同じ式で境界を求めるので、間に隙間も重なりもできない
+            int Edge(int index, double origin) => (int)Math.Round((index * MercatorProjection.TileSize * scaleRatio) - origin);
+            var bounds = new SKRectI(Edge(tx, left), Edge(ty, top), Edge(tx + 1, left), Edge(ty + 1, top));
+            return (tx, ty, placed, scale, dx, dy, bounds);
         }
 
         int attemptedTiles = 0;
@@ -301,6 +304,11 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             cancellationToken.ThrowIfCancellationRequested();
             var item = loadedTiles[i];
             canvas.Save();
+            if (activeStyle.ClipsLinesToTile)
+            {
+                ClipToTile(canvas, item.bounds, bandTop: 0);
+            }
+
             canvas.Translate(item.dx, item.dy);
             canvas.Scale(item.scale, item.scale);
 
@@ -460,7 +468,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
     private static async Task DrawParallelAsync(
         ParallelDraw parallel,
         SKCanvas canvas,
-        IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)> tiles,
+        IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy, SKRectI bounds)> tiles,
         IVectorMapStyle style,
         int styleZoom,
         float pixelRatio,
@@ -551,7 +559,7 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
 
     private static async Task DrawBandsAsync(
         SKBitmap bitmap,
-        IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy)> tiles,
+        IReadOnlyList<(int tx, int ty, VectorTile tile, float scale, float dx, float dy, SKRectI bounds)> tiles,
         IVectorMapStyle style,
         int styleZoom,
         float pixelRatio,
@@ -599,6 +607,11 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 bandCanvas.Save();
+                if (style.ClipsLinesToTile)
+                {
+                    ClipToTile(bandCanvas, item.bounds, top);
+                }
+
                 bandCanvas.Translate(item.dx, item.dy);
                 bandCanvas.Scale(item.scale, item.scale);
                 style.RenderLines(bandCanvas, item.tile, item.scale, styleZoom, cancellationToken);
@@ -616,6 +629,16 @@ public sealed class VectorMapRenderer : IVectorMapRenderer, IVectorMapPrefetcher
             // 利用者には元の例外（スタイルの失敗など）として見せるため、最初の失敗を投げ直す
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.Flatten().InnerExceptions[0]).Throw();
         }
+    }
+
+    // タイルの範囲（画像の物理ピクセル）で切り抜く。呼び出し側の Save と Restore の内側で呼ぶ。行列は元に戻すので、切り抜きだけが残る。
+    // bandTop は、描画先が画像の一部の帯のときの、帯の先頭の行
+    private static void ClipToTile(SKCanvas canvas, SKRectI bounds, int bandTop)
+    {
+        SKMatrix matrix = canvas.TotalMatrix;
+        canvas.SetMatrix(SKMatrix.CreateTranslation(0, -bandTop));
+        canvas.ClipRect(bounds, SKClipOperation.Intersect, antialias: false);
+        canvas.SetMatrix(matrix);
     }
 
     private sealed record ParallelDraw(SKBitmap Bitmap, int BandCount, bool ParallelLabels);

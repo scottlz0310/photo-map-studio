@@ -20,6 +20,7 @@ public sealed class VectorStyleSharedStateTests
     [Theory]
     [InlineData(typeof(GsiVectorStyle))]
     [InlineData(typeof(OpenMapTilesStyle))]
+    [InlineData(typeof(OpenMapTilesRoadOverlayStyle))]
     public void 線の描画で共有ペイントの線幅を書き換えない(Type styleType)
     {
         using var style = (IDisposable)Activator.CreateInstance(styleType)!;
@@ -36,6 +37,7 @@ public sealed class VectorStyleSharedStateTests
     [Theory]
     [InlineData(typeof(GsiVectorStyle))]
     [InlineData(typeof(OpenMapTilesStyle))]
+    [InlineData(typeof(OpenMapTilesRoadOverlayStyle))]
     public async Task 異なる縮尺で並行して描画しても単独で描画した結果と一致する(Type styleType)
     {
         using var style = (IDisposable)Activator.CreateInstance(styleType)!;
